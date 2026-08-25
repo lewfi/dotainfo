@@ -28,7 +28,7 @@ MATCH_SCHEMA = pa.schema(
         pa.field("game_mode", pa.int32()),
         pa.field("lobby_type", pa.int32()),
         pa.field("patch", pa.string()),
-        pa.field("is_parsed", pa.bool_(), nullable=False),
+        pa.field("is_parsed", pa.bool_()),
         pa.field("tower_status_radiant", pa.int32()),
         pa.field("tower_status_dire", pa.int32()),
         pa.field("barracks_status_radiant", pa.int32()),
@@ -95,6 +95,8 @@ DRAFT_SCHEMA = pa.schema(
 )
 
 
+# Reference IDs preserve their source-table widths: reference_teams.team_id and
+# reference_leagues.leagueid are int64, while the corresponding match IDs are int32.
 TEAM_SCHEMA = pa.schema(
     [
         pa.field("team_id", pa.int64()),
@@ -111,7 +113,7 @@ REFERENCE_PLAYER_SCHEMA = pa.schema(
         pa.field("name", pa.string()),
         pa.field("country_code", pa.string()),
         pa.field("fantasy_role", pa.int32()),
-        pa.field("team_id", pa.int64()),
+        pa.field("team_id", pa.int32()),
         pa.field("team_name", pa.string()),
         pa.field("team_tag", pa.string()),
         pa.field("is_pro", pa.bool_()),
@@ -121,7 +123,7 @@ REFERENCE_PLAYER_SCHEMA = pa.schema(
 
 LEAGUE_SCHEMA = pa.schema(
     [
-        pa.field("leagueid", pa.int32()),
+        pa.field("leagueid", pa.int64()),
         pa.field("name", pa.string()),
         pa.field("tier", pa.string()),
         pa.field("banner", pa.string()),
@@ -141,6 +143,22 @@ HERO_SCHEMA = pa.schema(
 )
 
 
+SCHEMAS: dict[str, pa.Schema] = {
+    "matches": MATCH_SCHEMA,
+    "players": PLAYER_SCHEMA,
+    "draft": DRAFT_SCHEMA,
+    "reference_teams": TEAM_SCHEMA,
+    "reference_players": REFERENCE_PLAYER_SCHEMA,
+    "reference_leagues": LEAGUE_SCHEMA,
+    "reference_heroes": HERO_SCHEMA,
+}
+
+
+def get_schema(name: str) -> pa.Schema:
+    """Return the schema registered for ``name``."""
+    return SCHEMAS[name]
+
+
 __all__ = [
     "DRAFT_SCHEMA",
     "HERO_SCHEMA",
@@ -148,6 +166,29 @@ __all__ = [
     "MATCH_SCHEMA",
     "PLAYER_SCHEMA",
     "REFERENCE_PLAYER_SCHEMA",
+    "SCHEMAS",
     "TEAM_SCHEMA",
+    "get_schema",
 ]
 
+
+if __name__ == "__main__":
+    import tempfile
+    from pathlib import Path
+
+    import pyarrow.parquet as pq
+
+    for schema_name, schema in SCHEMAS.items():
+        print(f"=== {schema_name} ===")
+        print(schema)
+        try:
+            table = pa.Table.from_pylist([], schema=schema)
+            with tempfile.TemporaryDirectory() as temporary_directory:
+                parquet_path = Path(temporary_directory) / f"{schema_name}.parquet"
+                pq.write_table(table, parquet_path)
+                round_tripped = pq.read_table(parquet_path)
+            assert round_tripped.schema.equals(schema)
+        except Exception:
+            print("FAIL")
+            raise
+        print("PASS")

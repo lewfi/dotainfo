@@ -205,9 +205,14 @@ it to `ord`. The SQL backfill path reads the `picks_bans` table and maps its `or
 
 ### `data/reference/` — refreshed weekly in v0
 
-- `teams.parquet` — `team_id, name, tag, logo_url` from `/teams`
+Reference ID widths intentionally match their source tables: `teams.team_id` and
+`leagues.leagueid` are `bigint` (int64). The same logical IDs in `matches` — `leagueid`,
+`radiant_team_id`, and `dire_team_id` — are `integer` (int32). This width mismatch is real
+and intentional.
+
+- `teams.parquet` — `team_id bigint, name, tag, logo_url` from `/teams`
 - `players.parquet` — `account_id, name, country_code, fantasy_role, team_id, team_name, team_tag, is_pro` from `notable_players`
-- `leagues.parquet` — `leagueid, name, tier, banner` from `/leagues`
+- `leagues.parquet` — `leagueid bigint, name, tier, banner` from `/leagues`
 - `heroes.parquet` — `id, name, localized_name, primary_attr, attack_type, roles` from `/heroes`
 
 Hero **icons** are not in the API. Pinning `odota/dotaconstants` and recording its commit SHA
