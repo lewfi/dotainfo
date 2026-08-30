@@ -19,7 +19,7 @@ Refer to steps by these numbers only. Do not renumber.
 
 ## Never
 
-- Store a raw /matches/{id} response
+- Store a raw /matches/{id} response anywhere under data/
 - Rewrite a closed monthly shard
 - Filter matches out at ingest
 - Run backfill.py against the live API without explicit approval
@@ -30,6 +30,9 @@ Refer to steps by these numbers only. Do not renumber.
 ## Always
 
 - Shard by match start\_time, never by ingestion month
+- Committed test fixtures under tests/fixtures/ are exempt from the
+  raw-response rule and are required. They are the offline contract
+  against the API's actual response shape.
 - Ask when the spec is ambiguous; do not pick a direction and build on it
 - Verify by running, not by reasoning. Show the output.
 - Update HANDOFF.md when a decision changes the spec, in the same commit
