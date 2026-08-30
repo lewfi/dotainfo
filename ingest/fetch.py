@@ -20,6 +20,7 @@ from urllib.request import Request, urlopen
 import pyarrow as pa
 import pyarrow.parquet as pq
 
+from ingest.compact import compact_eligible_months
 from ingest.schema import DRAFT_SCHEMA, MATCH_SCHEMA, PLAYER_SCHEMA
 from ingest.slim import shard_month, slim_match_response
 
@@ -167,11 +168,6 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--limit",
         type=positive_int,
         help="maximum combined new and retry matches attempted this run",
-    )
-    parser.add_argument(
-        "--enable-compaction",
-        action="store_true",
-        help="enable the step-5 compaction call site (currently unavailable)",
     )
     return parser.parse_args(argv)
 
@@ -401,30 +397,6 @@ def failure_record(match_id: int, previous: JsonObject | None, error: Exception)
     }
 
 
-def previous_month(now: datetime) -> str:
-    first_of_month = now.astimezone(timezone.utc).replace(
-        day=1, hour=0, minute=0, second=0, microsecond=0
-    )
-    previous_day = first_of_month - timedelta(days=1)
-    return previous_day.strftime("%Y-%m")
-
-
-def maybe_compact(data_dir: Path, now: datetime, enabled: bool, dry_run: bool) -> None:
-    if now.day < 8:
-        return
-    month = previous_month(now)
-    eligible = (data_dir / "matches" / f"{month}.ndjson").exists()
-    if not eligible:
-        return
-    if dry_run:
-        print(f"PLAN compaction eligible for {month}; dry-run skips it")
-        return
-    if enabled:
-        raise NotImplementedError(
-            f"compaction for {month} requires step 5; rerun without --enable-compaction"
-        )
-
-
 def print_discovery_plan(
     discovery: Discovery,
     retry_ids: list[int],
@@ -550,8 +522,6 @@ def run(args: argparse.Namespace) -> RunSummary:
     summary.shards_written = sorted(hot_months)
     summary.api_calls = client.calls
 
-    maybe_compact(DATA_DIR, run_started_utc, args.enable_compaction, args.dry_run)
-
     if not args.dry_run:
         for path in sorted(pending_rows, key=str):
             append_rows_atomically(path, pending_rows[path])
@@ -568,6 +538,9 @@ def run(args: argparse.Namespace) -> RunSummary:
                 indent=2,
             ) + "\n"
             atomic_write_if_changed(STATE_PATH, state_content)
+        compact_eligible_months(DATA_DIR, run_started_utc.date())
+    else:
+        compact_eligible_months(DATA_DIR, run_started_utc.date(), dry_run=True)
 
     summary.duration_seconds = round(time.monotonic() - started, 3)
     summary_content = json.dumps(asdict(summary), indent=2) + "\n"

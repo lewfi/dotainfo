@@ -86,7 +86,6 @@ class FetchTests(unittest.TestCase):
         args = Namespace(
             dry_run=dry_run,
             limit=limit,
-            enable_compaction=False,
         )
         output = io.StringIO()
         with patch.object(fetch, "ApiClient", return_value=client), redirect_stdout(output):
@@ -114,11 +113,61 @@ class FetchTests(unittest.TestCase):
         )
         before = self.snapshot()
 
-        summary, output = self.execute(client, dry_run=True, limit=2)
+        with patch.object(fetch, "compact_eligible_months") as compact:
+            summary, output = self.execute(client, dry_run=True, limit=2)
 
         self.assertEqual(before, self.snapshot())
         self.assertEqual(2, summary.matches_fetched)
         self.assertIn("DRY RUN: zero filesystem writes performed", output)
+        compact.assert_called_once()
+        self.assertTrue(compact.call_args.kwargs["dry_run"])
+
+    def test_patch_lookup_failure_skips_compaction(self):
+        class ConstantsFailureClient(FakeApiClient):
+            def get_json(self, path, params=None):
+                if path == "/constants/patch":
+                    raise RuntimeError("constants unavailable")
+                return super().get_json(path, params)
+
+        client = ConstantsFailureClient([], {})
+
+        with (
+            patch.object(fetch, "compact_eligible_months") as compact,
+            self.assertRaisesRegex(RuntimeError, "constants unavailable"),
+        ):
+            self.execute(client, limit=1)
+
+        compact.assert_not_called()
+        self.assertEqual({}, self.snapshot())
+
+    def test_compaction_failure_happens_after_fetch_data_and_state_are_written(self):
+        self.write_state(100)
+        client = FakeApiClient(
+            [self.pro_row(101), self.pro_row(100)],
+            {101: self.payload(101)},
+        )
+
+        with (
+            patch.object(
+                fetch,
+                "compact_eligible_months",
+                side_effect=RuntimeError("rollover failed"),
+            ),
+            self.assertRaisesRegex(RuntimeError, "rollover failed"),
+        ):
+            self.execute(client, limit=1)
+
+        state = json.loads(self.paths["STATE_PATH"].read_text(encoding="utf-8"))
+        self.assertEqual(101, state["last_match_id"])
+        matches_path = self.root / "matches" / "2026-08.ndjson"
+        self.assertTrue(matches_path.exists())
+        self.assertEqual(
+            [101],
+            [
+                json.loads(line)["match_id"]
+                for line in matches_path.read_text(encoding="utf-8").splitlines()
+            ],
+        )
 
     def test_limit_advances_cursor_only_through_selected_ids(self):
         self.write_state(100)

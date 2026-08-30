@@ -33,6 +33,11 @@ dated. Counts marked approximate grow over time:
 | Latest `start_time` | 1787645902 (2026-08-25, live) |
 | Average new pro matches | **~71/day** |
 
+Daily pro match volume varies from 0 to ~190; the ~71/day figure is a long-run average
+across 2,067 days including TI and major seasons. Observed: 2026-08-17, 2026-08-18,
+2026-08-26, and 2026-08-27 had zero matches; 2026-08-29 had 189, of which 164 came from a
+single league. A low-count run is not evidence of pipeline failure.
+
 API base URL: `https://api.opendota.com/api`
 
 **Quota budget (all free tiers):**
@@ -88,6 +93,25 @@ All data lives in git. At the field list below, the full 2021→now dataset is r
 **120–150 MB of Parquet**, which is comfortably inside GitHub's limits and clones fast enough
 for Cloudflare builds.
 
+A first real compaction measurement used the 299-match 2026-08 incremental shard:
+
+| Table | NDJSON | Parquet | Compression |
+|---|---:|---:|---:|
+| matches | 308,092 bytes | 135,194 bytes | 2.3:1 |
+| players | 1,884,111 bytes | 171,175 bytes | 11.0:1 |
+| draft | 504,555 bytes | 11,690 bytes | 43.2:1 |
+| **total** | **2,696,758 bytes** | **318,059 bytes** | **8.5:1** |
+
+A linear extrapolation to 147,495 matches is 156.9 MB / 149.63 MiB, at the top of the
+120–150 MB projection rather than comfortably inside it. This is only one 299-match file;
+Parquet compresses better at larger row-group sizes, so real monthly shards of roughly 2,000
+matches should make that extrapolation pessimistic.
+
+The measured sample has both `radiant_gold_adv` and `radiant_xp_adv` populated for all 299
+matches (11,098 list elements in each column), so its measured size includes those arrays.
+Historical backfilled rows will leave them null, while every parsed incremental match will
+continue adding their per-minute arrays at roughly 71 matches/day indefinitely.
+
 Two formats, by lifecycle stage:
 
 - **Hot month** — `data/matches/2026-08.ndjson`, appended to on every run. Newline-delimited
@@ -100,7 +124,9 @@ Two formats, by lifecycle stage:
   appended to `data/matches/late.ndjson`; readers UNION it with the monthly shards.
 
 If the repo ever exceeds ~500 MB, the escape hatch is to move `data/` to GitHub Release
-assets. Do not build that now.
+assets. Do not build that now. Re-evaluate this threshold and escape hatch after the first
+two real monthly Parquet shards exist; they will provide a trustworthy per-month figure that
+the 299-match sample cannot.
 
 ```
 repo/
@@ -119,7 +145,7 @@ repo/
     .run-summary.json # local/CI run counts, gitignored
     matches/          # YYYY-MM.ndjson (hot) | YYYY-MM.parquet (closed) | late.ndjson
     players/          # YYYY-MM.ndjson | .parquet   (10 rows per match)
-    draft/            # YYYY-MM.ndjson | .parquet   (~24 rows per match)
+    draft/            # YYYY-MM.ndjson | .parquet   (variable rows, including zero)
     reference/
       teams.parquet  players.parquet  leagues.parquet  heroes.parquet
   site/               # Astro
@@ -313,8 +339,8 @@ for each id (ascending):
     on HTTP 429, retry in-run per hard rule 6 without incrementing failure attempts
     on failure, update failed.ndjson; after attempt 5 move it to failed_permanent.ndjson
     sleep 1.1s
-if a previous month is past its seven-day grace period: run compact.py for that month
 write state.json (highest new match_id processed)
+run compact.py for every eligible hot month
 write data/.run-summary.json with run counts
 ```
 
@@ -358,6 +384,24 @@ tracked data changed. If there is nothing new, it exits without a commit, avoidi
 Cloudflare build. During bootstrap, limited runs consume the discovered backlog in ascending
 order and advance the cursor only through matches actually attempted. A no-op run is expected
 only after that bootstrap backlog has been fully consumed.
+
+### `ingest/compact.py`
+
+Compaction runs only after `fetch.py` has durably written its match rows, failure queues, and
+cursor state. A rollover failure therefore leaves the completed fetch intact and fails the
+run with the hot NDJSON available for a later retry. `fetch.py --dry-run` invokes compaction
+only in dry-run mode, and a `/constants/patch` failure aborts before compaction as well as
+before any fetch writes.
+
+Eligibility is evaluated from an explicit reference date: a month remains hot through the
+seventh day of the following month and becomes eligible on the eighth. All three datasets
+for a month form one lifecycle unit. Compaction refuses a month if any Parquet destination
+already exists or if the three NDJSON sources are incomplete. It loads each source with the
+corresponding `schema.py` schema, writes all three Parquet files to temporary paths, reads
+them back, and verifies exact row counts and schemas before publishing any of them. Only
+after all three verified files have been published are the NDJSON sources removed. The
+command reports the before/after row count for each table; `--dry-run` reports eligible
+months and row counts without filesystem writes.
 
 ### `ingest/reference.py`
 
