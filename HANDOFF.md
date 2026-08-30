@@ -72,8 +72,13 @@ These are the constraints that make the project viable. Violating any one of the
    continue. Retry them on the next run. After five failed attempts, move the record to
    `data/failed_permanent.ndjson` so it is no longer retried. A successful retry is removed
    from `data/failed.ndjson`.
-6. **Respect rate limits.** Sleep ≥1.1s between REST calls (60/min ceiling). Sleep ≥5s
-   between `/explorer` calls — that endpoint queries their production Postgres directly.
+6. **Respect rate limits.** Sleep ≥1.1s between REST calls. Treat the documented 60/minute
+   ceiling as burst-sensitive, not as a guaranteed steady-state rate. On HTTP 429, honor
+   `Retry-After` when present; otherwise retry the same request with exponential backoff from
+   1.1s. Retry at most five times within the run. Those in-run 429 retries do not increment the
+   match's failure-queue attempt count. If all five are exhausted, record one failure whose
+   `last_error` identifies persistent rate-limiting. Sleep ≥5s between `/explorer` calls — that
+   endpoint queries their production Postgres directly.
 
 ---
 
@@ -190,8 +195,8 @@ what the data supports, not a defect to fix.
   the team's name at the time.
 - `slim.py` keeps preferring `$.radiant_name` over `$.radiant_team.name` (and the dire
   equivalents) in case OpenDota corrects this later. That preference is harmless today.
-- The 5,038 matches with a NULL `radiant_team_id` get a null radiant team name and must
-  render without one.
+- Approximately 5,038 matches have a NULL team ID. They get a null corresponding team name
+  and must render without one.
 
 The REST `/matches/{id}` response supplies `patch` as an integer index. `fetch.py` must GET
 `/constants/patch` once per run, build an `{id: name}` lookup, and pass it to `slim_match`.
@@ -201,7 +206,8 @@ If an index is absent from the live lookup, `slim_match` writes null and `fetch.
 the raw index in `.run-summary.json` under `unknown_patch_indices`; the raw integer is never
 persisted in a match row and the run continues. `constants_patch.json` is an offline test
 fixture only. This lookup is v0 ingest work; the v1 `dotaconstants` deferral applies only to
-hero icons.
+hero icons. `/constants/patch` grows as patches are released; never pin the lookup, because a
+pinned copy would write null for every future patch.
 
 Explicitly excluded: `chat`, `objectives`, `teamfights`, `cosmetics`, `draft_timings`,
 `replay_salt`, `match_seq_num`, `cluster`, `engine`, `human_players`, `positive_votes`,
@@ -227,9 +233,8 @@ megabytes live. Do not store them.
 Fields including `stuns`, `teamfight_participation`, `lane_role`, and `is_roaming` are null
 for unparsed matches. Handle nulls; do not drop the rows.
 
-`backpack_3` is absent from the REST response for every player observed in the step-3
-fixtures, so `fetch.py` always writes it as null. Retain the column because the SQL path may
-populate it for historical matches.
+`backpack_3` is absent from REST player responses, so `fetch.py` always writes it as null.
+Retain the column because the SQL path may populate it for historical matches.
 
 ### `data/draft/` — ~24 rows per match
 
@@ -237,9 +242,9 @@ populate it for historical matches.
 match_id bigint, is_pick bool, hero_id int, team smallint (0=radiant, 1=dire), ord smallint
 ```
 
-The live REST path maps the `/matches/{id}` response's `picks_bans` array. Verify whether
-its ordering field is named `order` during the step-3 `--limit 5` live dry run, then normalize
-it to `ord`. The SQL backfill path reads the `picks_bans` table and maps its `ord` column.
+The live REST path maps the `/matches/{id}` response's `picks_bans` array. REST names its
+ordering field `order`; normalize it to the schema's `ord`. The SQL backfill path reads the
+`picks_bans` table and maps its existing `ord` column.
 
 ### `data/reference/` — refreshed weekly in v0
 
@@ -269,6 +274,7 @@ unvalidated. Step 6 must capture endpoint-specific reference fixtures before rel
 read data/state.json -> last_match_id
 read data/failed.ndjson -> retry queue
 GET /constants/patch                             # once per run -> {id: name}
+  if the lookup request fails: abort before fetching or writing matches or advancing state
 GET /proMatches                                  # 100 newest, descending
 collect ids > last_match_id
   if all 100 are new, page back with ?less_than_match_id= until overlap is found
@@ -280,6 +286,7 @@ for each id (ascending):
     select one shard month from match start_time and apply it to all three tables
     if the start_time month is already compacted, use the late-arrival path
     on success, remove the id from the retry queue
+    on HTTP 429, retry in-run per hard rule 6 without incrementing failure attempts
     on failure, update failed.ndjson; after attempt 5 move it to failed_permanent.ndjson
     sleep 1.1s
 if a previous month is past its seven-day grace period: run compact.py for that month
@@ -291,7 +298,9 @@ Bootstrap: if `state.json` is absent, do not estimate a match ID from a timestam
 `/proMatches` backward until a page contains a match with `start_time` older than `now - 7d`.
 Set the initial cursor to the lowest `match_id` in that page, then process forward. Match IDs
 are monotonic but not time-linear, so a date-to-ID estimate is guesswork. In the run summary,
-`cursor_before` records this selected lowest ID.
+`cursor_before` records this selected lowest ID. There is no page-count cap: after bootstrap,
+if all 100 rows are newer than the saved cursor, continue paging until an overlap, a short or
+empty page, or a pagination error is encountered.
 
 `data/.run-summary.json` is gitignored and overwritten on every non-dry run. Its exact shape
 is:
@@ -316,7 +325,9 @@ is:
 
 `--dry-run` guarantees no filesystem or Git writes: no shards, state, failure queues,
 compaction, run summary, commit, or push. It prints what it would do and exits. `--limit N`
-limits the number of real matches processed so a five-match dry run is observable.
+limits the number of real matches processed so a five-match dry run is observable. The cursor
+advances only to the highest contiguous new ID actually attempted in that limited batch, never
+to the highest ID merely discovered.
 
 `fetch.py` never performs Git operations. The workflow stages, commits, and pushes only when
 tracked data changed. If there is nothing new, it exits without a commit, avoiding a needless
@@ -336,8 +347,9 @@ exact schemas defined in §5 and observes the REST rate limit.
   `state.json`
 - `permissions: contents: write`
 - Commit with the `github-actions[bot]` identity
-- Run `fetch.py`, log `data/.run-summary.json`, then use a `git diff --quiet` guard before
-  committing and pushing tracked data
+- Run `fetch.py`, log `data/.run-summary.json`, then run `git add -A data` and use
+  `git diff --cached --quiet` as the guard before committing and pushing. The ordinary
+  `git diff --quiet` does not detect first-run untracked shards.
 
 ### `.github/workflows/reference.yml`
 
