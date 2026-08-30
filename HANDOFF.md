@@ -22,11 +22,12 @@ feed of recent matches, and a match detail page. Deployed to Cloudflare Pages.
 
 ## 2. Verified facts (do not re-derive these)
 
-Measured against the live OpenDota database on 2026-08-25:
+Baseline facts measured against the live OpenDota database on 2026-08-25. Counts marked
+approximate grow over time:
 
 | Fact | Value |
 |---|---|
-| Pro matches since 2021-01-01 | **147,224** |
+| Pro matches since 2021-01-01 | **~147,493 and growing** |
 | Distinct leagues | 960 |
 | Earliest `start_time` | 1609488182 (2021-01-01) |
 | Latest `start_time` | 1787645902 (2026-08-25, live) |
@@ -149,8 +150,8 @@ series_id               int
 series_type             int       0=bo1, 1=bo3, 2=bo5
 radiant_team_id         int
 dire_team_id            int
-radiant_team_name       text      name AT TIME OF MATCH — do not drop, teams rename
-dire_team_name          text
+radiant_team_name       text      name as of row write time; null when team_id is null
+dire_team_name          text      name as of row write time; null when team_id is null
 radiant_captain         bigint
 dire_captain            bigint
 radiant_win             bool
@@ -172,14 +173,25 @@ radiant_xp_adv          list<int> per-minute xp lead; null when unparsed
 The `league_tier` domain is open-ended. Do not hardcode an enum; the live API has returned
 `"excluded"` in addition to the currently documented public tiers.
 
-REST `$.radiant_name` and `$.radiant_team.name` both return the team's **current** name; the
-same applies to dire. The API does not expose the match-time name. Historical accuracy in
-the incremental path comes from snapshotting the name at ingest time and never rewriting
-closed shards, not from the API. `slim.py` still prefers `$.radiant_name` over
-`$.radiant_team.name` (and the dire equivalents) in case the API is corrected later.
-`backfill.py` **must** read `m.radiant_team_name` and `m.dire_team_name` from SQL and must
-never fall back to REST for team names. Retries in `failed.ndjson` must stay short-lived: a
-match retried long after it was played can snapshot a renamed team's wrong current name.
+**Team names.** No historical team name exists in any source. OpenDota's
+`matches.radiant_team_name` and `matches.dire_team_name` are NULL for 100% of the 2021+ pro
+dataset (verified 147,493/147,493). REST `$.radiant_name` and `$.radiant_team.name` both
+return the team's current name; the same applies to dire.
+
+Consequently, `radiant_team_name` and `dire_team_name` hold the team's name as of when the
+row was written. Incremental rows are near-accurate because they are written hours after the
+match. Backfilled rows carry present-day names for matches years old. This is the ceiling of
+what the data supports, not a defect to fix.
+
+- `backfill.py` sources team names by joining `teams` on `team_id`.
+- `team_id` is the durable identifier. All joins, URLs, and aggregation keys use `team_id`;
+  never key on a name.
+- The site must not imply names are historical. Do not caption a 2021 match as if that were
+  the team's name at the time.
+- `slim.py` keeps preferring `$.radiant_name` over `$.radiant_team.name` (and the dire
+  equivalents) in case OpenDota corrects this later. That preference is harmless today.
+- The 5,038 matches with a NULL `radiant_team_id` get a null radiant team name and must
+  render without one.
 
 The REST `/matches/{id}` response supplies `patch` as an integer index. `fetch.py` must GET
 `/constants/patch` once per run, build an `{id: name}` lookup, and pass it to `slim_match`.
@@ -265,6 +277,7 @@ for each id (ascending):
     GET /matches/{id}
     slim(response, patch_lookup) -> append rows to matches/, players/, draft/
     if patch index is unknown: persist null and add index to run summary
+    if a team_id is null: persist the corresponding team name as null
     select one shard month from match start_time and apply it to all three tables
     if the start_time month is already compacted, use the late-arrival path
     on success, remove the id from the retry queue
@@ -310,7 +323,7 @@ exact schemas defined in §5 and observes the REST rate limit.
 ### `ingest/backfill.py` — run locally, once, never in CI
 
 Loads 2021-01-01 → present via `/explorer` SQL. Per-match REST calls are not an option here:
-147,224 of them would consume three months of quota.
+roughly 147,493 and growing would consume three months of quota.
 
 Chunk by month (68 months), keyset-paginated within each chunk so a row cap or timeout
 cannot silently truncate results:
@@ -318,7 +331,8 @@ cannot silently truncate results:
 ```sql
 SELECT m.match_id, m.start_time, m.duration, m.leagueid, l.name AS league_name,
        l.tier AS league_tier, m.series_id, m.series_type,
-       m.radiant_team_id, m.dire_team_id, m.radiant_team_name, m.dire_team_name,
+       m.radiant_team_id, m.dire_team_id,
+       rt.name AS radiant_team_name, dt.name AS dire_team_name,
        m.radiant_captain, m.dire_captain, m.radiant_win, m.radiant_score, m.dire_score,
        m.first_blood_time, m.game_mode, m.lobby_type, mp.patch,
        m.version IS NOT NULL AS is_parsed,
@@ -327,6 +341,8 @@ SELECT m.match_id, m.start_time, m.duration, m.leagueid, l.name AS league_name,
 FROM matches m
 LEFT JOIN leagues l ON l.leagueid = m.leagueid
 LEFT JOIN match_patch mp ON mp.match_id = m.match_id
+LEFT JOIN teams rt ON rt.team_id = m.radiant_team_id
+LEFT JOIN teams dt ON dt.team_id = m.dire_team_id
 WHERE m.leagueid > 0
   AND m.start_time >= :start AND m.start_time < :end
   AND m.match_id > :cursor
@@ -339,7 +355,9 @@ Expect roughly 400–600 explorer calls total.
 
 Requirements: write each completed historical month directly to `.parquet`; make the script
 resumable from the gitignored `ingest/.backfill-checkpoint.json`; on timeout, halve the window
-and retry. A crash at month 50 must not cost the first 49.
+and retry. A crash at month 50 must not cost the first 49. Source team names from the `teams`
+joins shown above. If a team ID is null, write the corresponding team name as null, flag the
+row, and continue.
 
 `radiant_gold_adv` / `radiant_xp_adv` are not practical to backfill via explorer. Leave them
 null for historical rows and populate them going forward. The match page must render without
@@ -349,6 +367,12 @@ The script must provide a `--dry-run` that validates query construction and keys
 against mocked responses without calling the live API or writing data. Do not run the live
 backfill without explicit user approval.
 
+### Open questions
+
+- **Backfill/incremental overlap:** Backfill will re-cover months that incremental ingest
+  already wrote, creating two sources for the same `match_id`. Deduplication and precedence
+  rules are undecided. Resolve before step 9.
+
 ### v0 acceptance criteria
 
 - [ ] Two consecutive scheduled runs complete, the second adding only genuinely new matches
@@ -356,9 +380,13 @@ backfill without explicit user approval.
 - [ ] Date-driven compaction on or after the eighth produces a `.parquet` and removes the
       corresponding `.ndjson`
 - [ ] A deliberately corrupted match id lands in `failed.ndjson` without failing the run
+- [ ] **Step 4:** a match with a null team ID stores the corresponding team name as null and
+      completes without error
 - [ ] A run with no new matches produces no commit
 - [ ] Backfill `--dry-run` validates query construction and keyset pagination against mocked
       responses without live API calls or data writes
+- [ ] **Step 8:** backfill joins team names through `teams.team_id`; rows with a null team ID
+      retain a null name, are flagged, and do not abort the run
 - [ ] **Separate step 7, explicit approval required:** backfill completes for at least one
       historical month and matches the count from an independent `SELECT count(*)` for that
       window
@@ -380,8 +408,8 @@ Observable Plot for charts, plain CSS. No React, no Tailwind, no UI framework.
   `radiant_gold_adv` is non-null.
 
 **Build scope — this is a hard constraint.** Cloudflare caps builds at 20 minutes. Do not
-pre-render all 147,224 match pages. Pre-render **only matches from the last 90 days**
-(~6,400 pages). Older matches resolve through a catch-all route that reads a small
+pre-render all roughly 147,493-and-growing match pages. Pre-render **only matches from the
+last 90 days** (~6,400 pages). Older matches resolve through a catch-all route that reads a small
 per-month JSON index client-side.
 
 **Deploy:** Cloudflare Pages, connected to the repo, building on push to `main`. The ingest
