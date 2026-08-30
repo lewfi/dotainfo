@@ -513,9 +513,10 @@ writes nothing.
 - Commit with the `github-actions[bot]` identity only when reference data changed
 
 This workflow is the pattern for `ingest.yml` in step 7: use `setup-python` with the pinned
-Python version, install from `requirements.txt`, stage the relevant data subdirectory, guard
-with `git diff --cached --quiet`, commit, run `git pull --rebase origin main`, then push. The
-rebase closes the race with the other workflow; their generated data paths are disjoint.
+Python version, set `fetch-depth: 0` on checkout so rebase has full history, install from
+`requirements.txt`, stage the relevant data subdirectory, guard with
+`git diff --cached --quiet`, commit, run `git pull --rebase origin main`, then push. The rebase
+closes the race with the other workflow; their generated data paths are disjoint.
 
 ### `ingest/backfill.py` — run locally, once, never in CI
 
