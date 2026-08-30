@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
+from datetime import datetime, timezone
 from typing import Any, TypeAlias
 
 from .schema import (
@@ -16,6 +17,7 @@ from .schema import (
 )
 
 JsonObject: TypeAlias = Mapping[str, Any]
+PatchLookup: TypeAlias = Mapping[int, str]
 Row: TypeAlias = dict[str, Any]
 
 
@@ -38,7 +40,7 @@ def _first_present(*values: Any) -> Any:
     return next((value for value in values if value is not None), None)
 
 
-def slim_match(payload: JsonObject) -> Row:
+def slim_match(payload: JsonObject, patch_lookup: PatchLookup) -> Row:
     """Create the single match row from a `/matches/{id}` response."""
     row = _project(payload, MATCH_SCHEMA.names)
     league = _object(payload.get("league"))
@@ -51,20 +53,31 @@ def slim_match(payload: JsonObject) -> Row:
     row["league_tier"] = _first_present(
         payload.get("league_tier"), league.get("tier")
     )
+    # Prefer the match-level names in case OpenDota restores historical names there;
+    # nested team names are current names and are only a fallback.
     row["radiant_team_name"] = _first_present(
-        payload.get("radiant_team_name"),
-        payload.get("radiant_name"),
-        radiant_team.get("name"),
+        payload.get("radiant_name"), radiant_team.get("name")
     )
     row["dire_team_name"] = _first_present(
-        payload.get("dire_team_name"),
-        payload.get("dire_name"),
-        dire_team.get("name"),
+        payload.get("dire_name"), dire_team.get("name")
     )
-    patch = payload.get("patch")
-    row["patch"] = str(patch) if patch is not None else None
+    patch_index = payload.get("patch")
+    patch_name = (
+        patch_lookup.get(patch_index)
+        if isinstance(patch_index, int) and not isinstance(patch_index, bool)
+        else None
+    )
+    row["patch"] = patch_name if isinstance(patch_name, str) else None
     row["is_parsed"] = payload.get("version") is not None
     return row
+
+
+def shard_month(match_row: JsonObject) -> str:
+    """Return the UTC `YYYY-MM` shard selected by a match's start time."""
+    start_time = match_row.get("start_time")
+    if not isinstance(start_time, int) or isinstance(start_time, bool):
+        raise TypeError("match row start_time must be an integer")
+    return datetime.fromtimestamp(start_time, tz=timezone.utc).strftime("%Y-%m")
 
 
 def slim_players(payload: JsonObject) -> list[Row]:
@@ -96,11 +109,13 @@ def slim_draft(payload: JsonObject) -> list[Row]:
     return rows
 
 
-def slim_match_response(payload: JsonObject) -> tuple[Row, list[Row], list[Row]]:
+def slim_match_response(
+    payload: JsonObject, patch_lookup: PatchLookup
+) -> tuple[Row, list[Row], list[Row]]:
     """Return match, player, and draft rows for one detailed match response."""
     if not isinstance(payload, Mapping):
         raise TypeError("match response must be a mapping")
-    return slim_match(payload), slim_players(payload), slim_draft(payload)
+    return slim_match(payload, patch_lookup), slim_players(payload), slim_draft(payload)
 
 
 def slim_team(payload: JsonObject) -> Row:
@@ -124,6 +139,7 @@ def slim_hero(payload: JsonObject) -> Row:
 
 
 __all__ = [
+    "shard_month",
     "slim_draft",
     "slim_hero",
     "slim_league",

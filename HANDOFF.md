@@ -144,7 +144,7 @@ start_time              bigint    unix seconds
 duration                int       seconds
 leagueid                int
 league_name             text      denormalized from leagues
-league_tier             text      premium | professional | amateur | null
+league_tier             text      open-ended string or null; "excluded" observed
 series_id               int
 series_type             int       0=bo1, 1=bo3, 2=bo5
 radiant_team_id         int
@@ -169,11 +169,27 @@ radiant_gold_adv        list<int> per-minute gold lead; null when unparsed
 radiant_xp_adv          list<int> per-minute xp lead; null when unparsed
 ```
 
-The REST `/matches/{id}` response supplies `patch` as an integer index. Before persistence,
-map that index through `/constants/patch` to the version string (for example, `"7.35"`). The
-SQL backfill's `match_patch.patch` column already supplies the version-string format. The
-fixture-backed patch lookup is v0 ingest work; the v1 `dotaconstants` deferral applies only
-to hero icons.
+The `league_tier` domain is open-ended. Do not hardcode an enum; the live API has returned
+`"excluded"` in addition to the currently documented public tiers.
+
+REST `$.radiant_name` and `$.radiant_team.name` both return the team's **current** name; the
+same applies to dire. The API does not expose the match-time name. Historical accuracy in
+the incremental path comes from snapshotting the name at ingest time and never rewriting
+closed shards, not from the API. `slim.py` still prefers `$.radiant_name` over
+`$.radiant_team.name` (and the dire equivalents) in case the API is corrected later.
+`backfill.py` **must** read `m.radiant_team_name` and `m.dire_team_name` from SQL and must
+never fall back to REST for team names. Retries in `failed.ndjson` must stay short-lived: a
+match retried long after it was played can snapshot a renamed team's wrong current name.
+
+The REST `/matches/{id}` response supplies `patch` as an integer index. `fetch.py` must GET
+`/constants/patch` once per run, build an `{id: name}` lookup, and pass it to `slim_match`.
+Both ingest paths must persist the same version-string format such as `"7.41"`: REST maps the
+integer through the live lookup, while SQL reads the already-text `match_patch.patch` column.
+If an index is absent from the live lookup, `slim_match` writes null and `fetch.py` records
+the raw index in `.run-summary.json` under `unknown_patch_indices`; the raw integer is never
+persisted in a match row and the run continues. `constants_patch.json` is an offline test
+fixture only. This lookup is v0 ingest work; the v1 `dotaconstants` deferral applies only to
+hero icons.
 
 Explicitly excluded: `chat`, `objectives`, `teamfights`, `cosmetics`, `draft_timings`,
 `replay_salt`, `match_seq_num`, `cluster`, `engine`, `human_players`, `positive_votes`,
@@ -198,6 +214,10 @@ megabytes live. Do not store them.
 
 Fields including `stuns`, `teamfight_participation`, `lane_role`, and `is_roaming` are null
 for unparsed matches. Handle nulls; do not drop the rows.
+
+`backpack_3` is absent from the REST response for every player observed in the step-3
+fixtures, so `fetch.py` always writes it as null. Retain the column because the SQL path may
+populate it for historical matches.
 
 ### `data/draft/` — ~24 rows per match
 
@@ -224,6 +244,9 @@ and intentional.
 Hero **icons** are not in the API. Pinning `odota/dotaconstants` and recording its commit SHA
 belongs to v1 only; do not do it in v0.
 
+The existing `slim_team`, `slim_reference_player`, `slim_league`, and `slim_hero` helpers are
+unvalidated. Step 6 must capture endpoint-specific reference fixtures before relying on them.
+
 ---
 
 ## 6. v0 — ingest pipeline
@@ -233,13 +256,16 @@ belongs to v1 only; do not do it in v0.
 ```
 read data/state.json -> last_match_id
 read data/failed.ndjson -> retry queue
+GET /constants/patch                             # once per run -> {id: name}
 GET /proMatches                                  # 100 newest, descending
 collect ids > last_match_id
   if all 100 are new, page back with ?less_than_match_id= until overlap is found
 combine genuinely new ids with retryable failed ids
 for each id (ascending):
     GET /matches/{id}
-    slim -> append rows to matches/, players/, draft/ shard selected by start_time
+    slim(response, patch_lookup) -> append rows to matches/, players/, draft/
+    if patch index is unknown: persist null and add index to run summary
+    select one shard month from match start_time and apply it to all three tables
     if the start_time month is already compacted, use the late-arrival path
     on success, remove the id from the retry queue
     on failure, update failed.ndjson; after attempt 5 move it to failed_permanent.ndjson
