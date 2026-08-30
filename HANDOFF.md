@@ -468,11 +468,32 @@ the actual null round-trip case.
 
 ### `ingest/reference.py`
 
-Refreshes all four reference Parquet files weekly. `/teams` must be paged forward until a
-page contains fewer than 1,000 objects, then deduplicated by `team_id`; it required 23 pages
-on 2026-08-30. With one call each to `/leagues`, `/heroes`, and `/proPlayers`, that refresh
-required 26 REST calls rather than four. It uses the exact schemas defined in §5 and observes
-the REST rate limit.
+Refreshes all four reference Parquet files weekly using the exact schemas defined in §5 and
+observing the REST rate limit. `/teams` is paged forward until a page contains fewer than
+1,000 objects, then deduplicated by `team_id` with the first occurrence winning. One call
+each to `/leagues`, `/heroes`, and `/proPlayers` makes 26 calls in the observed steady state:
+23 team pages plus three other endpoints.
+
+Because the `/teams` walk is deterministically lossy, each refresh also collects distinct
+non-null team IDs from every local match NDJSON, Parquet, and late-arrival shard. It subtracts
+IDs returned by the current walk and IDs already cached in `data/reference/teams.parquet`,
+then requests the remaining IDs in ascending order from `/teams/{team_id}`. The existing
+Parquet is the only supplemental cache; there is no separate state file. At most 600 IDs are
+attempted per refresh, with the remainder reported as deferred to the next week. A 404 or
+other non-200 response is counted and reported but does not abort the run. A refresh with a
+large supplemental backlog can therefore make up to 626 REST calls.
+
+Supplemental rows are merged into `teams.parquet` with ordinary team rows. A supplementally
+fetched team that remains absent from later page walks is not refreshed again, so its name,
+tag, and logo can become stale indefinitely. This is intentional: the stored schema excludes
+rating, and the affected teams are overwhelmingly single-match teams.
+
+Every output is sorted deterministically before writing: teams by `team_id`, leagues by
+`leagueid`, heroes by `id`, and players by `account_id`. `/teams` is rating-ordered and its
+order changes as ratings change; stable sorting prevents an unchanged weekly refresh from
+producing a meaningless Parquet diff, commit, and Cloudflare build. `--dry-run` performs all
+API and local reads, prints paging, deduplication, supplemental, and per-file row counts, and
+writes nothing.
 
 ### `.github/workflows/ingest.yml`
 
@@ -490,6 +511,11 @@ the REST rate limit.
 - Run weekly plus `workflow_dispatch`
 - `permissions: contents: write`
 - Commit with the `github-actions[bot]` identity only when reference data changed
+
+This workflow is the pattern for `ingest.yml` in step 7: use `setup-python` with the pinned
+Python version, install from `requirements.txt`, stage the relevant data subdirectory, guard
+with `git diff --cached --quiet`, commit, run `git pull --rebase origin main`, then push. The
+rebase closes the race with the other workflow; their generated data paths are disjoint.
 
 ### `ingest/backfill.py` — run locally, once, never in CI
 
@@ -617,6 +643,10 @@ building ahead.
 
 The target repository is the existing public `lewfi/dotainfo` repository. Repository creation
 and cloning are complete.
+
+Python 3.14.5 is the pinned project and CI interpreter. The ingest pipeline's only
+third-party runtime dependency is PyArrow; its exact version is pinned in `requirements.txt`,
+and CI installs dependencies from that file.
 
 1. Scaffold the structure in §4.
 2. Confirm Actions is enabled and workflow write permissions are on. The repository owner
