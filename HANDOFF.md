@@ -159,7 +159,7 @@ dire_score              int
 first_blood_time        int
 game_mode               int
 lobby_type              int
-patch                   text      from the match_patch table — REQUIRED for meta analysis
+patch                   text      normalized version string — REQUIRED for meta analysis
 is_parsed               bool      derive as (version is not null)
 tower_status_radiant    int
 tower_status_dire       int
@@ -168,6 +168,12 @@ barracks_status_dire    int
 radiant_gold_adv        list<int> per-minute gold lead; null when unparsed
 radiant_xp_adv          list<int> per-minute xp lead; null when unparsed
 ```
+
+The REST `/matches/{id}` response supplies `patch` as an integer index. Before persistence,
+map that index through `/constants/patch` to the version string (for example, `"7.35"`). The
+SQL backfill's `match_patch.patch` column already supplies the version-string format. The
+fixture-backed patch lookup is v0 ingest work; the v1 `dotaconstants` deferral applies only
+to hero icons.
 
 Explicitly excluded: `chat`, `objectives`, `teamfights`, `cosmetics`, `draft_timings`,
 `replay_salt`, `match_seq_num`, `cluster`, `engine`, `human_players`, `positive_votes`,
