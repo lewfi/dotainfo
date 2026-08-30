@@ -26,6 +26,7 @@ from ingest.slim import slim_hero, slim_league, slim_reference_player, slim_team
 
 
 TEAM_PAGE_SIZE = 1_000
+MAX_TEAM_PAGES = 100
 SUPPLEMENTAL_TEAM_LIMIT = 600
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -84,9 +85,7 @@ def walk_teams(
     """Walk every `/teams` page and retain the first row for each team ID."""
     teams: dict[int, JsonObject] = {}
     summary = ReferenceSummary()
-    page = 0
-
-    while True:
+    for page in range(MAX_TEAM_PAGES):
         payload = _objects(client.get_json("/teams", {"page": page}), "/teams")
         summary.pages_walked += 1
         summary.team_rows_returned += len(payload)
@@ -100,7 +99,11 @@ def walk_teams(
 
         if len(payload) < TEAM_PAGE_SIZE:
             break
-        page += 1
+    else:
+        raise RuntimeError(
+            f"/teams pagination exceeded the {MAX_TEAM_PAGES}-page ceiling "
+            "without a short or empty page"
+        )
 
     summary.distinct_teams_walked = len(teams)
     return teams, summary
@@ -342,6 +345,7 @@ def main(argv: list[str] | None = None) -> int:
 __all__ = [
     "DATA_DIR",
     "LocalMatchInventory",
+    "MAX_TEAM_PAGES",
     "ReferenceSummary",
     "SUPPLEMENTAL_TEAM_LIMIT",
     "TEAM_PAGE_SIZE",

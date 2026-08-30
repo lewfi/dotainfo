@@ -8,6 +8,7 @@ import unittest
 from argparse import Namespace
 from contextlib import redirect_stdout
 from pathlib import Path
+from unittest.mock import patch
 from urllib.error import HTTPError
 
 import pyarrow as pa
@@ -156,7 +157,28 @@ class ReferenceTests(unittest.TestCase):
 
         self.assertEqual(1000, len(rows))
         self.assertEqual(2, summary.pages_walked)
-        self.assertEqual(("/teams", {"page": 1}), client.calls[-1])
+        self.assertEqual(
+            [("/teams", {"page": 0}), ("/teams", {"page": 1})],
+            client.calls,
+        )
+
+    def test_paging_raises_at_hard_ceiling(self):
+        team_pages = [
+            [team(team_id)] for team_id in range(reference.MAX_TEAM_PAGES)
+        ]
+        client = self.client(team_pages)
+
+        with patch.object(reference, "TEAM_PAGE_SIZE", 1):
+            with self.assertRaisesRegex(RuntimeError, "100-page ceiling"):
+                reference.walk_teams(client)
+
+        self.assertEqual(
+            [
+                ("/teams", {"page": page})
+                for page in range(reference.MAX_TEAM_PAGES)
+            ],
+            client.calls,
+        )
 
     def test_duplicate_team_ids_collapse_and_first_occurrence_wins(self):
         full_page = [team(team_id) for team_id in range(1, 1001)]
