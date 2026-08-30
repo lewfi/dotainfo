@@ -313,15 +313,39 @@ as total eligible matches minus drafted matches because the direct anti-join tim
 
 ### `data/reference/` — refreshed weekly in v0
 
-Reference ID widths intentionally match their source tables: `teams.team_id` and
+Reference ID widths intentionally match their PostgreSQL source tables: `teams.team_id` and
 `leagues.leagueid` are `bigint` (int64). The same logical IDs in `matches` — `leagueid`,
-`radiant_team_id`, and `dire_team_id` — are `integer` (int32). This width mismatch is real
-and intentional.
+`radiant_team_id`, and `dire_team_id` — are `integer` (int32). JSON numbers cannot confirm
+those widths. The first `/teams` page had a maximum `team_id` of 10,232,231; the complete
+page walk raised that maximum to 10,240,390, and `/leagues` had a maximum `leagueid` of
+65,019. All are within signed int32. Keep the int64 reference schemas, but treat their width
+as a PostgreSQL-derived assertion that REST neither confirms nor contradicts.
 
 - `teams.parquet` — `team_id bigint, name, tag, logo_url` from `/teams`
-- `players.parquet` — `account_id, name, country_code, fantasy_role, team_id, team_name, team_tag, is_pro` from `notable_players`
+- `players.parquet` — `account_id, name, country_code, fantasy_role, team_id, team_name, team_tag, is_pro` from REST `/proPlayers`
 - `leagues.parquet` — `leagueid bigint, name, tier, banner` from `/leagues`
 - `heroes.parquet` — `id, name, localized_name, primary_attr, attack_type, roles` from `/heroes`
+
+The 2026-08-30 REST contract capture established:
+
+- `/teams` is paginated at 1,000 objects. Pages 0–21 contained 1,000 objects each and page
+  22 contained 504: 23 pages and 22,504 returned objects total. The page walk contained
+  21,970 distinct `team_id` values because 534 rows were duplicates across pages. Deduplicate
+  by `team_id` when constructing the reference table.
+- The 2021+ pro match data contains 22,504 distinct non-null team IDs. Of those, 21,970
+  appeared in that `/teams` page walk and 534 (2.37%) did not. This is a non-trivial reference
+  coverage gap: `teams.parquet` cannot resolve every non-null team ID currently stored in the
+  match data. No resolution has been selected yet.
+- `/leagues.tier` returned `null`, `"amateur"`, `"excluded"`, `"premium"`, and
+  `"professional"`. The domain is open-ended and must never be hardcoded as an enum.
+- `/proPlayers.fantasy_role` is an integer code whose meaning the API does not supply.
+- Of 5,327 `/proPlayers` objects, `is_pro` was null on 4,851 and `true` on all 476 non-null
+  rows; `false` was never observed. It carries no discriminating information and must not be
+  used as a predicate.
+- Observed null counts were: `/teams` page-0 `logo_url` 96/1,000; `/leagues.tier`
+  105/10,127 and `banner` 9,895/10,127; `/proPlayers.country_code`, `fantasy_role`, and
+  `team_id` 58/5,327 each; `team_name` and `team_tag` 186/5,327 each; and `is_pro`
+  4,851/5,327.
 
 Hero **icons** are not in the API. Pinning `odota/dotaconstants` and recording its commit SHA
 belongs to v1 only; do not do it in v0.
@@ -426,8 +450,11 @@ the actual null round-trip case.
 
 ### `ingest/reference.py`
 
-Refreshes all four reference Parquet files weekly using four REST API calls. It uses the same
-exact schemas defined in §5 and observes the REST rate limit.
+Refreshes all four reference Parquet files weekly. `/teams` must be paged forward until a
+page contains fewer than 1,000 objects, then deduplicated by `team_id`; it required 23 pages
+on 2026-08-30. With one call each to `/leagues`, `/heroes`, and `/proPlayers`, that refresh
+required 26 REST calls rather than four. It uses the exact schemas defined in §5 and observes
+the REST rate limit.
 
 ### `.github/workflows/ingest.yml`
 

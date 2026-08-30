@@ -1,0 +1,50 @@
+[
+  {
+    "team_id": 9572001,
+    "rating": 1545.86,
+    "wins": 345,
+    "losses": 180,
+    "last_match_time": 1787486918,
+    "delta": -18.4049,
+    "match_id": 8960991322,
+    "name": "TEAM VISION",
+    "tag": "VSN",
+    "logo_url": "https://cdn.steamusercontent.com/ugc/10380389074903512947/5D074799695A862D17D4205285315FE20399B28D/"
+  },
+  {
+    "team_id": 10108947,
+    "rating": 1431.07,
+    "wins": 46,
+    "losses": 25,
+    "last_match_time": 1777650919,
+    "delta": 15.6712,
+    "match_id": 8793794280,
+    "name": "SouthAmericaRejects",
+    "tag": "SAR",
+    "logo_url": null
+  },
+  {
+    "team_id": 2,
+    "rating": 1170.85,
+    "wins": 61,
+    "losses": 51,
+    "last_match_time": 1491924628,
+    "delta": null,
+    "match_id": null,
+    "name": "Zenith",
+    "tag": "Zenith",
+    "logo_url": null
+  },
+  {
+    "team_id": 10232231,
+    "rating": 1141.82,
+    "wins": 10,
+    "losses": 0,
+    "last_match_time": 1788038052,
+    "delta": 10.1317,
+    "match_id": 8973088430,
+    "name": "Klim Sani4",
+    "tag": "KS",
+    "logo_url": "https://cdn.steamusercontent.com/ugc/17154379317387244703/A3F526268CFCE8F90DC4AC49D48D69ACE33ACEB5/"
+  }
+]

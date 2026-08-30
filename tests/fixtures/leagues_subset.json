@@ -1,0 +1,51 @@
+[
+  {
+    "leagueid": 226,
+    "ticket": null,
+    "banner": null,
+    "tier": "professional",
+    "name": "CIS Dota 2 League"
+  },
+  {
+    "leagueid": 1849,
+    "ticket": null,
+    "banner": null,
+    "tier": "excluded",
+    "name": "KESL Season 1 "
+  },
+  {
+    "leagueid": 11894,
+    "ticket": null,
+    "banner": null,
+    "tier": "premium",
+    "name": "adsf"
+  },
+  {
+    "leagueid": 2031,
+    "ticket": "econ/leagues/subscriptions_impact_gaming_s1",
+    "banner": "econ/leagues/subscriptions_impact_gaming_s1_ingame",
+    "tier": "amateur",
+    "name": "Impact Gaming Season 1"
+  },
+  {
+    "leagueid": 62,
+    "ticket": "econ/leagues/subscriptions_batalhagamer",
+    "banner": "econ/leagues/subscriptions_batalhagamer_ingame",
+    "tier": null,
+    "name": "Batalha Gamer"
+  },
+  {
+    "leagueid": 65019,
+    "ticket": null,
+    "banner": null,
+    "tier": "professional",
+    "name": "BanglaGamer Dota 2 Championship"
+  },
+  {
+    "leagueid": 2,
+    "ticket": "econ/tools/gift_multiple",
+    "banner": "econ/leagues/subscription_logo_the_wildcards",
+    "tier": "premium",
+    "name": "Wild Cards West"
+  }
+]
