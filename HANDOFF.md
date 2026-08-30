@@ -277,7 +277,6 @@ for each id (ascending):
     GET /matches/{id}
     slim(response, patch_lookup) -> append rows to matches/, players/, draft/
     if patch index is unknown: persist null and add index to run summary
-    if a team_id is null: persist the corresponding team name as null
     select one shard month from match start_time and apply it to all three tables
     if the start_time month is already compacted, use the late-arrival path
     on success, remove the id from the retry queue
@@ -288,8 +287,32 @@ write state.json (highest new match_id processed)
 write data/.run-summary.json with run counts
 ```
 
-Bootstrap: if `state.json` is absent, seed `last_match_id` from 7 days ago so the first
-run is small and observable.
+Bootstrap: if `state.json` is absent, do not estimate a match ID from a timestamp. Page
+`/proMatches` backward until a page contains a match with `start_time` older than `now - 7d`.
+Set the initial cursor to the lowest `match_id` in that page, then process forward. Match IDs
+are monotonic but not time-linear, so a date-to-ID estimate is guesswork. In the run summary,
+`cursor_before` records this selected lowest ID.
+
+`data/.run-summary.json` is gitignored and overwritten on every non-dry run. Its exact shape
+is:
+
+```json
+{
+  "run_utc": "ISO-8601 UTC",
+  "matches_fetched": 0,
+  "matches_failed": 0,
+  "retries_attempted": 0,
+  "retries_succeeded": 0,
+  "retries_permanent": 0,
+  "api_calls": 0,
+  "unknown_patch_indices": [],
+  "shards_written": [],
+  "late_rows_written": 0,
+  "cursor_before": 0,
+  "cursor_after": 0,
+  "duration_seconds": 0.0
+}
+```
 
 `--dry-run` guarantees no filesystem or Git writes: no shards, state, failure queues,
 compaction, run summary, commit, or push. It prints what it would do and exits. `--limit N`
@@ -297,7 +320,9 @@ limits the number of real matches processed so a five-match dry run is observabl
 
 `fetch.py` never performs Git operations. The workflow stages, commits, and pushes only when
 tracked data changed. If there is nothing new, it exits without a commit, avoiding a needless
-Cloudflare build.
+Cloudflare build. During bootstrap, limited runs consume the discovered backlog in ascending
+order and advance the cursor only through matches actually attempted. A no-op run is expected
+only after that bootstrap backlog has been fully consumed.
 
 ### `ingest/reference.py`
 
