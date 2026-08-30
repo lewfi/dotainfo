@@ -328,14 +328,32 @@ as a PostgreSQL-derived assertion that REST neither confirms nor contradicts.
 
 The 2026-08-30 REST contract capture established:
 
-- `/teams` is paginated at 1,000 objects. Pages 0–21 contained 1,000 objects each and page
-  22 contained 504: 23 pages and 22,504 returned objects total. The page walk contained
-  21,970 distinct `team_id` values because 534 rows were duplicates across pages. Deduplicate
-  by `team_id` when constructing the reference table.
-- The 2021+ pro match data contains 22,504 distinct non-null team IDs. Of those, 21,970
-  appeared in that `/teams` page walk and 534 (2.37%) did not. This is a non-trivial reference
-  coverage gap: `teams.parquet` cannot resolve every non-null team ID currently stored in the
-  match data. No resolution has been selected yet.
+- `/teams` is paginated at 1,000 objects and must be paged until a page returns fewer than
+  1,000. On 2026-08-30 that was 23 pages: pages 0–21 of 1,000 and page 22 of 504, for
+  22,504 objects containing 21,970 distinct `team_id` values and 534 duplicate rows.
+  Deduplicate by `team_id`.
+- The page walk is lossy and the loss is deterministic. It is a defect in the endpoint, not
+  a gap in the data. `SELECT count(*) FROM teams` returns 22,504 — exactly the number of rows
+  a walk serves and exactly the number of distinct non-null team IDs in all-history pro
+  matches — so every match-used team ID exists in the `teams` table. Two complete walks
+  produced identical membership and the same 534 duplicates. An exhaustive offset walk over
+  an N-row result serves N rows, so 534 rows served twice necessarily means 534 rows never
+  served: the "534 duplicates" and "534 missing" figures are the same subtraction, not a
+  coincidence. `/teams` is rating-ordered and rating has very large ties (a 0-1 record rates
+  exactly 984, a 1-0 record exactly 1016), so an offset walk across the tie plateau both
+  duplicates and drops rows at page boundaries.
+- The omitted teams are individually retrievable. `GET /teams/{team_id}` returned HTTP 200
+  with a complete object for three sampled walk-missing IDs (1989737, 4326732, 6490258),
+  carrying the same keys as page-walk entries: `team_id`, `rating`, `wins`, `losses`,
+  `last_match_time`, `delta`, `match_id`, `name`, `tag`, `logo_url`. A SQL check confirmed
+  all ten sampled missing IDs are present in the `teams` table.
+- Scope: all-history, 534 of 22,504 match-used IDs (2.37%) are absent from a walk. Within the
+  project's 2021+ boundary there are 8,921 distinct non-null team IDs, of which 8,609 appear
+  in a walk and 312 (3.50%) do not. An earlier contract report labeled the unbounded
+  all-history figure as 2021+; it was not.
+- Team objects carry empty strings as well as nulls: sampled walk-missing teams included a
+  null `logo_url` and an empty-string `tag`. Treat empty string and null as equivalent
+  "absent" at render.
 - `/leagues.tier` returned `null`, `"amateur"`, `"excluded"`, `"premium"`, and
   `"professional"`. The domain is open-ended and must never be hardcoded as an enum.
 - `/proPlayers.fantasy_role` is an integer code whose meaning the API does not supply.
@@ -563,8 +581,12 @@ Observable Plot for charts, plain CSS. No React, no Tailwind, no UI framework.
 
 **Build scope — this is a hard constraint.** Cloudflare caps builds at 20 minutes. Do not
 pre-render all roughly 147,495-and-growing match pages. Pre-render **only matches from the
-last 90 days** (~6,400 pages). Older matches resolve through a catch-all route that reads a small
-per-month JSON index client-side.
+last 90 days**. Do not size the 90-day pre-render window from the ~71/day long-run average.
+The trailing-90-day match count is volatile in both directions: 2026-01 through 2026-03
+totalled 7,294 matches, above the original ~6,400 estimate, while 2026-06 through 2026-08
+totalled 2,169. Plan for a 2,000–7,500 page range, and count the real window at build time
+rather than assuming a figure. Older matches resolve through a catch-all route that reads a
+small per-month JSON index client-side.
 
 **Deploy:** Cloudflare Pages, connected to the repo, building on push to `main`. The ingest
 job's commits trigger builds automatically.
