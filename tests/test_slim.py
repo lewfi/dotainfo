@@ -86,6 +86,15 @@ class SlimMatchTests(unittest.TestCase):
         self.assertNotEqual(match_row["radiant_team_name"], "CURRENT_RADIANT")
         self.assertNotEqual(match_row["dire_team_name"], "CURRENT_DIRE")
 
+    def test_null_team_id_clears_only_corresponding_team_name(self) -> None:
+        response = copy.deepcopy(self.responses["parsed"])
+        response["radiant_team_id"] = None
+
+        match_row = slim_match(response, self.patch_lookup)
+
+        self.assertIsNone(match_row["radiant_team_name"])
+        self.assertEqual(match_row["dire_team_name"], response["dire_name"])
+
     def test_unknown_patch_is_null_and_caller_records_index(self) -> None:
         response = copy.copy(self.responses["parsed"])
         response["patch"] = 999_999

@@ -61,6 +61,10 @@ def slim_match(payload: JsonObject, patch_lookup: PatchLookup) -> Row:
     row["dire_team_name"] = _first_present(
         payload.get("dire_name"), dire_team.get("name")
     )
+    if row["radiant_team_id"] is None:
+        row["radiant_team_name"] = None
+    if row["dire_team_id"] is None:
+        row["dire_team_name"] = None
     patch_index = payload.get("patch")
     patch_name = (
         patch_lookup.get(patch_index)
