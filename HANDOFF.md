@@ -22,12 +22,12 @@ feed of recent matches, and a match detail page. Deployed to Cloudflare Pages.
 
 ## 2. Verified facts (do not re-derive these)
 
-Baseline facts measured against the live OpenDota database on 2026-08-25. Counts marked
-approximate grow over time:
+Baseline facts measured against the live OpenDota database on 2026-08-25 unless otherwise
+dated. Counts marked approximate grow over time:
 
 | Fact | Value |
 |---|---|
-| Pro matches since 2021-01-01 | **~147,493 and growing** |
+| Pro matches since 2021-01-01 | **~147,495 as of 2026-08-30 and growing** (147,224 on 2026-08-25) |
 | Distinct leagues | 960 |
 | Earliest `start_time` | 1609488182 (2021-01-01) |
 | Latest `start_time` | 1787645902 (2026-08-25, live) |
@@ -178,10 +178,16 @@ radiant_xp_adv          list<int> per-minute xp lead; null when unparsed
 The `league_tier` domain is open-ended. Do not hardcode an enum; the live API has returned
 `"excluded"` in addition to the currently documented public tiers.
 
+A 2026-08-30 SQL null sweep over 147,495 matches found `series_id` and `series_type` null on
+209 rows (0.14%), and both captain fields null on 1,781 rows (1.21%). Seven rows (0.005%) are
+null across `radiant_win`, both score fields, `first_blood_time`, `game_mode`, `lobby_type`,
+and all four tower/barracks status fields. Hard rule 3 still applies: retain these matches,
+and the site must render them without crashing.
+
 **Team names.** No historical team name exists in any source. OpenDota's
-`matches.radiant_team_name` and `matches.dire_team_name` are NULL for 100% of the 2021+ pro
-dataset (verified 147,493/147,493). REST `$.radiant_name` and `$.radiant_team.name` both
-return the team's current name; the same applies to dire.
+`matches.radiant_team_name` and `matches.dire_team_name` are NULL for 100% of the measured
+2021+ pro dataset (verified 147,493/147,493 at measurement time). REST `$.radiant_name` and
+`$.radiant_team.name` both return the team's current name; the same applies to dire.
 
 Consequently, `radiant_team_name` and `dire_team_name` hold the team's name as of when the
 row was written. Incremental rows are near-accurate because they are written hours after the
@@ -195,8 +201,13 @@ what the data supports, not a defect to fix.
   the team's name at the time.
 - `slim.py` keeps preferring `$.radiant_name` over `$.radiant_team.name` (and the dire
   equivalents) in case OpenDota corrects this later. That preference is harmless today.
-- Approximately 5,038 matches have a NULL team ID. They get a null corresponding team name
-  and must render without one.
+- Of 147,495 matches measured on 2026-08-30, 5,038 (3.42%) have a NULL
+  `radiant_team_id`, and 5,449 (3.69%) have a NULL `dire_team_id`. A separate join to the
+  current `teams` table produced exactly the same null counts for `rt.name` and `dt.name`,
+  establishing that every non-null team ID resolved to a team row. This join result says
+  nothing about the historical `matches.radiant_team_name` / `matches.dire_team_name`
+  columns described above. Null-ID matches retain a null corresponding name and must render
+  without one.
 
 The REST `/matches/{id}` response supplies `patch` as an integer index. `fetch.py` must GET
 `/constants/patch` once per run, build an `{id: name}` lookup, and pass it to `slim_match`.
@@ -234,9 +245,16 @@ Fields including `stuns`, `teamfight_participation`, `lane_role`, and `is_roamin
 for unparsed matches. Handle nulls; do not drop the rows.
 
 `backpack_3` is absent from REST player responses, so `fetch.py` always writes it as null.
-Retain the column because the SQL path may populate it for historical matches.
+It exists as a real `player_matches` SQL column, but all 4,350 rows in the bounded 2026-07
+sweep were null. Retain the schema column, but do not assume the SQL backfill can populate it
+without further historical evidence.
 
-### `data/draft/` — ~24 rows per match
+Apart from `backpack_3`, a bounded SQL null sweep found no null §5 player fields among 4,350
+rows in 2026-07. Among 11,130 rows in 2026-06, exactly 60 rows (0.54%) were null for `stuns`,
+`teamfight_participation`, `obs_placed`, `sen_placed`, `camps_stacked`, `rune_pickups`,
+`lane`, `lane_role`, and `is_roaming`; all other §5 player fields had zero nulls.
+
+### `data/draft/` — variable rows per match, including zero
 
 ```
 match_id bigint, is_pick bool, hero_id int, team smallint (0=radiant, 1=dire), ord smallint
@@ -245,6 +263,12 @@ match_id bigint, is_pick bool, hero_id int, team smallint (0=radiant, 1=dire), o
 The live REST path maps the `/matches/{id}` response's `picks_bans` array. REST names its
 ordering field `order`; normalize it to the schema's `ord`. The SQL backfill path reads the
 `picks_bans` table and maps its existing `ord` column.
+
+Drafts are variable-length and may be absent entirely; never assert exactly 24 rows. In the
+2021+ SQL population measured on 2026-08-30, `game_mode=2` averaged between 23 and 24 rows
+across 145,714 drafted matches, while `game_mode=22` averaged between 16 and 17 across 413.
+Another 1,368 of 147,495 matches (0.93%) had no `picks_bans` rows. The 1,368 count was derived
+as total eligible matches minus drafted matches because the direct anti-join timed out.
 
 ### `data/reference/` — refreshed weekly in v0
 
@@ -442,10 +466,11 @@ Observable Plot for charts, plain CSS. No React, no Tailwind, no UI framework.
   we stored it.
 - `/matches/[id]` — draft order (picks and bans, both teams, in `ord` sequence), both boxscores
   (hero, K/D/A, LH/DN, GPM/XPM, net worth, items), and the gold-advantage graph when
-  `radiant_gold_adv` is non-null.
+  `radiant_gold_adv` is non-null. If the match has no draft rows, render a clean
+  draft-unavailable state just as an unparsed match renders without the gold graph.
 
 **Build scope — this is a hard constraint.** Cloudflare caps builds at 20 minutes. Do not
-pre-render all roughly 147,493-and-growing match pages. Pre-render **only matches from the
+pre-render all roughly 147,495-and-growing match pages. Pre-render **only matches from the
 last 90 days** (~6,400 pages). Older matches resolve through a catch-all route that reads a small
 per-month JSON index client-side.
 
@@ -456,7 +481,8 @@ job's commits trigger builds automatically.
 
 - [ ] `npm run build` completes in under 10 minutes locally
 - [ ] Home feed renders with correct team names and results
-- [ ] A match page renders full draft and both boxscores
+- [ ] A match page renders the full draft when present, a clean unavailable state when absent,
+      and both boxscores
 - [ ] A parsed match shows the gold graph; an unparsed one renders cleanly without it
 - [ ] A match older than 90 days is still reachable
 - [ ] Deployed and publicly accessible
