@@ -1,0 +1,3 @@
+*.ndjson text eol=lf
+*.json text eol=lf
+*.parquet binary

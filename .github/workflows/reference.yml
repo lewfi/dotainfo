@@ -35,13 +35,52 @@ jobs:
       - name: Commit changed reference data
         shell: bash
         run: |
-          git add -A data/reference
-          if git diff --cached --quiet; then
-            echo "No reference changes to commit"
-            exit 0
-          fi
+          set -euo pipefail
+
+          reference_files=(
+            data/reference/teams.parquet
+            data/reference/players.parquet
+            data/reference/leagues.parquet
+            data/reference/heroes.parquet
+          )
+          snapshot_dir="$(mktemp -d)"
+          trap 'rm -rf "$snapshot_dir"' EXIT
+          for path in "${reference_files[@]}"; do
+            cp "$path" "$snapshot_dir/$(basename "$path")"
+          done
+
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git commit -m "Refresh reference data"
-          git pull --rebase origin main
-          git push
+
+          max_attempts=3
+          for ((attempt = 1; attempt <= max_attempts; attempt++)); do
+            echo "Commit attempt $attempt of $max_attempts"
+            git fetch origin main
+            git reset --hard origin/main
+            for path in "${reference_files[@]}"; do
+              cp "$snapshot_dir/$(basename "$path")" "$path"
+            done
+            git add -A data/reference
+
+            if git diff --cached --quiet; then
+              echo "No reference changes to commit"
+              exit 0
+            fi
+
+            git commit -m "Refresh reference data"
+            if push_output="$(git push origin HEAD:main 2>&1)"; then
+              printf '%s\n' "$push_output"
+              exit 0
+            fi
+            printf '%s\n' "$push_output"
+
+            if ! grep -Eqi 'non-fast-forward|fetch first' <<<"$push_output"; then
+              echo "Push failed for a reason other than a non-fast-forward update"
+              exit 1
+            fi
+            if ((attempt == max_attempts)); then
+              echo "Push remained non-fast-forward after $max_attempts attempts"
+              exit 1
+            fi
+            echo "Remote advanced; rebuilding the commit on the new origin/main"
+          done

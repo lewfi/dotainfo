@@ -128,6 +128,10 @@ assets. Do not build that now. Re-evaluate this threshold and escape hatch after
 two real monthly Parquet shards exist; they will provide a trustworthy per-month figure that
 the 299-match sample cannot.
 
+Reference-data history contributes separately to that threshold. `data/reference/teams.parquet`
+is 1.48 MB, and git stores a full copy each time this binary file changes. At a weekly refresh
+cadence, changes to this file alone add roughly 77 MB of repository growth per year.
+
 ```
 repo/
   ingest/
@@ -520,10 +524,18 @@ writes nothing.
 - Commit with the `github-actions[bot]` identity only when reference data changed
 
 This workflow is the pattern for `ingest.yml` in step 7: use `setup-python` with the pinned
-Python version, set `fetch-depth: 0` on checkout so rebase has full history, install from
-`requirements.txt`, stage the relevant data subdirectory, guard with
-`git diff --cached --quiet`, commit, run `git pull --rebase origin main`, then push. The rebase
-closes the race with the other workflow; their generated data paths are disjoint.
+Python version, install from `requirements.txt`, and generate the data before synchronizing
+with the remote. Preserve the generated outputs in a temporary directory outside the worktree,
+then fetch `origin/main`, reset the worktree to that tip, restore the generated outputs, stage
+the relevant data subdirectory, and use `git diff --cached --quiet` as the no-change guard
+before committing and pushing. If the push is rejected as non-fast-forward, repeat that
+fetch/reset/restore/stage/commit cycle with a bounded retry count.
+
+Do not rebase generated data commits. The Parquet files are regenerated binary output, not
+edited source: when both the remote tip and the current run contain a version, the freshly
+generated version is authoritative. Git cannot merge the binary content, so rebasing a stale
+run onto a remote reference refresh can produce an add/add conflict instead of resolving the
+race.
 
 ### `ingest/backfill.py` — run locally, once, never in CI
 
