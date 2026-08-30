@@ -212,7 +212,7 @@ class CompactTests(unittest.TestCase):
         self.assertTrue(result.dry_run)
         self.assertEqual(before, self.snapshot())
 
-    def test_nullable_match_fields_and_arrow_types_round_trip(self):
+    def test_nullable_fields_and_arrow_types_round_trip(self):
         self.write_month(
             matches=[
                 self.match_row(
@@ -245,11 +245,14 @@ class CompactTests(unittest.TestCase):
             "patch",
         ):
             self.assertIsNone(row[name])
-        self.assertTrue(
-            pq.read_table(
-                self.data_dir / "players" / f"{self.month}.parquet"
-            ).schema.equals(PLAYER_SCHEMA)
+        player_table = pq.read_table(
+            self.data_dir / "players" / f"{self.month}.parquet"
         )
+        self.assertTrue(player_table.schema.equals(PLAYER_SCHEMA))
+        player = player_table.to_pylist()[0]
+        for name in ("stuns", "teamfight_participation"):
+            self.assertIsNone(player[name])
+            self.assertEqual(1, player_table[name].null_count)
 
     def test_match_without_draft_rows_compacts_with_empty_typed_draft(self):
         self.write_month(draft=[])

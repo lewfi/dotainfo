@@ -201,6 +201,12 @@ radiant_gold_adv        list<int> per-minute gold lead; null when unparsed
 radiant_xp_adv          list<int> per-minute xp lead; null when unparsed
 ```
 
+The advantage-array source distinction is path-specific. REST `/matches/{id}` returns
+`radiant_gold_adv` and `radiant_xp_adv` for parsed matches; all 299 matches in the measured
+2026-08 incremental sample populated both columns, with 11,098 elements in each. Only the SQL
+Explorer backfill path cannot practically reconstruct them, so historical backfilled rows
+leave them null.
+
 The `league_tier` domain is open-ended. Do not hardcode an enum; the live API has returned
 `"excluded"` in addition to the currently documented public tiers.
 
@@ -234,6 +240,15 @@ what the data supports, not a defect to fix.
   nothing about the historical `matches.radiant_team_name` / `matches.dire_team_name`
   columns described above. Null-ID matches retain a null corresponding name and must render
   without one.
+
+A 2026-by-month SQL sweep on 2026-08-30 found no systematic recent rise in null team IDs;
+instead, the August spike was entirely event-specific. August had 116/621 (18.68%) null
+`radiant_team_id` and 111/621 (17.87%) null `dire_team_id`, and every one belonged to league
+20134: 116/185 (62.70%) radiant and 111/185 (60.00%) dire. The other 436 August matches had
+zero null team IDs. The 299-match incremental sample contains those same 116 and 111 nulls,
+so its apparent 38.80%/37.12% rate is a sampling-composition effect. Nameless rendering is
+therefore not the general recent case, but it is common within an affected event and must be
+treated as normal presentation rather than an exceptional error.
 
 The REST `/matches/{id}` response supplies `patch` as an integer index. `fetch.py` must GET
 `/constants/patch` once per run, build an `{id: name}` lookup, and pass it to `slim_match`.
@@ -402,6 +417,12 @@ them back, and verifies exact row counts and schemas before publishing any of th
 after all three verified files have been published are the NDJSON sources removed. The
 command reports the before/after row count for each table; `--dry-run` reports eligible
 months and row counts without filesystem writes.
+
+`test_real_august_shards_round_trip_every_row_and_column` asserts exact null-position and
+null-count preservation for `stuns` and `teamfight_participation`, but the 299-match August
+sample has zero nulls in both columns because every sampled match was parsed. That part of
+the real-data assertion is currently vacuous; the synthetic tests in `test_compact.py` cover
+the actual null round-trip case.
 
 ### `ingest/reference.py`
 
