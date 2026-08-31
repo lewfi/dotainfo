@@ -163,6 +163,15 @@ match. Across all 60 backfilled months now committed—2021-01 through 2025-12�
 measurement is 133,059 matches in 68,443,801 bytes, or 514.3869 bytes per match. These are
 again SQL-backfilled rows with null advantage arrays.
 
+The final approved closed-history batch, 2026-01 through 2026-07, adds 13,816 matches in
+7,176,722 bytes, or 519.4501 bytes per match. Across all 67 backfilled months now
+committed—2021-01 through 2026-07—the measurement is 146,875 matches in 75,620,523 bytes,
+or 514.8631 bytes per match. These are likewise SQL-backfilled rows with null advantage
+arrays. The 649-match difference from the dated 147,524-match population is almost entirely
+the independently measured 621-match 2026-08 window (95.7%); the remaining 28 are not
+independently classified and the population measurements were taken while August was still
+growing.
+
 Two formats, by lifecycle stage:
 
 - **Hot month** — `data/matches/2026-08.ndjson`, appended to on every run. Newline-delimited
@@ -293,16 +302,28 @@ premium, and 14,072 excluded. Relative to finding 23, arithmetic leaves 4,990 pr
 147 premium, and 9,328 excluded matches for 2026-01 through 2026-07; these remain
 implications for the final historical chunk, not measurements.
 
+The 2026-01 through 2026-07 batch directly measures 4,517 professional, zero premium, and
+9,299 excluded matches. Excluded shares are 51.43%, 71.71%, 81.02%, 69.01%, 81.65%, 52.11%,
+and 14.71% from January through July. The November/December 2025 surge therefore continued
+at high levels through May, eased in June, and collapsed in July rather than continuing as a
+monotonic ramp. May is the high point: its 2,025 excluded matches are spread across fourteen
+leagues, led by Destiny League (570), Ultras Dota Pro League (428), Dota 2 Space League
+(263), SIVVIT League (137), and 刀塔扭蛋杯 (123). Across all 67 committed months, measured
+tier totals are 110,786 professional, 12,718 premium, and 23,371 excluded, with no null-tier
+row.
+
 **Cross-path coverage question.** The committed 2026-08 REST shard has 327 rows: 315
-professional, 12 premium, and zero excluded. By contrast, 2025 SQL is 34.28% excluded, so
-the tension is real: either `/proMatches` does not return excluded-tier leagues or another
-part of the forward path is not seeing them. If 2026-08 resembled the 2025 share, roughly
-213 of its independently measured 621 SQL matches would be excluded, enough to explain
-about 72% of the known roughly 294-match REST/SQL gap and eventual late-arrival set. This is
-a scale illustration, not a measurement of August's excluded tier. The 2026 backfill chunk
-must settle the question without assuming the cause. HANDOFF finding 7's earlier “no
-`/proMatches` coverage gap” conclusion was established before excluded-tier leagues existed
-in the data and does not resolve this newer evidence.
+professional, 12 premium, and zero excluded. The SQL-backed closed months immediately before
+it are 67.31% excluded overall and remain 14.71% excluded even in July. The tension is
+therefore real and large enough that `/proMatches` plausibly omits excluded-tier leagues, or
+the forward path otherwise fails to see them; the closed-month comparison does not by itself
+identify which mechanism is responsible. Applying July's observed share to the independently
+measured 621 SQL matches in August estimates roughly 91 excluded matches, which would explain
+about 31% of the roughly 294-match REST/SQL gap. This is a scale estimate, not an August tier
+measurement. HANDOFF finding 7's earlier “no `/proMatches` coverage gap” conclusion predates
+excluded-tier leagues and does not resolve this evidence. August remains a separate bounded
+backfill to run on or after 2026-09-12; it will directly measure the tier split and exercise
+the real `late.ndjson` publication path for the first time.
 
 A 2026-08-30 SQL null sweep over 147,495 matches found `series_id` and `series_type` null on
 209 rows (0.14%), and both captain fields null on 1,781 rows (1.21%). Seven rows (0.005%) are
@@ -463,7 +484,12 @@ therefore exercises both the short-player anomaly and draft-unavailable cases.
 The committed direct no-draft observations form a series, not a universal rate: 167/16,807
 (0.99%) in 2021, 174/24,951 (0.70%) in 2022, 157/28,477 (0.55%) in 2023-01 through
 2023-11, 21/2,025 (1.04%) in 2023-12, 240/29,994 (0.80%) in 2024, and 448/30,805
-(1.45%) in 2025. The running committed total is 1,207/133,059 (0.907%).
+(1.45%) in 2025. The 2026-01 through 2026-07 observation is 160/13,816 (1.158%). The
+running committed total is 1,367/146,875 (0.931%): 1,152/110,786 professional (1.040%),
+50/12,718 premium (0.393%), and 165/23,371 excluded (0.706%). Professional no-draft rates
+for January through July are 0.306%, 0.969%, 1.092%, 0.517%, 0.440%, 0.938%, and 0.539%; no
+month exceeds 2%, so the 2025 rise to a 2.07% professional yearly rate did not remain
+elevated in this chunk.
 
 ### `data/reference/` — refreshed weekly in v0
 
@@ -892,6 +918,25 @@ premium, and 10,561 excluded matches. The excluded share plateaued near 26-34% t
 October before jumping to 58.5% in November and 69.1% in December. The 2025 no-draft
 observation is 448/30,805 (1.45%).
 
+A seventh and final closed-history invocation selected exactly 2026-01 through 2026-07 and
+completed all seven in 233.887 seconds with 43 Explorer query calls. No `TIMEOUT`,
+`TRUNCATED PLAYER TAIL`, `PLAYER TAIL HALVING CAP REACHED`, or player-row anomaly line
+appeared. Direct Parquet reads found 13,816 distinct matches, no duplicate match ID within
+the batch or across all 67 backfilled months, exactly ten player rows per selected match,
+null advantage arrays throughout, and exact correspondence between null team IDs and names.
+The only all-history player anomaly remains match 7485890286 with two rows. An independent
+Explorer query grouped `[1767225600, 1785542400)` by UTC month and league tier; every monthly
+total and tier distribution matched Parquet. January alone exceeded 10% null-team matches at
+369/2,693 (13.70%), concentrated in DreamLeague Season 28 Qualifiers (141), ESL One
+Birmingham 2026 Qualifiers (152), 肛宝联赛-老婆杯 (41), and SIVVIT League (33), with two
+single-match leagues. The batch occupies 7,176,722 bytes (519.4501 bytes per match), and all
+67 months occupy 75,620,523 bytes (514.8631 bytes per match). The pre-run 2026-08 NDJSON
+remained byte-identical at 338,692 bytes and SHA-256
+`191e237866b5d1ca8350dec80fcc804350c420c3f69d60182e689ba9be7f9730`; no 2026-08
+Parquet was created. The checkpoint records all months through 2026-07. The 2026-08 month is
+still outstanding as a separate explicitly bounded run on or after 2026-09-12, when it will
+be the first live exercise of the late-arrival path against an existing REST shard.
+
 ### v0 acceptance criteria
 
 - [ ] Two consecutive scheduled runs complete, the second adding only genuinely new matches
@@ -926,9 +971,11 @@ Observable Plot for charts, plain CSS. No React, no Tailwind, no UI framework.
   directly establishes the recent tier shift: excluded first appears in May and reaches
   3,511 matches for the year, while only 121 matches are premium. The 2025 backfill then
   finds 10,561 excluded matches (34.28%) and only 144 premium, with excluded reaching 69.1%
-  in December. Arithmetic leaves another 9,328 excluded and 147 premium matches to test in
-  2026-01 through 2026-07. Revisit whether this default is appropriate for the home feed and
-  90-day window.
+  in December. The 2026-01 through 2026-07 backfill directly finds another 9,299 excluded
+  matches and no premium matches; excluded exceeds half of every month from January through
+  June, peaks at 81.65% in May, and falls to 14.71% in July. The
+  premium-plus-professional default would hide most matches in several recent months, so
+  revisit whether it is appropriate for the home feed and 90-day window.
 - `/matches/[id]` — draft order (picks and bans, both teams, in `ord` sequence), both boxscores
   (hero, K/D/A, LH/DN, GPM/XPM, net worth, items), and the gold-advantage graph when
   `radiant_gold_adv` is non-null. If the match has no draft rows, render a clean
