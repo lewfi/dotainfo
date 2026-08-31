@@ -78,10 +78,6 @@ class ExplorerRateLimitError(RuntimeError):
     """Raised after /explorer remains rate-limited through five retries."""
 
 
-class ChildQueryIncompleteError(RuntimeError):
-    """Raised when a child query does not return a complete match window."""
-
-
 class Explorer(Protocol):
     def query(self, sql: str) -> list[Mapping[str, Any]]: ...
 
@@ -95,6 +91,7 @@ class MonthRows:
     explorer_queries: int = 0
     null_team_id_matches: int = 0
     zero_player_match_ids: list[int] = field(default_factory=list)
+    player_row_count_anomalies: dict[int, int] = field(default_factory=dict)
     zero_draft_match_ids: list[int] = field(default_factory=list)
 
 
@@ -118,6 +115,8 @@ class BackfillSummary:
     duplicate_matches_skipped: int = 0
     explorer_queries: int = 0
     null_team_id_matches: int = 0
+    zero_player_matches: int = 0
+    player_row_count_anomalies: dict[int, int] = field(default_factory=dict)
     zero_draft_matches: int = 0
     late_matches_written: int = 0
 
@@ -369,6 +368,25 @@ def fetch_month_rows(
         result.explorer_queries += 1
         return client.query(sql)
 
+    def halve_page(
+        reason: str, *, observed_match_count: int | None = None
+    ) -> bool:
+        nonlocal page_size
+        effective_size = (
+            min(page_size, observed_match_count)
+            if observed_match_count is not None
+            else page_size
+        )
+        if effective_size <= MIN_PAGE_SIZE:
+            return False
+        reduced = max(MIN_PAGE_SIZE, effective_size // 2)
+        print(
+            f"{reason} month={month} cursor={cursor} "
+            f"window={page_size}->{reduced}"
+        )
+        page_size = reduced
+        return True
+
     while True:
         try:
             source_matches = query(build_match_query(month, cursor, page_size))
@@ -391,14 +409,8 @@ def fetch_month_rows(
             source_players = query(build_player_query(month, cursor, window_end))
             source_draft = query(build_draft_query(month, cursor, window_end))
         except ExplorerTimeout:
-            if page_size <= MIN_PAGE_SIZE:
+            if not halve_page("TIMEOUT"):
                 raise
-            reduced = max(MIN_PAGE_SIZE, page_size // 2)
-            print(
-                f"TIMEOUT month={month} cursor={cursor} "
-                f"window={page_size}->{reduced}"
-            )
-            page_size = reduced
             continue
 
         page_ids = set(match_ids)
@@ -418,24 +430,39 @@ def fetch_month_rows(
         player_counts = {match_id: 0 for match_id in match_ids}
         for row in source_players:
             player_counts[_required_match_id(row, "players")] += 1
-        zero_player_ids = sorted(
-            match_id for match_id, count in player_counts.items() if count == 0
-        )
-        incomplete_player_counts = {
+        short_player_counts = {
+            match_id: count
+            for match_id, count in player_counts.items()
+            if count < PLAYER_ROWS_PER_MATCH
+        }
+        tail_short_ids: list[int] = []
+        for match_id in reversed(match_ids):
+            if match_id not in short_player_counts:
+                break
+            tail_short_ids.append(match_id)
+        tail_short_ids.reverse()
+        if tail_short_ids and halve_page(
+            "SUSPECTED PLAYER TRUNCATION",
+            observed_match_count=len(match_ids),
+        ):
+            tail_counts = {
+                match_id: player_counts[match_id]
+                for match_id in tail_short_ids
+            }
+            print(
+                f"TRUNCATED PLAYER TAIL month={month} "
+                f"counts={tail_counts}"
+            )
+            continue
+
+        player_anomalies = {
             match_id: count
             for match_id, count in player_counts.items()
             if count != PLAYER_ROWS_PER_MATCH
         }
-        if zero_player_ids:
-            print(
-                f"ZERO PLAYER ROWS month={month} match_ids={zero_player_ids}"
-            )
-        if incomplete_player_counts:
-            raise ChildQueryIncompleteError(
-                f"player query incomplete for month={month}: "
-                f"expected {PLAYER_ROWS_PER_MATCH} rows per match, "
-                f"received {incomplete_player_counts}"
-            )
+        zero_player_ids = sorted(
+            match_id for match_id, count in player_anomalies.items() if count == 0
+        )
 
         draft_ids = {
             _required_match_id(row, "draft") for row in source_draft
@@ -450,6 +477,8 @@ def fetch_month_rows(
             row["radiant_team_id"] is None or row["dire_team_id"] is None
             for row in mapped_matches
         )
+        result.zero_player_match_ids.extend(zero_player_ids)
+        result.player_row_count_anomalies.update(player_anomalies)
         result.zero_draft_match_ids.extend(zero_draft_ids)
         result.pages += 1
         cursor = window_end
@@ -487,6 +516,20 @@ def existing_month_match_ids(data_dir: Path, month: str) -> set[int]:
         ids.update(value.as_py() for value in table.column("match_id"))
     ids.update(_late_month_match_ids(matches_dir / "late.ndjson", month))
     return ids
+
+
+def _filter_existing_late_children(
+    path: Path,
+    rows: Sequence[JsonObject],
+    source: str,
+) -> list[JsonObject]:
+    """Skip a complete child set already published before an interrupted match append."""
+    existing_ids = read_ndjson_match_ids(path)
+    return [
+        row
+        for row in rows
+        if _required_match_id(row, source) not in existing_ids
+    ]
 
 
 def _sort_nullable(value: Any) -> tuple[bool, Any]:
@@ -591,18 +634,26 @@ def write_month(data_dir: Path, month: str, fetched: MonthRows) -> WriteResult:
         if not new_matches:
             return WriteResult(month, 0, 0, 0, duplicate_count, False, "none")
         late_paths = dataset_paths(data_dir, month, late=True)
+        late_draft = _filter_existing_late_children(
+            late_paths["draft"], new_draft, "backfill late draft"
+        )
+        late_players = _filter_existing_late_children(
+            late_paths["players"], new_players, "backfill late players"
+        )
         late_rows = {
             "matches": new_matches,
-            "players": new_players,
-            "draft": new_draft,
+            "players": late_players,
+            "draft": late_draft,
         }
-        for name in ("matches", "players", "draft"):
+        # The match row is the deduplication key and is deliberately published last.
+        # Child-local match-ID filtering makes either interruption point resumable.
+        for name in ("draft", "players", "matches"):
             append_rows_atomically(late_paths[name], late_rows[name])
         return WriteResult(
             month=month,
             matches_written=len(new_matches),
-            players_written=len(new_players),
-            draft_written=len(new_draft),
+            players_written=len(late_players),
+            draft_written=len(late_draft),
             duplicate_matches_skipped=duplicate_count,
             wrote_files=True,
             write_target="late",
@@ -756,6 +807,10 @@ def run_backfill(
         summary.duplicate_matches_skipped += result.duplicate_matches_skipped
         summary.explorer_queries += fetched.explorer_queries
         summary.null_team_id_matches += fetched.null_team_id_matches
+        summary.zero_player_matches += len(fetched.zero_player_match_ids)
+        summary.player_row_count_anomalies.update(
+            fetched.player_row_count_anomalies
+        )
         summary.zero_draft_matches += len(fetched.zero_draft_match_ids)
         if result.write_target == "late":
             summary.late_matches_written += result.matches_written
@@ -764,12 +819,19 @@ def run_backfill(
                 f"ZERO DRAFT ROWS month={month} "
                 f"match_ids={fetched.zero_draft_match_ids}"
             )
+        if fetched.player_row_count_anomalies:
+            print(
+                f"PLAYER ROW COUNT ANOMALIES month={month} "
+                f"counts={fetched.player_row_count_anomalies}"
+            )
         print(
             f"COMPLETE month={month} pages={fetched.pages} "
             f"matches_written={result.matches_written} "
             f"duplicates_skipped={result.duplicate_matches_skipped} "
             f"null_team_id_matches={fetched.null_team_id_matches} "
-            "zero_player_matches=0 "
+            f"zero_player_matches={len(fetched.zero_player_match_ids)} "
+            "player_row_count_anomalies="
+            f"{len(fetched.player_row_count_anomalies)} "
             f"zero_draft_matches={len(fetched.zero_draft_match_ids)} "
             f"write_target={result.write_target} "
             f"files_written={str(result.wrote_files).lower()}"
@@ -825,7 +887,7 @@ def _mock_players(match_id: int) -> list[JsonObject]:
 def validate_offline_dry_run() -> MonthRows:
     script = [
         ("matches", [_mock_match(101), _mock_match(102)]),
-        ("players", _mock_players(101) + _mock_players(102)),
+        ("players", _mock_players(102)),
         ("draft", [{"match_id": 101, "is_pick": True, "hero_id": 1, "team": 0, "ord": 0}]),
         ("matches", [_mock_match(103)]),
         ("players", _mock_players(103)),
@@ -874,7 +936,8 @@ def validate_offline_dry_run() -> MonthRows:
     print(f"mock_players={len(rows.players)}")
     print(f"mock_draft={len(rows.draft)}")
     print(f"null_team_id_matches={rows.null_team_id_matches}")
-    print("zero_player_match_ids=[]")
+    print(f"zero_player_match_ids={rows.zero_player_match_ids}")
+    print(f"player_row_count_anomalies={rows.player_row_count_anomalies}")
     print(f"zero_draft_match_ids={rows.zero_draft_match_ids}")
     print(f"patch_format={patch_format}")
     print(

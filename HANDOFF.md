@@ -150,7 +150,7 @@ repo/
     failed_permanent.ndjson
     .run-summary.json # local/CI run counts, gitignored
     matches/          # YYYY-MM.ndjson (hot) | YYYY-MM.parquet (closed) | late.ndjson
-    players/          # YYYY-MM.ndjson | .parquet | late.ndjson (10 rows per match)
+    players/          # YYYY-MM.ndjson | .parquet | late.ndjson (normally 10 rows/match)
     draft/            # YYYY-MM.ndjson | .parquet | late.ndjson (variable, including zero)
     reference/
       teams.parquet  players.parquet  leagues.parquet  heroes.parquet
@@ -271,7 +271,7 @@ Explicitly excluded: `chat`, `objectives`, `teamfights`, `cosmetics`, `draft_tim
 `replay_salt`, `match_seq_num`, `cluster`, `engine`, `human_players`, `positive_votes`,
 `negative_votes`. These are the bulk of the payload and are not rendered in v1.
 
-### `data/players/` — ten rows per match
+### `data/players/` — normally ten rows per match
 
 ```
 match_id bigint, account_id bigint, player_slot int, is_radiant bool (derive: player_slot < 128),
@@ -290,6 +290,11 @@ megabytes live. Do not store them.
 
 Fields including `stuns`, `teamfight_participation`, `lane_role`, and `is_roaming` are null
 for unparsed matches. Handle nulls; do not drop the rows.
+
+Ten rows per match is the expected shape, but whether it holds across the full 2021+
+population is not yet measured. Step 9 preparation will check it with one aggregate Explorer
+query. Backfill must retain and report genuine short or long player-row counts rather than
+filtering the match or permanently blocking its month.
 
 `backpack_3` is absent from REST player responses, so `fetch.py` always writes it as null.
 It exists as a real `player_matches` SQL column, but all 4,350 rows in the bounded 2026-07
@@ -587,9 +592,14 @@ LIMIT 2000
 
 Parallel queries against `player_matches` and `picks_bans` use the same match-ID window. The
 `LIMIT 2000` shown above applies only to the match query. The player and draft queries carry
-no `LIMIT`; they are bounded by `match_id > :cursor AND match_id <= :window_end`. Before a
-page is accepted, every match must have its expected ten `player_matches` rows. Matches with
-zero player rows are printed and the month aborts rather than checkpointing truncated data.
+no `LIMIT`; they are bounded by `match_id > :cursor AND match_id <= :window_end`. Count
+`player_matches` rows per match before accepting a page. Because results are ordered by
+`match_id, player_slot`, a short contiguous suffix at the highest match IDs is treated as
+suspected server-side truncation: halve the match page and retry the same cursor, using the
+same window-reduction path as a timeout. A non-ten count away from that tail is a data
+anomaly, not truncation; retain it, record its match ID and observed count, and continue. A
+one-match window cannot be reduced further, so its non-ten count is likewise recorded as an
+anomaly. Derive the zero-player IDs and summary counts from those recorded observations.
 Zero `picks_bans` rows are valid (about 0.93% of matches) and are reported but do not abort.
 Expect roughly 400–600 explorer calls total.
 
@@ -617,6 +627,13 @@ therefore protects its match, player, and draft rows together. A valid zero-draf
 adds no draft row. This path is required for the measured 2026-08 case: the forward REST
 shard currently contains 327 distinct matches while the independent SQL sweep found 621, so
 the roughly 294 missing rows must remain reachable after the ingest cron closes August.
+
+The three late files cannot be published as one filesystem-atomic group. Publish draft first,
+players second, and the match deduplication key last. Before each child append, remove rows
+whose match IDs already occur in that child's own `late.ndjson`. Therefore an interruption
+after either child append is resumable: the next pass skips the already-complete child set,
+adds the missing child set, and publishes the match key last. Once the match key exists, both
+children are already durable, so REST-first match deduplication cannot strand them.
 
 Write each completed historical month directly to `.parquet`, with all three tables staged and
 verified before publication. Existing eligible NDJSON rows may be carried into that first

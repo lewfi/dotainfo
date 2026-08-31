@@ -17,7 +17,6 @@ import pyarrow.parquet as pq
 from ingest.backfill import (
     EXPLORER_INTERVAL_SECONDS,
     EXPLORER_RATE_LIMIT_RETRIES,
-    ChildQueryIncompleteError,
     ExplorerClient,
     ExplorerRateLimitError,
     ExplorerTimeout,
@@ -32,6 +31,7 @@ from ingest.backfill import (
     run_backfill,
     write_month,
 )
+from ingest.fetch import append_rows_atomically as real_append_rows_atomically
 from ingest.schema import DRAFT_SCHEMA, MATCH_SCHEMA, PLAYER_SCHEMA
 from ingest.slim import slim_sql_draft, slim_sql_match, slim_sql_player
 
@@ -277,19 +277,54 @@ class BackfillTests(unittest.TestCase):
                 f"missing exponential delay {expected} in {sleeps}",
             )
 
-    def test_player_query_requires_every_match_and_reports_zero_rows(self) -> None:
+    def test_tail_short_player_count_halves_and_retries_same_cursor(self) -> None:
         client = ScriptedExplorer(
             [
                 [match_source(10), match_source(20)],
                 player_sources(10),
                 [],
+                [match_source(10)],
+                player_sources(10),
+                [],
+                [match_source(20)],
+                [],
+                [],
+                [],
             ]
         )
         output = io.StringIO()
         with redirect_stdout(output):
-            with self.assertRaises(ChildQueryIncompleteError):
-                fetch_month_rows(client, "2021-01", initial_page_size=2)
-        self.assertIn("ZERO PLAYER ROWS month=2021-01 match_ids=[20]", output.getvalue())
+            rows = fetch_month_rows(client, "2021-01", initial_page_size=2)
+
+        match_queries = [
+            query for query in client.queries if "backfill:matches" in query
+        ]
+        self.assertIn("m.match_id > 0", match_queries[0])
+        self.assertIn("LIMIT 2", match_queries[0])
+        self.assertIn("m.match_id > 0", match_queries[1])
+        self.assertIn("LIMIT 1", match_queries[1])
+        self.assertIn("SUSPECTED PLAYER TRUNCATION", output.getvalue())
+        self.assertEqual(rows.zero_player_match_ids, [20])
+        self.assertEqual(rows.player_row_count_anomalies, {20: 0})
+        self.assertEqual([row["match_id"] for row in rows.matches], [10, 20])
+
+    def test_interior_short_player_count_is_recorded_as_anomaly(self) -> None:
+        client = ScriptedExplorer(
+            [
+                [match_source(10), match_source(20)],
+                player_sources(20),
+                [],
+                [],
+            ]
+        )
+        output = io.StringIO()
+        with redirect_stdout(output):
+            rows = fetch_month_rows(client, "2021-01", initial_page_size=2)
+
+        self.assertNotIn("SUSPECTED PLAYER TRUNCATION", output.getvalue())
+        self.assertEqual(rows.zero_player_match_ids, [10])
+        self.assertEqual(rows.player_row_count_anomalies, {10: 0})
+        self.assertEqual(len(rows.players), 10)
 
     def test_first_match_page_must_cover_every_selected_sql_column(self) -> None:
         source = match_source(10)
@@ -362,6 +397,35 @@ class BackfillTests(unittest.TestCase):
                 )
             self.assertEqual(summary.completed_months, ["2021-01"])
             self.assertEqual(len(client.queries), 1)
+
+    def test_run_summary_derives_player_anomaly_counts(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            client = ScriptedExplorer(
+                [
+                    [match_source(10), match_source(20)],
+                    player_sources(20),
+                    [],
+                    [],
+                ]
+            )
+            output = io.StringIO()
+            with redirect_stdout(output):
+                summary = run_backfill(
+                    client,
+                    data_dir=root / "data",
+                    checkpoint_path=root / "checkpoint.json",
+                    run_date=date(2021, 3, 12),
+                    only_month="2021-01",
+                    initial_page_size=2,
+                )
+
+            self.assertEqual(summary.zero_player_matches, 1)
+            self.assertEqual(summary.player_row_count_anomalies, {10: 0})
+            self.assertIn(
+                "zero_player_matches=1 player_row_count_anomalies=1",
+                output.getvalue(),
+            )
 
     def test_write_time_dedup_keeps_one_match_id(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
@@ -473,6 +537,70 @@ class BackfillTests(unittest.TestCase):
             for name, path in paths.items():
                 self.assertEqual(path.read_bytes(), parquet_before[name])
 
+    def _assert_interrupted_late_write_recovers(self, fail_on_call: int) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            data_dir = Path(temporary_directory) / "data"
+            parquet_rows = {
+                "matches": ([match_row(1, gold=[100])], MATCH_SCHEMA),
+                "players": ([player_row(1)], PLAYER_SCHEMA),
+                "draft": ([draft_row(1)], DRAFT_SCHEMA),
+            }
+            for name, (rows, schema) in parquet_rows.items():
+                path = data_dir / name / "2021-01.parquet"
+                path.parent.mkdir(parents=True, exist_ok=True)
+                pq.write_table(pa.Table.from_pylist(rows, schema=schema), path)
+
+            fetched = MonthRows(
+                matches=[match_row(2)],
+                players=[player_row(2, slot) for slot in range(10)],
+                draft=[draft_row(2, 0), draft_row(2, 1)],
+            )
+            append_calls = [0]
+
+            def interrupted_append(path, rows):
+                append_calls[0] += 1
+                if append_calls[0] == fail_on_call:
+                    raise KeyboardInterrupt("simulated process termination")
+                real_append_rows_atomically(path, rows)
+
+            with patch(
+                "ingest.backfill.append_rows_atomically",
+                side_effect=interrupted_append,
+            ):
+                with self.assertRaises(KeyboardInterrupt):
+                    write_month(data_dir, "2021-01", fetched)
+
+            result = write_month(data_dir, "2021-01", fetched)
+
+            late_rows = {
+                name: [
+                    json.loads(line)
+                    for line in (data_dir / name / "late.ndjson")
+                    .read_text(encoding="utf-8")
+                    .splitlines()
+                ]
+                for name in ("matches", "players", "draft")
+            }
+            self.assertEqual(result.matches_written, 1)
+            self.assertEqual(
+                [row["match_id"] for row in late_rows["matches"]], [2]
+            )
+            self.assertEqual(len(late_rows["players"]), 10)
+            self.assertEqual(
+                sorted(row["player_slot"] for row in late_rows["players"]),
+                list(range(10)),
+            )
+            self.assertEqual(len(late_rows["draft"]), 2)
+            self.assertEqual(
+                sorted(row["ord"] for row in late_rows["draft"]), [0, 1]
+            )
+
+    def test_late_write_recovers_after_draft_append_interruption(self) -> None:
+        self._assert_interrupted_late_write_recovers(fail_on_call=2)
+
+    def test_late_write_recovers_after_player_append_interruption(self) -> None:
+        self._assert_interrupted_late_write_recovers(fail_on_call=3)
+
     def test_zero_match_month_creates_no_files(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             data_dir = Path(temporary_directory) / "data"
@@ -510,6 +638,10 @@ class BackfillTests(unittest.TestCase):
             self.assertIn("filesystem_writes=0", output.getvalue())
             self.assertIn("mock_keyset_cursors=[0, 102, 103]", output.getvalue())
             self.assertIn("null_team_id_matches=3", output.getvalue())
+            self.assertIn("zero_player_match_ids=[101]", output.getvalue())
+            self.assertIn(
+                "player_row_count_anomalies={101: 0}", output.getvalue()
+            )
 
     def test_no_arguments_refuses_live_execution(self) -> None:
         stderr = io.StringIO()
