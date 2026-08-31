@@ -1027,3 +1027,215 @@ and CI installs dependencies from that file.
 1. Scaffold the structure in §4.
 2. Confirm Actions is enabled and workflow write permissions are on. The repository owner
    confirms public visibility and Actions write permissions externally.
+
+---
+
+## Appendix A. Committed-data readiness analysis for v1
+
+This is a measured finding, not a change to §7. It was produced offline on 2026-08-31 from
+the committed files under `data/` only, with an explicit analysis clock of
+`2026-08-31T00:00:00Z`. Trailing windows are half-open intervals ending at that instant.
+The dataset contains 147,202 unique matches: 146,875 complete SQL-backfilled rows through
+2026-07 plus the partial 327-row 2026-08 REST shard. Every window below includes that partial
+August shard; the missing August population can change both counts and tier shares.
+
+### Pre-render budget
+
+| Window | Start epoch | Matches | Excluded | Premium | Professional |
+|---|---:|---:|---:|---:|---:|
+| 30 days | 1785542400 | 327 | 0 | 12 | 315 |
+| 90 days | 1780358400 | 1,781 | 587 | 12 | 1,182 |
+| 180 days | 1772582400 | 9,046 | 6,148 | 12 | 2,886 |
+
+The committed 90-day count is below §7's 2,000-page planning floor only because August is
+partial. Replacing its 327 committed rows with the independently measured 621 gives 2,075
+pages, inside the 2,000–7,500 range. The 294 missing rows' tier distribution is unknown, so
+only that adjusted total—not an adjusted tier split—is supported by the data.
+
+### Default-view behavior
+
+The current `premium` plus `professional` default keeps 100/100 newest matches (100%),
+443/500 newest (88.600%), and 1,194/1,781 in the committed trailing 90 days (67.041%). The
+newest 100 are all `professional`; the newest 500 are 57 `excluded`, 12 `premium`, and 431
+`professional`. The 90-day set is 587 `excluded`, 12 `premium`, and 1,182 `professional`.
+The newest samples are compositionally biased because the partial REST shard contains no
+`excluded` rows.
+
+| Closed month | Total | Kept | Kept share | Excluded | Premium | Professional |
+|---|---:|---:|---:|---:|---:|---:|
+| 2025-08 | 2,651 | 1,790 | 67.522% | 861 | 0 | 1,790 |
+| 2025-09 | 3,011 | 2,152 | 71.471% | 859 | 144 | 2,008 |
+| 2025-10 | 2,993 | 1,976 | 66.021% | 1,017 | 0 | 1,976 |
+| 2025-11 | 2,477 | 1,029 | 41.542% | 1,448 | 0 | 1,029 |
+| 2025-12 | 2,130 | 658 | 30.892% | 1,472 | 0 | 658 |
+| 2026-01 | 2,693 | 1,308 | 48.570% | 1,385 | 0 | 1,308 |
+| 2026-02 | 2,188 | 619 | 28.291% | 1,569 | 0 | 619 |
+| 2026-03 | 2,413 | 458 | 18.981% | 1,955 | 0 | 458 |
+| 2026-04 | 2,494 | 773 | 30.994% | 1,721 | 0 | 773 |
+| 2026-05 | 2,480 | 455 | 18.347% | 2,025 | 0 | 455 |
+| 2026-06 | 1,113 | 533 | 47.889% | 580 | 0 | 533 |
+| 2026-07 | 435 | 371 | 85.287% | 64 | 0 | 371 |
+
+**Finding and recommendation, pending approval:** the same default appears to keep 100% of
+the newest feed while hiding 69–82% of several recent closed months. That discontinuity is a
+source-path artifact, not a stable user-facing definition of relevance. v1 should default to
+all tiers and expose tier as a visible control, with `premium` plus `professional` available
+as an explicit selection. Do not silently retain the current default. This recommendation is
+recorded for review; §7 remains unchanged.
+
+### Match-page completeness
+
+| Scope | Matches | No draft | Null radiant team | Null dire team | Either team null | Both advantage arrays null | All ten result fields null |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| All committed | 147,202 | 1,367 | 5,040 | 5,449 | 7,058 | 146,875 | 7 |
+| Trailing 90 days | 1,781 | 12 | 145 | 141 | 193 | 1,454 | 0 |
+
+`radiant_gold_adv` and `radiant_xp_adv` have identical null masks in this snapshot: each is
+null on the same 146,875 all-history rows and the same 1,454 trailing-90-day rows. That is a
+source distinction: every closed SQL-backfilled row is null, while all 327 partial-August
+REST rows populate both arrays. The seven rows null across `radiant_win`, both scores,
+`first_blood_time`, `game_mode`, `lobby_type`, and all four tower/barracks fields are present:
+
+```
+7445599470, 7468132951, 7477639498, 7480980391, 7484575133,
+7485890286, 7488997459
+```
+
+### Reference-join readiness
+
+The match shards use 8,918 distinct non-null team IDs, while `teams.parquet` contains 22,019
+IDs. There are 271 used IDs absent from the reference file, covering 330 match-side
+appearances. The match rows preserve a denormalized name for 321 appearances, so those render
+a name but lack reference-provided logos and cannot support a complete future team page. Nine
+appearances across seven missing IDs have no denormalized name either:
+
+| Team ID | Appearances | Match IDs |
+|---:|---:|---|
+| 8215149 | 1 | 6227089721 |
+| 8606585 | 1 | 6289118475 |
+| 9265443 | 1 | 7457724604 |
+| 9736535 | 1 | 8250351584 |
+| 9742000 | 3 | 8260467074, 8261805473, 8261983238 |
+| 9776501 | 1 | 8299524108 |
+| 9906348 | 1 | 8509545723 |
+
+All 964 distinct non-null league IDs used by matches occur among the 10,127 IDs in
+`leagues.parquet`; there is no league-reference gap. All 127 distinct non-null draft hero IDs
+occur among the 127 IDs in `heroes.parquet`; there is no draft-hero gap. Match rows already
+carry denormalized league names, while draft rows do not carry hero names, so a future hero
+gap would directly affect draft rendering whereas the measured league set is doubly covered.
+
+### Build-time read cost
+
+| `data/` area | Files | Bytes |
+|---|---:|---:|
+| `matches/` | 69 | 7,118,598 |
+| `players/` | 69 | 66,143,189 |
+| `draft/` | 69 | 5,310,299 |
+| `reference/` | 5, including `.gitkeep` | 1,978,183 |
+| root data files | 3 | 83 |
+| **Total** | **215** | **80,550,352** |
+
+The current newest 100 all live in `data/matches/2026-08.ndjson`, so an implementation that
+uses shard names to prune files needs zero monthly fact-Parquet bytes for the home query and
+reads 338,692 bytes of hot match NDJSON. Projected reference column chunks add 1,747,458
+Parquet bytes if all team, player, league, and hero lookups are loaded, for 2,086,150 bytes
+including the hot match file.
+
+The 90-day set touches the 2026-06 and 2026-07 Parquet shards plus August NDJSON. For the
+exact §7 match, box-score, and draft projections, Parquet metadata reports 51,330 compressed
+match-column bytes, 409,400 player-column bytes, and 50,705 draft-column bytes: 511,435 fact
+bytes after column pruning. The six complete fact files total 896,610 bytes without pruning.
+Adding projected reference columns makes the Parquet scan 2,258,893 bytes. The three August
+NDJSON files total 2,951,560 bytes, producing a 5,210,453-byte projected working input. Even
+the complete committed `data/` tree is only 80,550,352 bytes, so data volume is not plausibly
+the binding constraint for either the 20-minute platform cap or the under-10-minute local
+acceptance target. Page generation and framework overhead should be measured instead.
+
+### Catch-all route index
+
+The measurement below serializes each month's sorted IDs as a compact JSON array plus one LF.
+The filename supplies the month, so `match_id` is the only per-row routing field.
+
+| Month | IDs | Bytes | Month | IDs | Bytes |
+|---|---:|---:|---|---:|---:|
+| 2021-01 | 1,578 | 17,360 | 2024-01 | 3,104 | 34,146 |
+| 2021-02 | 1,318 | 14,500 | 2024-02 | 2,367 | 26,039 |
+| 2021-03 | 1,136 | 12,498 | 2024-03 | 2,966 | 32,628 |
+| 2021-04 | 1,367 | 15,039 | 2024-04 | 2,183 | 24,015 |
+| 2021-05 | 1,353 | 14,885 | 2024-05 | 2,420 | 26,622 |
+| 2021-06 | 847 | 9,319 | 2024-06 | 2,635 | 28,987 |
+| 2021-07 | 1,398 | 15,380 | 2024-07 | 2,409 | 26,501 |
+| 2021-08 | 1,308 | 14,390 | 2024-08 | 2,437 | 26,809 |
+| 2021-09 | 1,432 | 15,754 | 2024-09 | 2,571 | 28,283 |
+| 2021-10 | 1,225 | 13,477 | 2024-10 | 2,288 | 25,170 |
+| 2021-11 | 2,293 | 25,225 | 2024-11 | 2,565 | 28,217 |
+| 2021-12 | 1,552 | 17,074 | 2024-12 | 2,049 | 22,541 |
+| 2022-01 | 1,555 | 17,107 | 2025-01 | 2,972 | 32,694 |
+| 2022-02 | 1,630 | 17,932 | 2025-02 | 2,334 | 25,676 |
+| 2022-03 | 2,046 | 22,508 | 2025-03 | 2,408 | 26,490 |
+| 2022-04 | 1,893 | 20,825 | 2025-04 | 2,535 | 27,887 |
+| 2022-05 | 2,089 | 22,981 | 2025-05 | 2,273 | 25,005 |
+| 2022-06 | 2,990 | 32,892 | 2025-06 | 2,381 | 26,193 |
+| 2022-07 | 2,433 | 26,765 | 2025-07 | 2,640 | 29,042 |
+| 2022-08 | 2,235 | 24,587 | 2025-08 | 2,651 | 29,163 |
+| 2022-09 | 1,798 | 19,780 | 2025-09 | 3,011 | 33,123 |
+| 2022-10 | 1,675 | 18,427 | 2025-10 | 2,993 | 32,925 |
+| 2022-11 | 1,852 | 20,374 | 2025-11 | 2,477 | 27,249 |
+| 2022-12 | 2,755 | 30,307 | 2025-12 | 2,130 | 23,432 |
+| 2023-01 | 2,589 | 28,481 | 2026-01 | 2,693 | 29,625 |
+| 2023-02 | 2,719 | 29,911 | 2026-02 | 2,188 | 24,070 |
+| 2023-03 | 2,591 | 28,503 | 2026-03 | 2,413 | 26,545 |
+| 2023-04 | 2,704 | 29,746 | 2026-04 | 2,494 | 27,436 |
+| 2023-05 | 2,429 | 26,721 | 2026-05 | 2,480 | 27,282 |
+| 2023-06 | 2,780 | 30,582 | 2026-06 | 1,113 | 12,245 |
+| 2023-07 | 2,655 | 29,207 | 2026-07 | 435 | 4,787 |
+| 2023-08 | 2,471 | 27,183 | 2026-08 partial | 327 | 3,599 |
+| 2023-09 | 2,257 | 24,829 |  |  |  |
+| 2023-10 | 2,186 | 24,048 |  |  |  |
+| 2023-11 | 3,096 | 34,058 |  |  |  |
+| 2023-12 | 2,025 | 22,277 |  |  |  |
+
+All 68 current month indexes contain 147,202 IDs in 1,619,358 bytes. Only 145,421 matches
+are older than the 90-day boundary; indexes limited to those IDs occupy 1,599,763 bytes,
+including 94 June IDs in 1,036 bytes and no July or partial-August IDs. Monthly files are
+3.6–34.1 KB and align with the source shards, so one index per month is the right storage and
+cache granularity. The client should not eagerly download all 1.62 MB: generate a small
+month/range manifest to select candidate monthly indexes for an unknown match ID.
+
+### Proposed v1 implementation sequence—requires approval
+
+This proposal continues canonical numbering without changing `AGENTS.md`. None of these steps
+is approved or started.
+
+10. **Static-site scaffold.** Add the pinned Node/Astro toolchain, static-output configuration,
+    minimal page shell, and package scripts. Approval gate: a clean install and production
+    build succeed from scratch and emit a runnable static index without reading live APIs.
+11. **Local data catalog and query layer.** Add DuckDB-backed readers that UNION Parquet, hot
+    NDJSON, and late NDJSON, use explicit UTC cutoffs, prune shards/columns, and expose tested
+    home/detail queries. Approval gate: an offline audit reproduces the committed match,
+    30/90/180-day, tier, and duplicate counts in this appendix.
+12. **Reference and presentation model.** Resolve teams, leagues, players, and heroes with
+    denormalized-name fallbacks and explicit missing-logo/name states; pin the v1 hero-icon
+    source if approved. Approval gate: tests cover complete joins, the seven genuinely
+    nameless team appearances, null team IDs, and all 127 draft heroes.
+13. **Home feed and tier control.** Render the newest 100 matches with results, duration,
+    league, relative time, and a visible tier filter. Approval gate: ordering and tier counts
+    match the offline query, all-tier and premium-plus-professional views are both testable,
+    and the chosen default is explicitly approved.
+14. **Recent match pages and dynamic pre-render budget.** Render detail pages only for the
+    measured trailing 90-day set, including box scores, draft, and advantage graph when
+    available. Approval gate: normal, no-draft, null-team, and null-advantage fixtures render;
+    generated route count equals the data-layer count for an injected build clock.
+15. **Historical catch-all route.** Generate the monthly ID indexes and selector manifest,
+    then resolve older match IDs client-side without pre-rendering every page. Approval gate:
+    known old IDs—including 7485890286—resolve to the right shard, unknown IDs fail cleanly,
+    and generated index byte counts are reported.
+16. **Accessibility, responsive styling, and build profiling.** Finish the plain-CSS visual
+    system, keyboard/focus behavior, metadata, error states, and reproducible timing output.
+    Approval gate: accessibility checks pass, representative narrow/wide renders are reviewed,
+    and a clean local production build completes under ten minutes.
+17. **Cloudflare deployment.** Add only the deployment configuration needed for the approved
+    static build and connect the production project. Approval gate: the public deployment is
+    reachable, the home and old/new match routes work, and the measured build remains below
+    Cloudflare's 20-minute cap.
