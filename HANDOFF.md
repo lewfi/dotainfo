@@ -153,6 +153,11 @@ The approved 2023-01 through 2023-11 batch adds 28,477 matches in 14,462,480 byt
 2023-12—the running measurement is 72,260 matches in 37,391,742 bytes, or 517.4611 bytes
 per match. Like the earlier historical measurements, these rows have null advantage arrays.
 
+The approved 2024 batch adds 29,994 matches in 15,374,830 bytes, or 512.5969 bytes per
+match. Across all 48 backfilled months now committed—2021-01 through 2024-12—the running
+measurement is 102,254 matches in 52,766,572 bytes, or 516.0343 bytes per match. These are
+again SQL-backfilled rows with null advantage arrays.
+
 Two formats, by lifecycle stage:
 
 - **Hot month** — `data/matches/2026-08.ndjson`, appended to on every run. Newline-delimited
@@ -257,15 +262,19 @@ leave them null.
 The `league_tier` domain is open-ended. Do not hardcode an enum; the live API has returned
 `"excluded"` in addition to the currently documented public tiers.
 
-Across the 36 committed backfill months from 2021-01 through 2023-12, direct Parquet reads
-find 59,807 `professional` and 12,453 `premium` matches and no `excluded` or null-tier row.
-Finding 23 measured the full backfill population at 111,259 professional, 12,865 premium,
-and 23,400 excluded matches. Arithmetic therefore implies that the roughly 75,264 matches
-remaining in 2024, 2025, and 2026-01 through 2026-07 contain all 23,400 excluded matches and
-only about 412 premium matches. This is an implication to test against the next backfill
-chunk's tier distribution, not a measurement of those months. If confirmed, it puts the
-v1 premium-plus-professional default view in question for the recent era, where the excluded
-population is concentrated.
+The first 36 committed backfill months, 2021-01 through 2023-12, contain 59,807
+`professional` and 12,453 `premium` matches and no `excluded` or null-tier row. The 2024
+batch is the first direct test of the arithmetic implication recorded before that run:
+`excluded` first appears in 2024-05, and the year contains 26,362 professional, 121 premium,
+and 3,511 excluded matches. SQL and Parquet agree exactly. Across all 48 committed months,
+the totals are therefore 86,169 professional, 12,574 premium, and 3,511 excluded, with no
+null-tier row. Finding 23 measured the full backfill population at 111,259 professional,
+12,865 premium, and 23,400 excluded matches. The implication partly held: excluded matches
+are confined to the recent era and premium matches are scarce, but 2024 accounts for only
+3,511 of the 23,400 excluded population. Arithmetic now leaves roughly 45,270 matches in
+2025 and 2026-01 through 2026-07: 25,090 professional, 291 premium, and 19,889 excluded.
+Those remaining counts are implications to test, not measurements. The observed shift still
+puts v1's premium-plus-professional default view in question for the recent era.
 
 A 2026-08-30 SQL null sweep over 147,495 matches found `series_id` and `series_type` null on
 209 rows (0.14%), and both captain fields null on 1,781 rows (1.21%). Seven rows (0.005%) are
@@ -317,6 +326,12 @@ Direct reads of the 2022 shards find 1,322 matches with at least one null team I
 `professional` and 42 are `premium`. The 42 premium rows occur in four DPC qualifier leagues.
 Thus 100% of 2022's null-team matches survive v1's premium-plus-professional default view;
 the tier filter does not reduce nameless rendering for that year.
+
+The 2024 shards contain 1,506 matches with at least one null team ID, all of them
+`professional`. January is the only month above 10%: 522/3,104 (16.82%). Its concentration
+is again event-shaped: league 16140, ESL One Birmingham 2024 Qualifiers, contributes 204;
+league 16077, NADCL Season 6, contributes 137; league 16053, DreamLeague Season 22
+Qualifiers, contributes 134; the remaining 47 are spread across six smaller events.
 
 The committed 2023-12 backfill shard provides a dated direct comparison: on 2026-08-30 it
 contained 40/2,025 (1.98%) null `radiant_team_id` values and 40/2,025 (1.98%) null
@@ -410,8 +425,8 @@ therefore exercises both the short-player anomaly and draft-unavailable cases.
 
 The committed direct no-draft observations form a series, not a universal rate: 167/16,807
 (0.99%) in 2021, 174/24,951 (0.70%) in 2022, 157/28,477 (0.55%) in 2023-01 through
-2023-11, and 21/2,025 (1.04%) in 2023-12. The running committed total is 519/72,260
-(0.718%).
+2023-11, 21/2,025 (1.04%) in 2023-12, and 240/29,994 (0.80%) in 2024. The running
+committed total is 759/102,254 (0.742%).
 
 ### `data/reference/` — refreshed weekly in v0
 
@@ -812,6 +827,20 @@ verification issued from a Python file through `ExplorerClient` grouped the exac
 `[1672531200, 1701388800)` window by UTC month and league tier: every monthly total and tier
 distribution matched Parquet, with no `excluded` or null-tier row.
 
+A fifth explicitly approved bounded invocation selected exactly 2024-01 through 2024-12 and
+completed all twelve in 489.988 seconds with 84 Explorer query calls. No `TIMEOUT`,
+`TRUNCATED PLAYER TAIL`, `PLAYER TAIL HALVING CAP REACHED`, or player-row anomaly line
+appeared. Direct Parquet reads found 29,994 distinct matches with no duplicate match IDs
+within 2024 or across all 48 backfilled months. Every 2024 match has exactly ten player rows,
+both advantage columns are null throughout, and every null team ID has a corresponding null
+team name on the same side. The batch occupies 15,374,830 bytes, or 512.5969 bytes per
+match; all 48 months contain 102,254 matches at 516.0343 bytes per match. An independent
+Explorer query grouped `[1704067200, 1735689600)` by UTC month and league tier; every monthly
+total and tier distribution matched Parquet. The year contains 26,362 professional, 121
+premium, and 3,511 excluded matches, with excluded first appearing in May. This partly
+confirms the prior recent-era tier implication while leaving most excluded matches to be
+measured in 2025-2026. The 2024 no-draft observation is 240/29,994 (0.80%).
+
 ### v0 acceptance criteria
 
 - [ ] Two consecutive scheduled runs complete, the second adding only genuinely new matches
@@ -842,10 +871,11 @@ Observable Plot for charts, plain CSS. No React, no Tailwind, no UI framework.
 - `/` — most recent 100 matches. Team names, score, duration, league, relative time.
   Default the view to `league_tier IN ('premium','professional')`; the tier filter is why
   we stored it. Do not assume this filter reduces nameless rendering: all 1,322 null-team
-  matches committed for 2022 are premium or professional and survive it. The arithmetic
-  concentration of all 23,400 measured excluded matches in the still-uncommitted recent era
-  must be tested by the next backfill chunk; if confirmed, revisit whether this default is
-  appropriate for the home feed and 90-day window.
+  matches committed for 2022 are premium or professional and survive it. The 2024 backfill
+  directly establishes the recent tier shift: excluded first appears in May and reaches
+  3,511 matches for the year, while only 121 matches are premium. Arithmetic leaves another
+  19,889 excluded and 291 premium matches to test in 2025 and 2026-01 through 2026-07.
+  Revisit whether this default is appropriate for the home feed and 90-day window.
 - `/matches/[id]` — draft order (picks and bans, both teams, in `ord` sequence), both boxscores
   (hero, K/D/A, LH/DN, GPM/XPM, net worth, items), and the gold-advantage graph when
   `radiant_gold_adv` is non-null. If the match has no draft rows, render a clean
