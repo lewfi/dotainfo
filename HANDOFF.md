@@ -142,6 +142,12 @@ the historical SQL-backfill estimate from the single-month 521.77 figure to a fu
 weighted average; it retains the same null-advantage-array caveat and still does not estimate
 the size of REST-populated months.
 
+The approved 2022 batch adds 24,951 matches in 12,867,408 bytes, or 515.71 bytes per match.
+Across all 25 backfilled months committed so far—2021-01 through 2022-12 plus 2023-12—the
+running measurement is 43,783 matches in 22,929,262 bytes, or 523.70 bytes per match. This
+combined rate supplements rather than replaces the 521.77 single-month and 535.80 full-2021
+observations; all three describe SQL-backfilled rows with null advantage arrays.
+
 Two formats, by lifecycle stage:
 
 - **Hot month** — `data/matches/2026-08.ndjson`, appended to on every run. Newline-delimited
@@ -752,6 +758,15 @@ with 51 Explorer query calls. No `TIMEOUT`, `TRUNCATED PLAYER TAIL`,
 count matched one independent grouped Explorer query over the 2021 window. All match rows had
 null advantage arrays, every null team ID had a matching null team name on the same side, and
 the checkpoint now records all twelve 2021 months plus 2023-12 as completed.
+
+A third explicitly approved bounded invocation selected exactly 2022-01 through 2022-12 and
+completed all twelve in 462.122 seconds with 66 Explorer query calls. No `TIMEOUT`,
+`TRUNCATED PLAYER TAIL`, `PLAYER TAIL HALVING CAP REACHED`, or player-row anomaly appeared.
+Direct Parquet reads found 24,951 distinct matches with no duplicate match IDs within 2022 or
+across any of the 25 backfilled months. Every monthly count matched one independent grouped
+Explorer query over `[1640995200, 1672531200)`, both advantage columns were null throughout,
+and every null team ID had a corresponding null team name on the same side. The checkpoint
+now records all twelve months of 2021 and 2022 plus 2023-12 as completed.
 
 ### v0 acceptance criteria
 
