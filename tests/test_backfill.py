@@ -21,6 +21,7 @@ from ingest.backfill import (
     ExplorerRateLimitError,
     ExplorerTimeout,
     MATCH_QUERY_COLUMNS,
+    MAX_PLAYER_TAIL_HALVINGS_PER_MONTH,
     MonthRows,
     ZeroPlayerRowsError,
     build_draft_query,
@@ -191,6 +192,8 @@ class BackfillTests(unittest.TestCase):
         self.assertIn("m.match_id > 0", match_queries[1])
         self.assertIn("LIMIT 2", match_queries[1])
         self.assertEqual(rows.pages, 1)
+        self.assertEqual(rows.player_tail_halvings, 0)
+        self.assertFalse(rows.player_tail_halving_cap_reached)
         self.assertGreaterEqual(EXPLORER_INTERVAL_SECONDS, 5.0)
 
     def test_explorer_client_spaces_calls_by_at_least_five_seconds(self) -> None:
@@ -307,7 +310,83 @@ class BackfillTests(unittest.TestCase):
         self.assertIn("SUSPECTED PLAYER TRUNCATION", output.getvalue())
         self.assertIn("counts={20: 0}", output.getvalue())
         self.assertEqual(rows.player_row_count_anomalies, {})
+        self.assertEqual(rows.player_tail_halvings, 1)
+        self.assertFalse(rows.player_tail_halving_cap_reached)
         self.assertEqual([row["match_id"] for row in rows.matches], [10, 20])
+
+    def test_player_tail_halving_cap_stops_boundary_cascade(self) -> None:
+        match_ids = list(range(10, 90, 10))
+        full_players = {
+            match_id: player_sources(match_id) for match_id in match_ids
+        }
+        short_players = player_sources(80)[:2]
+        client = ScriptedExplorer(
+            [
+                [match_source(match_id) for match_id in match_ids],
+                sum((full_players[match_id] for match_id in match_ids[:-1]), [])
+                + short_players,
+                [],
+                [match_source(match_id) for match_id in match_ids[:4]],
+                sum((full_players[match_id] for match_id in match_ids[:4]), []),
+                [],
+                [match_source(match_id) for match_id in match_ids[4:]],
+                sum((full_players[match_id] for match_id in match_ids[4:-1]), [])
+                + short_players,
+                [],
+                [match_source(match_id) for match_id in match_ids[4:6]],
+                sum((full_players[match_id] for match_id in match_ids[4:6]), []),
+                [],
+                [match_source(match_id) for match_id in match_ids[6:]],
+                full_players[70] + short_players,
+                [],
+                [match_source(70)],
+                full_players[70],
+                [],
+                [match_source(80)],
+                short_players,
+                [],
+                [],
+            ]
+        )
+        output = io.StringIO()
+        with redirect_stdout(output):
+            rows = fetch_month_rows(client, "2021-01", initial_page_size=8)
+
+        self.assertEqual(MAX_PLAYER_TAIL_HALVINGS_PER_MONTH, 3)
+        self.assertEqual(rows.player_tail_halvings, 3)
+        self.assertTrue(rows.player_tail_halving_cap_reached)
+        self.assertEqual(rows.player_row_count_anomalies, {80: 2})
+        self.assertEqual(
+            [row["match_id"] for row in rows.matches],
+            match_ids,
+        )
+        self.assertIn("PLAYER TAIL HALVING CAP REACHED", output.getvalue())
+        self.assertIn("counts={80: 2}", output.getvalue())
+
+    def test_zero_player_tail_aborts_after_halving_cap(self) -> None:
+        client = ScriptedExplorer(
+            [
+                [match_source(10), match_source(20)],
+                player_sources(10),
+                [],
+                [match_source(10)],
+                player_sources(10),
+                [],
+                [match_source(20)],
+                [],
+                [],
+            ]
+        )
+        output = io.StringIO()
+        with patch(
+            "ingest.backfill.MAX_PLAYER_TAIL_HALVINGS_PER_MONTH", 1
+        ), redirect_stdout(output), self.assertRaisesRegex(
+            ZeroPlayerRowsError, r"match_ids=\[20\]"
+        ):
+            fetch_month_rows(client, "2021-01", initial_page_size=2)
+
+        self.assertIn("PLAYER TAIL HALVING CAP REACHED", output.getvalue())
+        self.assertIn("counts={20: 0}", output.getvalue())
 
     def test_interior_short_player_count_is_recorded_as_anomaly(self) -> None:
         client = ScriptedExplorer(
@@ -448,6 +527,11 @@ class BackfillTests(unittest.TestCase):
             self.assertEqual(summary.player_row_count_anomalies, {10: 2})
             self.assertIn(
                 "player_row_count_anomalies=1",
+                output.getvalue(),
+            )
+            self.assertIn("player_tail_halvings=0", output.getvalue())
+            self.assertIn(
+                "player_tail_halving_cap_reached=false",
                 output.getvalue(),
             )
             self.assertNotIn("zero_player_matches=", output.getvalue())
@@ -670,6 +754,11 @@ class BackfillTests(unittest.TestCase):
             )
             self.assertIn(
                 "mock_deliberate_player_anomaly={103: 2}",
+                output.getvalue(),
+            )
+            self.assertIn("player_tail_halvings=0", output.getvalue())
+            self.assertIn(
+                "player_tail_halving_cap_reached=false",
                 output.getvalue(),
             )
 

@@ -603,13 +603,19 @@ no `LIMIT`; they are bounded by `match_id > :cursor AND match_id <= :window_end`
 `match_id, player_slot`, a short contiguous suffix at the highest match IDs is treated as
 suspected server-side truncation; "short" here includes counts from zero through nine. If the
 page can still be reduced, halve it and retry the same cursor using the same path as a timeout
-before classifying any tail count. Exactly ten rows is normal. Once halving has bottomed out,
-or for a short count away from the tail, classify the observation: one through nine is a data
-anomaly that is retained and reported, while zero aborts the month with the match ID in the
-error and has no override. Zero was absent from the measured population and is the remaining
-signal of silent truncation at a one-match window. Counts above ten are also recorded as
-non-truncation anomalies. A successful result has no zero-player field; fatal IDs are reported
-by `ZeroPlayerRowsError`.
+before classifying any tail count. Player-tail suspicion can halve at most three times per
+month; three successive full-window reductions take the normal 2,000-match window through
+1,000 and 500 to 250. A shorter final page can reduce farther only when fewer matches remain
+in the month. After that cap, further short tails are classified normally instead of shrinking
+the rest of the month; timeout-triggered halving does not consume this budget and keeps its
+existing behavior. The per-month completion summary reports both the number of player-tail
+halvings and whether the cap was reached. Exactly ten rows is normal. Once halving
+has bottomed out, the player-tail cap has been exhausted, or a short count is away from the
+tail, classify the observation: one through nine is a data anomaly that is retained and
+reported, while zero aborts the month with the match ID in the error and has no override. Zero
+was absent from the measured population and is the remaining signal of silent truncation at a
+one-match window. Counts above ten are also recorded as non-truncation anomalies. A successful
+result has no zero-player field; fatal IDs are reported by `ZeroPlayerRowsError`.
 Zero `picks_bans` rows are valid (about 0.93% of matches) and are reported but do not abort.
 Expect roughly 400–600 explorer calls total.
 

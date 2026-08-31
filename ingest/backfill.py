@@ -60,6 +60,7 @@ EXPLORER_RATE_LIMIT_RETRIES = 5
 RATE_LIMIT_BACKOFF_SECONDS = 1.1
 CHECKPOINT_VERSION = 1
 PLAYER_ROWS_PER_MATCH = 10
+MAX_PLAYER_TAIL_HALVINGS_PER_MONTH = 3
 
 MATCH_QUERY_COLUMNS = tuple(
     name
@@ -95,6 +96,8 @@ class MonthRows:
     explorer_queries: int = 0
     null_team_id_matches: int = 0
     player_row_count_anomalies: dict[int, int] = field(default_factory=dict)
+    player_tail_halvings: int = 0
+    player_tail_halving_cap_reached: bool = False
     zero_draft_match_ids: list[int] = field(default_factory=list)
 
 
@@ -443,19 +446,41 @@ def fetch_month_rows(
                 break
             tail_short_ids.append(match_id)
         tail_short_ids.reverse()
-        if tail_short_ids and halve_page(
-            "SUSPECTED PLAYER TRUNCATION",
-            observed_match_count=len(match_ids),
+        tail_counts = {
+            match_id: player_counts[match_id]
+            for match_id in tail_short_ids
+        }
+        if (
+            tail_short_ids
+            and result.player_tail_halvings
+            < MAX_PLAYER_TAIL_HALVINGS_PER_MONTH
+            and halve_page(
+                "SUSPECTED PLAYER TRUNCATION",
+                observed_match_count=len(match_ids),
+            )
         ):
-            tail_counts = {
-                match_id: player_counts[match_id]
-                for match_id in tail_short_ids
-            }
+            result.player_tail_halvings += 1
+            result.player_tail_halving_cap_reached = (
+                result.player_tail_halvings
+                == MAX_PLAYER_TAIL_HALVINGS_PER_MONTH
+            )
             print(
                 f"TRUNCATED PLAYER TAIL month={month} "
-                f"counts={tail_counts}"
+                f"counts={tail_counts} "
+                f"player_tail_halvings={result.player_tail_halvings}"
             )
             continue
+        if (
+            tail_short_ids
+            and result.player_tail_halvings
+            >= MAX_PLAYER_TAIL_HALVINGS_PER_MONTH
+        ):
+            result.player_tail_halving_cap_reached = True
+            print(
+                f"PLAYER TAIL HALVING CAP REACHED month={month} "
+                f"cap={MAX_PLAYER_TAIL_HALVINGS_PER_MONTH} "
+                f"counts={tail_counts}"
+            )
 
         zero_player_ids = sorted(
             match_id for match_id, count in player_counts.items() if count == 0
@@ -837,6 +862,9 @@ def run_backfill(
             f"null_team_id_matches={fetched.null_team_id_matches} "
             "player_row_count_anomalies="
             f"{len(fetched.player_row_count_anomalies)} "
+            f"player_tail_halvings={fetched.player_tail_halvings} "
+            "player_tail_halving_cap_reached="
+            f"{str(fetched.player_tail_halving_cap_reached).lower()} "
             f"zero_draft_matches={len(fetched.zero_draft_match_ids)} "
             f"write_target={result.write_target} "
             f"files_written={str(result.wrote_files).lower()}"
@@ -958,6 +986,11 @@ def validate_offline_dry_run() -> MonthRows:
     print(
         "mock_deliberate_player_anomaly="
         f"{rows.player_row_count_anomalies}"
+    )
+    print(f"player_tail_halvings={rows.player_tail_halvings}")
+    print(
+        "player_tail_halving_cap_reached="
+        f"{str(rows.player_tail_halving_cap_reached).lower()}"
     )
     print(f"zero_draft_match_ids={rows.zero_draft_match_ids}")
     print(f"patch_format={patch_format}")
