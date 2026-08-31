@@ -1,0 +1,83 @@
+name: Ingest pro match data
+
+on:
+  schedule:
+    - cron: "0 */6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ingest
+  cancel-in-progress: false
+
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.14.5"
+
+      - name: Install dependencies
+        run: python -m pip install -r requirements.txt
+
+      - name: Fetch new pro matches
+        run: python -m ingest.fetch
+
+      - name: Log ingest summary
+        run: cat data/.run-summary.json
+
+      - name: Commit changed ingest data
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          snapshot_ref=""
+          if [[ -n "$(git status --porcelain --untracked-files=all -- data)" ]]; then
+            git stash push --include-untracked --message "ingest data snapshot" -- data
+            snapshot_ref="$(git rev-parse stash@{0})"
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          max_attempts=3
+          for ((attempt = 1; attempt <= max_attempts; attempt++)); do
+            echo "Commit attempt $attempt of $max_attempts"
+            git fetch origin main
+            git reset --hard origin/main
+            if [[ -n "$snapshot_ref" ]]; then
+              git stash apply "$snapshot_ref"
+            fi
+            git add -A data
+
+            if git diff --cached --quiet; then
+              echo "No ingest changes to commit"
+              exit 0
+            fi
+
+            git commit -m "Ingest match data"
+            if push_output="$(git push origin HEAD:main 2>&1)"; then
+              printf '%s\n' "$push_output"
+              exit 0
+            fi
+            printf '%s\n' "$push_output"
+
+            if ! grep -Eqi 'non-fast-forward|fetch first' <<<"$push_output"; then
+              echo "Push failed for a reason other than a non-fast-forward update"
+              exit 1
+            fi
+            if ((attempt == max_attempts)); then
+              echo "Push remained non-fast-forward after $max_attempts attempts"
+              exit 1
+            fi
+            echo "Remote advanced; rebuilding the commit on the new origin/main"
+          done

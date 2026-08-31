@@ -513,9 +513,23 @@ writes nothing.
   `state.json`
 - `permissions: contents: write`
 - Commit with the `github-actions[bot]` identity
-- Run `fetch.py`, log `data/.run-summary.json`, then run `git add -A data` and use
-  `git diff --cached --quiet` as the guard before committing and pushing. The ordinary
-  `git diff --quiet` does not detect first-run untracked shards.
+- Run `fetch.py`, then print `data/.run-summary.json` to the Actions log. The summary is
+  gitignored and is never staged.
+- If `fetch.py` exits non-zero, do not run the summary or commit steps and do not preserve any
+  workspace writes. `fetch.py` writes every pending match/player/draft shard first, then both
+  failure queues, then `state.json`; state therefore cannot advance while shard writes are
+  incomplete. A fatal mid-write error can still leave a partial workspace with the old state,
+  so committing any part of a failed run is unsafe. Discarding the runner workspace makes the
+  next scheduled run retry from the last committed cursor.
+- Snapshot successful generated changes with `git stash --include-untracked` scoped to
+  `data/`. This dynamically preserves modified files, new shards, and compaction deletions
+  without hardcoding filenames. The ignored run summary and unchanged reference files are not
+  included, so restoring the snapshot cannot overwrite a concurrent reference refresh.
+- Fetch `origin/main`, reset hard to that tip, restore the snapshot, run `git add -A data`, and
+  use `git diff --cached --quiet` as the no-change guard before committing and pushing. The
+  ordinary `git diff --quiet` does not detect first-run untracked shards. A non-fast-forward
+  push repeats the fetch/reset/restore/stage/commit cycle, with at most three attempts. Do not
+  use pull, rebase, or a binary merge strategy.
 
 ### `.github/workflows/reference.yml`
 
