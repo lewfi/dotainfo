@@ -119,12 +119,21 @@ continue adding their per-minute arrays at roughly 71 matches/day indefinitely.
 
 The first real month-scale historical shard was produced by the approved step 9 backfill of
 2023-12 on 2026-08-30. Its 2,025 matches occupy 1,056,583 bytes across matches (93,168),
-players (897,785), and draft (65,630), or 521.77 bytes per match. A linear projection at that
-rate across the measured 147,524-match backfill population is 76,973,506 bytes / 73.41 MiB.
-That estimate applies to the roughly 65 historical SQL-backfill months that make up most of
-the dataset: their `radiant_gold_adv` and `radiant_xp_adv` values are all null. It therefore
-understates a future incremental month populated through REST and does not, by itself, confirm
-or refute the original 120–150 MB projection for a mixed historical-plus-incremental dataset.
+players (897,785), and draft (65,630), or 521.77 bytes per match. Monthly volume ranges from
+435 to 2,693 matches, and Parquet compresses better at larger row-group sizes, so that rate is
+a central estimate from one mid-sized month rather than a per-match constant across months.
+A linear projection from it across the measured 147,524-match backfill population is
+76,973,506 bytes / 73.41 MiB.
+
+The comparison relevant to the ~500 MB escape hatch is source-specific. The 299-match REST
+sample extrapolated to 156.9 MB / 149.63 MiB with `radiant_gold_adv` and `radiant_xp_adv`
+populated, while the 2,025-match SQL sample extrapolates to 73.41 MiB with both arrays null.
+The difference between those projections is dominated by the advantage arrays, with shard
+size and row-group compression adding further variation. Repository growth is therefore
+primarily a question of how many months are REST-populated rather than backfilled. The SQL
+estimate is informative for the roughly 65 historical backfill months that make up most of
+the dataset, but it understates future incremental months and neither sample alone confirms
+or refutes the original 120–150 MB projection for the mixed population.
 
 Two formats, by lifecycle stage:
 
@@ -270,6 +279,12 @@ so its apparent 38.80%/37.12% rate is a sampling-composition effect. Nameless re
 therefore not the general recent case, but it is common within an affected event and must be
 treated as normal presentation rather than an exceptional error.
 
+The committed 2023-12 backfill shard provides a dated direct comparison: on 2026-08-30 it
+contained 40/2,025 (1.98%) null `radiant_team_id` values and 40/2,025 (1.98%) null
+`dire_team_id` values. The corresponding name was null on exactly the same 40 rows on each
+side, with zero null-ID/non-null-name violations. This single-month observation supports the
+conclusion that August's 18.68%/17.87% spike was specific to league 20134 rather than a trend.
+
 The REST `/matches/{id}` response supplies `patch` as an integer index. `fetch.py` must GET
 `/constants/patch` once per run, build an `{id: name}` lookup, and pass it to `slim_match`.
 Both ingest paths must persist the same version-string format such as `"7.41"`: REST maps the
@@ -336,6 +351,23 @@ Drafts are variable-length and may be absent entirely; never assert exactly 24 r
 across 145,714 drafted matches, while `game_mode=22` averaged between 16 and 17 across 413.
 Another 1,368 of 147,495 matches (0.93%) had no `picks_bans` rows. The 1,368 count was derived
 as total eligible matches minus drafted matches because the direct anti-join timed out.
+
+The approved 2023-12 backfill provided the first direct per-match measurement: on 2026-08-30,
+21 of its 2,025 committed matches (1.04%) had no draft rows. This is one month's direct
+observation, while the 1,368 figure above is a population-wide subtraction; neither should be
+presented as a universal no-draft rate. These committed match IDs are v1 test cases for the
+draft-unavailable state:
+
+```
+7466773359, 7468132951, 7468463913, 7476366318, 7477639498, 7480470163,
+7480944910, 7480980391, 7484575133, 7485890286, 7485948611, 7488997459,
+7489024640, 7490725357, 7498635492, 7500212286, 7504389815, 7507298211,
+7511221269, 7511263243, 7514555162
+```
+
+Match 7485890286 is also the only known match in the measured 2021+ population with a
+`player_matches` row count other than ten: it has two player rows. One committed record
+therefore exercises both the short-player anomaly and draft-unavailable cases.
 
 ### `data/reference/` — refreshed weekly in v0
 
