@@ -117,6 +117,15 @@ matches (11,098 list elements in each column), so its measured size includes tho
 Historical backfilled rows will leave them null, while every parsed incremental match will
 continue adding their per-minute arrays at roughly 71 matches/day indefinitely.
 
+The first real month-scale historical shard was produced by the approved step 9 backfill of
+2023-12 on 2026-08-30. Its 2,025 matches occupy 1,056,583 bytes across matches (93,168),
+players (897,785), and draft (65,630), or 521.77 bytes per match. A linear projection at that
+rate across the measured 147,524-match backfill population is 76,973,506 bytes / 73.41 MiB.
+That estimate applies to the roughly 65 historical SQL-backfill months that make up most of
+the dataset: their `radiant_gold_adv` and `radiant_xp_adv` values are all null. It therefore
+understates a future incremental month populated through REST and does not, by itself, confirm
+or refute the original 120–150 MB projection for a mixed historical-plus-incremental dataset.
+
 Two formats, by lifecycle stage:
 
 - **Hot month** — `data/matches/2026-08.ndjson`, appended to on every run. Newline-delimited
@@ -685,6 +694,17 @@ The script must provide a `--dry-run` that validates query construction and keys
 against mocked responses without calling the live API or writing data. Do not run the live
 backfill without explicit user approval.
 
+The explicitly approved step 9 run on 2026-08-30 processed only 2023-12. It completed two
+match pages with seven Explorer query calls in 39.382 seconds. No `TIMEOUT`,
+`TRUNCATED PLAYER TAIL`, or `PLAYER TAIL HALVING CAP REACHED` line appeared, so this run
+provided no evidence of an Explorer row cap. Direct reads of the published Parquet files
+verified 2,025 match rows with 2,025 distinct match IDs; 20,242 player rows, with exactly ten
+per match except match 7485890286 at two; and 48,091 draft rows, with contiguous `ord` values
+and 21 matches having no draft rows. No match had zero player rows. Both advantage columns
+were null on all 2,025 matches. Null team IDs and names matched exactly at 40 radiant and 40
+dire rows, with no null-ID/non-null-name violation. The three 2023-12 NDJSON shards were
+absent after publication, and the gitignored checkpoint records 2023-12 as completed.
+
 ### v0 acceptance criteria
 
 - [ ] Two consecutive scheduled runs complete, the second adding only genuinely new matches
@@ -699,7 +719,7 @@ backfill without explicit user approval.
       responses without live API calls or data writes
 - [ ] **Step 8:** backfill joins team names through `teams.team_id`; rows with a null team ID
       retain a null name, are flagged, and do not abort the run
-- [ ] **Step 9, explicit approval required:** backfill completes for at least one
+- [x] **Step 9, explicit approval required:** backfill completes for at least one
       historical month and matches the count from an independent `SELECT count(*)` for that
       window
 
