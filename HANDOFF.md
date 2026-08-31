@@ -356,6 +356,17 @@ what the data supports, not a defect to fix.
   columns described above. Null-ID matches retain a null corresponding name and must render
   without one.
 
+Rendering must apply the same absent-value rule to the denormalized match-row name columns as
+to `/teams` reference objects: null, empty, and whitespace-only after trimming all mean “name
+unavailable.” An offline 2026-08-31 read of all 147,202 committed match rows found 655
+match-side appearances whose team ID is non-null but whose corresponding name is absent by
+that rule. None is a true null: 647 are `""`, seven are `" "`, and one is `"  "`. They span
+74 team IDs and 48 months, from 2021-01 through 2026-05. The step 9 null-ID/null-name mask
+checks remain correct for the invariant they tested, but they cannot detect this rendering
+case because an empty or whitespace-only string is non-null. The earlier conclusion based on
+nine reference-missing appearances was therefore too narrow, not evidence that the step 9
+checks failed.
+
 A 2026-by-month SQL sweep on 2026-08-30 found no systematic recent rise in null team IDs.
 Instead, committed observations show that null IDs concentrate in qualifier and open events;
 a single event can account for almost an entire month's spike, or the spike can be diffuse
@@ -1106,8 +1117,9 @@ REST rows populate both arrays. The seven rows null across `radiant_win`, both s
 The match shards use 8,918 distinct non-null team IDs, while `teams.parquet` contains 22,019
 IDs. There are 271 used IDs absent from the reference file, covering 330 match-side
 appearances. The match rows preserve a denormalized name for 321 appearances, so those render
-a name but lack reference-provided logos and cannot support a complete future team page. Nine
-appearances across seven missing IDs have no denormalized name either:
+a name but lack reference-provided logos and cannot support a complete future team page. The
+remaining nine appearances across seven missing reference IDs are part of, but do not define,
+the broader rendering-name gap:
 
 | Team ID | Appearances | Match IDs |
 |---:|---:|---|
@@ -1118,6 +1130,14 @@ appearances across seven missing IDs have no denormalized name either:
 | 9742000 | 3 | 8260467074, 8261805473, 8261983238 |
 | 9776501 | 1 | 8299524108 |
 | 9906348 | 1 | 8509545723 |
+
+The rendering-relevant measurement must not be restricted to reference-missing IDs. Across
+both sides of every committed match, the predicate `team_id IS NOT NULL AND (name IS NULL OR
+trim(name) = '')` finds 655 appearances across 74 team IDs: 319 radiant and 336 dire. The
+observed forms are 647 empty strings, seven single spaces, one double space, and zero true
+nulls. The ten team IDs with the most appearances are 9149320 (185), 8442908 (176), 9256255
+(80), 9238262 (24), 9736263 (23), 9336632 (18), 8829931 (13), 9855039 (11), 9651524 (8),
+and 2886796 (5). These appearances occur from 2021-01 through 2026-05.
 
 All 964 distinct non-null league IDs used by matches occur among the 10,127 IDs in
 `leagues.parquet`; there is no league-reference gap. All 127 distinct non-null draft hero IDs
@@ -1200,8 +1220,132 @@ All 68 current month indexes contain 147,202 IDs in 1,619,358 bytes. Only 145,42
 are older than the 90-day boundary; indexes limited to those IDs occupy 1,599,763 bytes,
 including 94 June IDs in 1,036 bytes and no July or partial-August IDs. Monthly files are
 3.6–34.1 KB and align with the source shards, so one index per month is the right storage and
-cache granularity. The client should not eagerly download all 1.62 MB: generate a small
-month/range manifest to select candidate monthly indexes for an unknown match ID.
+cache granularity.
+
+The routing premise was measured directly rather than assumed. Across the 68 committed
+months, zero pairs of inclusive `[min_match_id, max_match_id]` ranges overlap. A compact JSON
+array of `{month,min_match_id,max_match_id}` objects occupies 4,897 bytes raw or 1,083 bytes
+under deterministic gzip. In the current data, that manifest maps any in-range match ID to
+exactly one candidate month without fetching a monthly index; the selected monthly index is
+then needed only to confirm that the ID actually exists. Zero overlap is an observed property,
+consistent with finding 6's zero month crossings, not a permanent guarantee. If a future
+month overlaps an existing range, routing must return every candidate month and check each
+candidate's ID index rather than choosing one arbitrarily.
+
+### What the historical catch-all can render—decision required
+
+The following offline measurement uses one compact UTF-8 JSON file plus LF per committed
+month. “Full” is `{"matches":[full rows],"players":[full rows],"draft":[full rows]}`;
+“match-only” contains full match rows with `radiant_gold_adv` and `radiant_xp_adv` removed;
+“IDs-only” is the sorted ID array. Each gzip size is from compressing that month's payload
+independently with level 9 and `mtime=0`.
+
+| Month | Full raw | Full gzip | Match-only raw | Match-only gzip | IDs raw | IDs gzip |
+|---|---:|---:|---:|---:|---:|---:|
+| 2021-01 | 13,840,475 | 1,585,387 | 962,186 | 96,337 | 17,360 | 6,431 |
+| 2021-02 | 11,534,730 | 1,295,772 | 791,978 | 78,009 | 14,500 | 5,777 |
+| 2021-03 | 9,923,414 | 1,117,759 | 675,684 | 63,233 | 12,498 | 4,968 |
+| 2021-04 | 11,970,930 | 1,354,356 | 828,296 | 80,159 | 15,039 | 5,974 |
+| 2021-05 | 11,845,940 | 1,339,269 | 814,863 | 77,112 | 14,885 | 5,893 |
+| 2021-06 | 7,411,342 | 833,911 | 501,213 | 44,517 | 9,319 | 3,772 |
+| 2021-07 | 12,228,927 | 1,382,764 | 834,234 | 74,902 | 15,380 | 6,099 |
+| 2021-08 | 11,433,004 | 1,294,962 | 787,187 | 71,488 | 14,390 | 5,697 |
+| 2021-09 | 12,546,978 | 1,412,579 | 860,220 | 75,063 | 15,754 | 6,218 |
+| 2021-10 | 10,729,802 | 1,210,375 | 727,390 | 64,087 | 13,477 | 5,352 |
+| 2021-11 | 20,111,369 | 2,293,808 | 1,384,548 | 131,133 | 25,225 | 9,530 |
+| 2021-12 | 13,617,075 | 1,539,027 | 944,374 | 88,077 | 17,074 | 6,745 |
+| 2022-01 | 13,638,111 | 1,543,725 | 944,404 | 88,718 | 17,107 | 6,812 |
+| 2022-02 | 14,300,320 | 1,634,919 | 981,659 | 93,425 | 17,932 | 7,073 |
+| 2022-03 | 17,938,401 | 2,047,473 | 1,245,228 | 120,152 | 22,508 | 8,723 |
+| 2022-04 | 16,593,154 | 1,891,021 | 1,146,316 | 111,764 | 20,825 | 8,138 |
+| 2022-05 | 18,340,872 | 2,106,202 | 1,258,805 | 122,614 | 22,981 | 8,976 |
+| 2022-06 | 26,234,143 | 3,011,336 | 1,802,314 | 163,673 | 32,892 | 12,609 |
+| 2022-07 | 21,379,057 | 2,458,154 | 1,478,285 | 148,201 | 26,765 | 10,340 |
+| 2022-08 | 19,585,608 | 2,244,912 | 1,332,769 | 132,118 | 24,587 | 9,532 |
+| 2022-09 | 15,746,357 | 1,801,257 | 1,070,209 | 102,524 | 19,780 | 7,773 |
+| 2022-10 | 14,661,775 | 1,667,643 | 995,643 | 91,631 | 18,427 | 7,272 |
+| 2022-11 | 16,213,156 | 1,848,960 | 1,103,587 | 107,747 | 20,374 | 8,112 |
+| 2022-12 | 24,122,864 | 2,769,458 | 1,652,335 | 168,233 | 30,307 | 11,791 |
+| 2023-01 | 22,704,911 | 2,609,591 | 1,557,072 | 157,309 | 28,481 | 11,133 |
+| 2023-02 | 23,850,858 | 2,747,264 | 1,634,608 | 163,207 | 29,911 | 11,529 |
+| 2023-03 | 22,747,869 | 2,604,117 | 1,569,407 | 155,947 | 28,503 | 11,166 |
+| 2023-04 | 23,756,753 | 2,740,226 | 1,634,457 | 163,471 | 29,746 | 11,532 |
+| 2023-05 | 21,354,933 | 2,462,482 | 1,466,385 | 144,933 | 26,721 | 10,419 |
+| 2023-06 | 24,441,978 | 2,825,397 | 1,677,383 | 169,469 | 30,582 | 11,772 |
+| 2023-07 | 23,322,545 | 2,688,066 | 1,584,264 | 155,208 | 29,207 | 11,295 |
+| 2023-08 | 21,725,829 | 2,512,555 | 1,481,722 | 145,127 | 27,183 | 10,587 |
+| 2023-09 | 19,839,762 | 2,302,323 | 1,353,761 | 134,374 | 24,829 | 9,696 |
+| 2023-10 | 19,221,092 | 2,223,726 | 1,307,341 | 125,419 | 24,048 | 9,373 |
+| 2023-11 | 27,208,203 | 3,152,718 | 1,862,533 | 181,699 | 34,058 | 13,132 |
+| 2023-12 | 17,792,091 | 2,047,900 | 1,215,310 | 119,491 | 22,277 | 8,705 |
+| 2024-01 | 27,200,538 | 3,147,639 | 1,862,829 | 178,647 | 34,146 | 13,006 |
+| 2024-02 | 20,802,166 | 2,409,943 | 1,414,349 | 142,577 | 26,039 | 10,066 |
+| 2024-03 | 26,109,610 | 3,015,392 | 1,786,746 | 173,594 | 32,628 | 12,593 |
+| 2024-04 | 19,222,532 | 2,220,194 | 1,307,290 | 128,951 | 24,015 | 9,385 |
+| 2024-05 | 21,288,130 | 2,442,970 | 1,446,687 | 140,075 | 26,622 | 10,470 |
+| 2024-06 | 23,136,619 | 2,688,072 | 1,591,094 | 158,481 | 28,987 | 11,246 |
+| 2024-07 | 21,127,146 | 2,450,442 | 1,444,811 | 142,500 | 26,501 | 10,428 |
+| 2024-08 | 21,379,472 | 2,478,639 | 1,457,000 | 145,990 | 26,809 | 10,462 |
+| 2024-09 | 22,533,393 | 2,598,506 | 1,540,860 | 151,696 | 28,283 | 10,909 |
+| 2024-10 | 20,067,463 | 2,326,664 | 1,363,418 | 136,280 | 25,170 | 9,691 |
+| 2024-11 | 22,480,695 | 2,607,546 | 1,534,210 | 152,566 | 28,217 | 10,957 |
+| 2024-12 | 17,953,077 | 2,064,836 | 1,222,751 | 120,097 | 22,541 | 8,860 |
+| 2025-01 | 26,059,628 | 3,016,246 | 1,781,514 | 173,346 | 32,694 | 12,584 |
+| 2025-02 | 20,483,467 | 2,376,214 | 1,402,037 | 139,706 | 25,676 | 9,981 |
+| 2025-03 | 21,025,217 | 2,420,629 | 1,430,175 | 140,736 | 26,490 | 10,251 |
+| 2025-04 | 22,158,155 | 2,558,463 | 1,510,584 | 153,796 | 27,887 | 10,713 |
+| 2025-05 | 19,880,761 | 2,285,418 | 1,353,539 | 136,944 | 25,005 | 9,640 |
+| 2025-06 | 20,803,274 | 2,383,392 | 1,429,537 | 141,512 | 26,193 | 10,211 |
+| 2025-07 | 23,149,471 | 2,661,883 | 1,576,347 | 159,275 | 29,042 | 11,216 |
+| 2025-08 | 23,228,399 | 2,665,471 | 1,579,954 | 163,652 | 29,163 | 11,328 |
+| 2025-09 | 26,343,358 | 3,036,242 | 1,796,219 | 181,777 | 33,123 | 12,773 |
+| 2025-10 | 26,186,810 | 3,012,110 | 1,788,795 | 180,515 | 32,925 | 12,689 |
+| 2025-11 | 21,571,774 | 2,477,266 | 1,471,032 | 146,384 | 27,249 | 10,640 |
+| 2025-12 | 18,647,954 | 2,118,472 | 1,264,299 | 122,949 | 23,432 | 9,148 |
+| 2026-01 | 23,584,294 | 2,700,939 | 1,606,624 | 158,040 | 29,625 | 11,380 |
+| 2026-02 | 19,154,878 | 2,196,353 | 1,300,027 | 128,506 | 24,070 | 9,309 |
+| 2026-03 | 21,162,141 | 2,432,677 | 1,434,262 | 139,414 | 26,545 | 10,254 |
+| 2026-04 | 21,899,400 | 2,514,688 | 1,490,128 | 144,631 | 27,436 | 10,577 |
+| 2026-05 | 21,678,014 | 2,511,585 | 1,469,835 | 146,805 | 27,282 | 10,543 |
+| 2026-06 | 9,775,740 | 1,125,507 | 671,647 | 63,235 | 12,245 | 4,786 |
+| 2026-07 | 3,824,247 | 440,306 | 259,422 | 22,279 | 4,787 | 1,935 |
+| 2026-08 partial | 2,951,596 | 376,394 | 192,296 | 18,780 | 3,599 | 1,318 |
+
+The 68 monthly payload totals, excluding the shared manifest, are:
+
+| Option | Raw bytes | Gzip bytes | Largest raw month | Largest gzip month |
+|---|---:|---:|---|---|
+| Full page | 1,290,784,047 | 148,362,492 | 2023-11: 27,208,203 | 2023-11: 3,152,718 |
+| Match-only summary | 88,248,288 | 8,644,307 | 2024-01: 1,862,829 | 2025-09: 181,777 |
+| IDs-only unavailable state | 1,619,358 | 629,295 | 2024-01: 34,146 | 2023-11: 13,132 |
+
+Including the 4,897-byte raw / 1,083-byte gzipped shared manifest gives deployment payload
+totals of 1,290,788,944 / 148,363,575 bytes, 88,253,185 / 8,645,390 bytes, and 1,624,255 /
+630,378 bytes respectively. Each option adds 69 deployment files: 68 monthly payloads plus
+the manifest.
+
+**Recommendation, not a selected direction:** use the match-only summary if “reachable” is
+approved to mean a meaningful historical summary containing teams, result, league, duration,
+and other match-row metadata, but not box scores, draft, or advantage graph. It is far smaller
+than full pages while still giving an old match a useful destination. IDs-only is cheapest but
+turns “reachable” into a not-available notice; full pages preserve the strongest meaning but
+are much larger and do not fit the current platform asset limit without changing the design.
+The v1 acceptance criterion “a match older than 90 days is still reachable” must define
+whether reachable means full detail, summary, or merely a recognized unavailable state before
+step 15 can have an approval gate. No option is selected here.
+
+### Cloudflare Pages constraints checked 2026-08-31
+
+Cloudflare's official [Pages limits](https://developers.cloudflare.com/pages/platform/limits/)
+page states that Free sites may contain 20,000 files, paid plans may contain 100,000 when the
+documented setting is enabled, each asset may be at most 25 MiB (26,214,400 bytes), and builds
+time out after 20 minutes. All three options add only 69 files and therefore fit the file-count
+limit. Match-only and IDs-only fit the individual asset limit. Full-page JSON as measured is
+ruled out: 2022-06 (26,234,143), 2023-11 (27,208,203), 2024-01 (27,200,538), and 2025-09
+(26,343,358) each exceed 25 MiB raw. Serving precompressed or split payloads would be a
+different design requiring its own decision and measurement. The timeout does not directly
+rule out the two smaller options; actual generation time remains a step-level acceptance
+measurement.
 
 ### Proposed v1 implementation sequence—requires approval
 
@@ -1227,10 +1371,13 @@ is approved or started.
     measured trailing 90-day set, including box scores, draft, and advantage graph when
     available. Approval gate: normal, no-draft, null-team, and null-advantage fixtures render;
     generated route count equals the data-layer count for an injected build clock.
-15. **Historical catch-all route.** Generate the monthly ID indexes and selector manifest,
-    then resolve older match IDs client-side without pre-rendering every page. Approval gate:
-    known old IDs—including 7485890286—resolve to the right shard, unknown IDs fail cleanly,
-    and generated index byte counts are reported.
+15. **Historical catch-all route.** Blocked on an explicit definition of “reachable”: full
+    detail, match-only summary, or recognized unavailable state. After that decision, generate
+    the range manifest and selected monthly payload, then resolve older match IDs client-side
+    without pre-rendering every page. Approval gate: known old IDs—including 7485890286—route
+    through the manifest and render the approved state, unknown and range-gap IDs fail cleanly,
+    overlapping future ranges check every candidate index, and generated byte counts match the
+    selected option's measured contract.
 16. **Accessibility, responsive styling, and build profiling.** Finish the plain-CSS visual
     system, keyboard/focus behavior, metadata, error states, and reproducible timing output.
     Approval gate: accessibility checks pass, representative narrow/wide renders are reviewed,
