@@ -122,6 +122,35 @@ def slim_match_response(
     return slim_match(payload, patch_lookup), slim_players(payload), slim_draft(payload)
 
 
+def slim_sql_match(source: JsonObject) -> Row:
+    """Create one match row from the SQL Explorer projection."""
+    row = _project(source, MATCH_SCHEMA.names)
+    if row["radiant_team_id"] is None:
+        row["radiant_team_name"] = None
+    if row["dire_team_id"] is None:
+        row["dire_team_name"] = None
+    patch = source.get("patch")
+    row["patch"] = patch if isinstance(patch, str) else None
+    row["radiant_gold_adv"] = None
+    row["radiant_xp_adv"] = None
+    return row
+
+
+def slim_sql_player(source: JsonObject) -> Row:
+    """Create one player row from the SQL Explorer projection."""
+    row = _project(source, PLAYER_SCHEMA.names)
+    player_slot = source.get("player_slot")
+    row["is_radiant"] = (
+        player_slot < 128 if isinstance(player_slot, int) else None
+    )
+    return row
+
+
+def slim_sql_draft(source: JsonObject) -> Row:
+    """Create one draft row whose SQL ordering column is already `ord`."""
+    return _project(source, DRAFT_SCHEMA.names)
+
+
 def slim_team(payload: JsonObject) -> Row:
     """Create one `/teams` reference row."""
     return _project(payload, TEAM_SCHEMA.names)
@@ -151,5 +180,8 @@ __all__ = [
     "slim_match_response",
     "slim_players",
     "slim_reference_player",
+    "slim_sql_draft",
+    "slim_sql_match",
+    "slim_sql_player",
     "slim_team",
 ]

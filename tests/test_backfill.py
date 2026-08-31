@@ -1,0 +1,346 @@
+from __future__ import annotations
+
+import io
+import json
+import tempfile
+import unittest
+from contextlib import redirect_stdout
+from datetime import date
+from pathlib import Path
+from unittest.mock import patch
+
+import pyarrow as pa
+import pyarrow.parquet as pq
+
+from ingest.backfill import (
+    EXPLORER_INTERVAL_SECONDS,
+    ExplorerClient,
+    ExplorerTimeout,
+    MonthRows,
+    build_draft_query,
+    build_match_query,
+    build_player_query,
+    fetch_month_rows,
+    last_fully_closed_month,
+    main,
+    run_backfill,
+    write_month,
+)
+from ingest.schema import DRAFT_SCHEMA, MATCH_SCHEMA, PLAYER_SCHEMA
+from ingest.slim import slim_sql_draft, slim_sql_match, slim_sql_player
+
+
+class ScriptedExplorer:
+    def __init__(self, responses: list[object]) -> None:
+        self.responses = list(responses)
+        self.queries: list[str] = []
+
+    def query(self, sql: str):
+        self.queries.append(sql)
+        if not self.responses:
+            raise AssertionError("unexpected explorer query")
+        response = self.responses.pop(0)
+        if isinstance(response, BaseException):
+            raise response
+        return response
+
+
+def match_source(match_id: int, *, patch_name: str = "7.41") -> dict[str, object]:
+    return {
+        "match_id": match_id,
+        "start_time": 1609459200 + match_id,
+        "patch": patch_name,
+        "is_parsed": True,
+        "radiant_team_id": None,
+        "radiant_team_name": "cleared by mapper",
+        "dire_team_id": None,
+        "dire_team_name": "cleared by mapper",
+        "radiant_win": None,
+        "radiant_score": None,
+        "dire_score": None,
+        "game_mode": None,
+    }
+
+
+def match_row(match_id: int, *, gold: list[int] | None = None) -> dict[str, object]:
+    row = {name: None for name in MATCH_SCHEMA.names}
+    row.update(
+        {
+            "match_id": match_id,
+            "start_time": 1609459200 + match_id,
+            "patch": "7.41",
+            "is_parsed": True,
+            "radiant_gold_adv": gold,
+            "radiant_xp_adv": gold,
+        }
+    )
+    return row
+
+
+def player_row(match_id: int, slot: int = 0) -> dict[str, object]:
+    row = {name: None for name in PLAYER_SCHEMA.names}
+    row.update(
+        {"match_id": match_id, "player_slot": slot, "is_radiant": slot < 128}
+    )
+    return row
+
+
+def draft_row(match_id: int, ord_value: int = 0) -> dict[str, object]:
+    row = {name: None for name in DRAFT_SCHEMA.names}
+    row.update(
+        {
+            "match_id": match_id,
+            "is_pick": True,
+            "hero_id": 1,
+            "team": 0,
+            "ord": ord_value,
+        }
+    )
+    return row
+
+
+def write_ndjson(path: Path, rows: list[dict[str, object]]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    content = "".join(json.dumps(row, separators=(",", ":")) + "\n" for row in rows)
+    path.write_text(content, encoding="utf-8", newline="\n")
+
+
+def write_existing_hot_month(data_dir: Path, month: str, match_id: int) -> None:
+    write_ndjson(
+        data_dir / "matches" / f"{month}.ndjson",
+        [match_row(match_id, gold=[50, 75])],
+    )
+    write_ndjson(
+        data_dir / "players" / f"{month}.ndjson", [player_row(match_id)]
+    )
+    write_ndjson(data_dir / "draft" / f"{month}.ndjson", [draft_row(match_id)])
+
+
+class BackfillTests(unittest.TestCase):
+    def test_keyset_pagination_advances_and_terminates(self) -> None:
+        client = ScriptedExplorer(
+            [
+                [match_source(10), match_source(20)],
+                [{"match_id": 10, "player_slot": 0}],
+                [{"match_id": 20, "is_pick": True, "hero_id": 1, "team": 0, "ord": 0}],
+                [match_source(30)],
+                [{"match_id": 30, "player_slot": 128}],
+                [],
+                [],
+            ]
+        )
+
+        rows = fetch_month_rows(client, "2021-01", initial_page_size=2)
+
+        match_queries = [query for query in client.queries if "backfill:matches" in query]
+        self.assertEqual(len(match_queries), 3)
+        self.assertIn("m.match_id > 0", match_queries[0])
+        self.assertIn("m.match_id > 20", match_queries[1])
+        self.assertIn("m.match_id > 30", match_queries[2])
+        self.assertEqual([row["match_id"] for row in rows.matches], [10, 20, 30])
+        self.assertTrue(all(row["radiant_win"] is None for row in rows.matches))
+        self.assertEqual(rows.null_team_id_matches, 3)
+        self.assertEqual(rows.pages, 2)
+        self.assertFalse(client.responses)
+
+        player_query = build_player_query("2021-01", 0, 20)
+        draft_query = build_draft_query("2021-01", 0, 20)
+        self.assertIn("pm.match_id > 0 AND pm.match_id <= 20", player_query)
+        self.assertIn("pb.match_id > 0 AND pb.match_id <= 20", draft_query)
+        self.assertIn("pb.ord", draft_query)
+
+    def test_timeout_halves_window_and_retries_same_cursor(self) -> None:
+        client = ScriptedExplorer(
+            [
+                ExplorerTimeout("mock timeout"),
+                [match_source(10)],
+                [],
+                [],
+                [],
+            ]
+        )
+
+        with redirect_stdout(io.StringIO()):
+            rows = fetch_month_rows(client, "2021-01", initial_page_size=4)
+
+        match_queries = [query for query in client.queries if "backfill:matches" in query]
+        self.assertIn("m.match_id > 0", match_queries[0])
+        self.assertIn("LIMIT 4", match_queries[0])
+        self.assertIn("m.match_id > 0", match_queries[1])
+        self.assertIn("LIMIT 2", match_queries[1])
+        self.assertEqual(rows.pages, 1)
+        self.assertGreaterEqual(EXPLORER_INTERVAL_SECONDS, 5.0)
+
+    def test_explorer_client_spaces_calls_by_at_least_five_seconds(self) -> None:
+        now = [0.0]
+        sleeps: list[float] = []
+
+        def sleeper(seconds: float) -> None:
+            sleeps.append(seconds)
+            now[0] += seconds
+
+        class Response(io.BytesIO):
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                self.close()
+
+        def opener(request, timeout):
+            return Response(b'{"rows": []}')
+
+        client = ExplorerClient(
+            opener=opener,
+            sleeper=sleeper,
+            clock=lambda: now[0],
+        )
+        client.query("SELECT 1")
+        client.query("SELECT 2")
+
+        self.assertEqual(sleeps, [EXPLORER_INTERVAL_SECONDS])
+        self.assertGreaterEqual(sleeps[0], 5.0)
+
+    def test_checkpoint_resume_skips_completed_months(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            data_dir = root / "data"
+            checkpoint_path = root / "checkpoint.json"
+            checkpoint_path.write_text(
+                json.dumps({"version": 1, "completed_months": ["2021-01"]}),
+                encoding="utf-8",
+            )
+            client = ScriptedExplorer([[]])
+
+            with redirect_stdout(io.StringIO()):
+                summary = run_backfill(
+                    client,
+                    data_dir=data_dir,
+                    checkpoint_path=checkpoint_path,
+                    run_date=date(2021, 3, 12),
+                    start_month="2021-01",
+                    initial_page_size=2,
+                )
+
+            self.assertEqual(summary.resumed_months, ["2021-01"])
+            self.assertEqual(summary.completed_months, ["2021-02"])
+            self.assertEqual(len(client.queries), 1)
+            february_start = 1612137600
+            self.assertIn(f"m.start_time >= {february_start}", client.queries[0])
+            checkpoint = json.loads(checkpoint_path.read_text(encoding="utf-8"))
+            self.assertEqual(
+                checkpoint["completed_months"], ["2021-01", "2021-02"]
+            )
+
+    def test_upper_bound_uses_compaction_boundary(self) -> None:
+        self.assertEqual(last_fully_closed_month(date(2026, 9, 3)), "2026-07")
+        self.assertEqual(last_fully_closed_month(date(2026, 9, 12)), "2026-08")
+
+    def test_write_time_dedup_keeps_one_match_id(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            data_dir = Path(temporary_directory) / "data"
+            write_existing_hot_month(data_dir, "2021-01", 1)
+            fetched = MonthRows(
+                matches=[slim_sql_match(match_source(1)), slim_sql_match(match_source(2))],
+                players=[
+                    slim_sql_player({"match_id": 1, "player_slot": 0}),
+                    slim_sql_player({"match_id": 2, "player_slot": 128}),
+                ],
+                draft=[
+                    slim_sql_draft(
+                        {"match_id": 1, "is_pick": True, "hero_id": 2, "team": 0, "ord": 0}
+                    ),
+                    slim_sql_draft(
+                        {"match_id": 2, "is_pick": True, "hero_id": 3, "team": 1, "ord": 0}
+                    ),
+                ],
+            )
+
+            result = write_month(data_dir, "2021-01", fetched)
+
+            table = pq.read_table(data_dir / "matches" / "2021-01.parquet")
+            self.assertEqual(table.column("match_id").to_pylist(), [1, 2])
+            self.assertEqual(result.duplicate_matches_skipped, 1)
+            self.assertEqual(result.matches_written, 1)
+            self.assertFalse((data_dir / "matches" / "2021-01.ndjson").exists())
+
+    def test_rest_precedence_preserves_existing_gold_advantage(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            data_dir = Path(temporary_directory) / "data"
+            paths = {
+                "matches": data_dir / "matches" / "2021-01.parquet",
+                "players": data_dir / "players" / "2021-01.parquet",
+                "draft": data_dir / "draft" / "2021-01.parquet",
+            }
+            for path in paths.values():
+                path.parent.mkdir(parents=True, exist_ok=True)
+            pq.write_table(
+                pa.Table.from_pylist([match_row(1, gold=[100, 200])], schema=MATCH_SCHEMA),
+                paths["matches"],
+            )
+            pq.write_table(
+                pa.Table.from_pylist([player_row(1)], schema=PLAYER_SCHEMA),
+                paths["players"],
+            )
+            pq.write_table(
+                pa.Table.from_pylist([draft_row(1)], schema=DRAFT_SCHEMA),
+                paths["draft"],
+            )
+            before = paths["matches"].read_bytes()
+            fetched = MonthRows(matches=[slim_sql_match(match_source(1))])
+
+            result = write_month(data_dir, "2021-01", fetched)
+
+            self.assertFalse(result.wrote_files)
+            self.assertEqual(paths["matches"].read_bytes(), before)
+            table = pq.read_table(paths["matches"])
+            self.assertEqual(table.column("radiant_gold_adv").to_pylist(), [[100, 200]])
+
+    def test_zero_match_month_creates_no_files(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            data_dir = Path(temporary_directory) / "data"
+            result = write_month(data_dir, "2021-01", MonthRows())
+            self.assertFalse(result.wrote_files)
+            self.assertEqual(list(data_dir.rglob("*.parquet")), [])
+
+    def test_dry_run_is_offline_and_writes_nothing(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            data_dir = root / "data"
+            checkpoint_path = root / "checkpoint.json"
+            before = sorted(path.relative_to(root) for path in root.rglob("*"))
+
+            with patch(
+                "ingest.backfill.ExplorerClient",
+                side_effect=AssertionError("dry-run instantiated live client"),
+            ):
+                output = io.StringIO()
+                with redirect_stdout(output):
+                    exit_code = main(
+                        [
+                            "--dry-run",
+                            "--data-dir",
+                            str(data_dir),
+                            "--checkpoint",
+                            str(checkpoint_path),
+                        ]
+                    )
+
+            after = sorted(path.relative_to(root) for path in root.rglob("*"))
+            self.assertEqual(exit_code, 0)
+            self.assertEqual(after, before)
+            self.assertIn("live_api_calls=0", output.getvalue())
+            self.assertIn("filesystem_writes=0", output.getvalue())
+            self.assertIn("mock_keyset_cursors=[0, 102, 103]", output.getvalue())
+            self.assertIn("null_team_id_matches=3", output.getvalue())
+
+    def test_match_query_uses_month_keyset_and_limit(self) -> None:
+        query = build_match_query("2021-01", 123, 456)
+        self.assertIn("m.start_time >= 1609459200", query)
+        self.assertIn("m.start_time < 1612137600", query)
+        self.assertIn("m.match_id > 123", query)
+        self.assertIn("ORDER BY m.match_id", query)
+        self.assertIn("LIMIT 456", query)
+
+
+if __name__ == "__main__":
+    unittest.main()

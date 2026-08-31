@@ -471,11 +471,12 @@ after all three verified files have been published are the NDJSON sources remove
 command reports the before/after row count for each table; `--dry-run` reports eligible
 months and row counts without filesystem writes.
 
-`test_real_august_shards_round_trip_every_row_and_column` asserts exact null-position and
-null-count preservation for `stuns` and `teamfight_participation`, but the 299-match August
-sample has zero nulls in both columns because every sampled match was parsed. That part of
-the real-data assertion is currently vacuous; the synthetic tests in `test_compact.py` cover
-the actual null round-trip case.
+`test_real_august_shards_round_trip_every_row_and_column` derives row counts from the committed
+append-only shard rather than pinning them, so scheduled ingest growth does not invalidate the
+test. It asserts exact null-position and null-count preservation for `stuns` and
+`teamfight_participation`; the original 299-match measurement had zero nulls in both columns
+because every sampled match was parsed. The synthetic tests in `test_compact.py` cover the
+actual null round-trip case even while the growing real shard continues to have no such nulls.
 
 ### `ingest/reference.py`
 
@@ -584,11 +585,33 @@ LIMIT 2000
 Parallel queries against `player_matches` and `picks_bans` for the same match_id window.
 Expect roughly 400–600 explorer calls total.
 
-Requirements: write each completed historical month directly to `.parquet`; make the script
-resumable from the gitignored `ingest/.backfill-checkpoint.json`; on timeout, halve the window
-and retry. A crash at month 50 must not cost the first 49. Source team names from the `teams`
-joins shown above. If a team ID is null, write the corresponding team name as null, flag the
-row, and continue.
+The hard upper bound is the last fully closed month, computed from the run date by reusing
+`compact.py`'s eligibility rule. A month stays hot through the seventh of the following month:
+on September 3 the bound is July, while on September 12 it is August. Backfill must never
+write the current hot month. Doing so could create a thin month that compaction seals
+permanently on the eighth even though closed shards are never rewritten.
+
+REST data always has precedence over SQL backfill data. REST is the only source for
+`radiant_gold_adv` and `radiant_xp_adv`, so replacing a REST-written match with its SQL row
+would silently destroy that match's gold graph. Deduplication occurs at write time: immediately
+before publishing a month, read its existing match IDs from monthly NDJSON or Parquet and the
+late-arrival shard, skip those matches and all of their backfilled player/draft rows, and retain
+the existing rows unchanged. This preserves the v0 acceptance criterion that every data file
+itself contains no duplicate `match_id`; readers must not be responsible for repairing overlap.
+
+Write each completed historical month directly to `.parquet`, with all three tables staged and
+verified before publication. Existing eligible NDJSON rows may be carried into that first
+Parquet publication, but an existing closed Parquet shard is never rewritten. If a month has no
+matches and no existing NDJSON, publish no files and still checkpoint the completed month.
+
+The gitignored `ingest/.backfill-checkpoint.json` has version 1 and records the sorted
+`completed_months`, the most recent `last_eligible_month`, and `updated_utc`. Save it atomically
+after each month, including an empty month, so a crash at month 50 does not cost the first 49.
+On an Explorer timeout, halve the keyset page limit and retry the same cursor; if a one-match
+window still times out, fail without advancing the checkpoint. Source team names from the
+`teams` joins shown above. If a team ID is null, write the corresponding team name as null and
+continue without dropping the match; report such rows in the month's `null_team_id_matches`
+summary count rather than adding a schema column.
 
 `radiant_gold_adv` / `radiant_xp_adv` are not practical to backfill via explorer. Leave them
 null for historical rows and populate them going forward. The match page must render without
@@ -597,12 +620,6 @@ the gold graph.
 The script must provide a `--dry-run` that validates query construction and keyset pagination
 against mocked responses without calling the live API or writing data. Do not run the live
 backfill without explicit user approval.
-
-### Open questions
-
-- **Backfill/incremental overlap:** Backfill will re-cover months that incremental ingest
-  already wrote, creating two sources for the same `match_id`. Deduplication and precedence
-  rules are undecided. Resolve before step 9.
 
 ### v0 acceptance criteria
 
@@ -618,7 +635,7 @@ backfill without explicit user approval.
       responses without live API calls or data writes
 - [ ] **Step 8:** backfill joins team names through `teams.team_id`; rows with a null team ID
       retain a null name, are flagged, and do not abort the run
-- [ ] **Separate step 7, explicit approval required:** backfill completes for at least one
+- [ ] **Step 9, explicit approval required:** backfill completes for at least one
       historical month and matches the count from an independent `SELECT count(*)` for that
       window
 

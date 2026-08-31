@@ -17,7 +17,6 @@ from ingest import compact
 
 class RealDataCompactRoundTripTests(unittest.TestCase):
     MONTH = "2026-08"
-    EXPECTED_ROWS = {"matches": 299, "players": 2_990, "draft": 7_170}
     FULL_DATASET_MATCHES = 147_495
 
     @classmethod
@@ -56,7 +55,7 @@ class RealDataCompactRoundTripTests(unittest.TestCase):
 
         ndjson_total = sum(cls.ndjson_sizes.values())
         parquet_total = sum(cls.parquet_sizes.values())
-        scale = cls.FULL_DATASET_MATCHES / cls.EXPECTED_ROWS["matches"]
+        scale = cls.FULL_DATASET_MATCHES / len(cls.source_rows["matches"])
         projection_bytes = parquet_total * scale
         print(
             "ROUNDTRIP_SIZES "
@@ -77,8 +76,8 @@ class RealDataCompactRoundTripTests(unittest.TestCase):
         cls.temporary.cleanup()
 
     def test_real_august_shards_round_trip_every_row_and_column(self):
-        for table_name, expected_rows in self.EXPECTED_ROWS.items():
-            self.assertEqual(expected_rows, len(self.source_rows[table_name]))
+        for table_name in compact.TABLE_SCHEMAS:
+            expected_rows = len(self.source_rows[table_name])
             self.assertEqual(expected_rows, self.parquet_tables[table_name].num_rows)
             self.assertTrue(
                 self.parquet_tables[table_name].schema.equals(
@@ -132,6 +131,7 @@ class RealDataCompactRoundTripTests(unittest.TestCase):
 
         players = self.parquet_tables["players"]
         source_players = self.source_rows["players"]
+        self.assertEqual(len(source_matches) * 10, len(source_players))
         parquet_players = players.to_pylist()
         real_null_counts = {}
         for field_name in ("stuns", "teamfight_participation"):
@@ -161,7 +161,7 @@ class RealDataCompactRoundTripTests(unittest.TestCase):
         backpack_field = players.schema.field("backpack_3")
         self.assertTrue(backpack_field.nullable)
         self.assertTrue(pa.types.is_int32(backpack_field.type))
-        self.assertEqual(self.EXPECTED_ROWS["players"], players["backpack_3"].null_count)
+        self.assertEqual(len(source_players), players["backpack_3"].null_count)
         self.assertTrue(all(row["backpack_3"] is None for row in players.to_pylist()))
 
         source_draft_counts = Counter(
