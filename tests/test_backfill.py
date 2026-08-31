@@ -22,6 +22,7 @@ from ingest.backfill import (
     ExplorerTimeout,
     MATCH_QUERY_COLUMNS,
     MonthRows,
+    ZeroPlayerRowsError,
     build_draft_query,
     build_match_query,
     build_player_query,
@@ -281,13 +282,13 @@ class BackfillTests(unittest.TestCase):
         client = ScriptedExplorer(
             [
                 [match_source(10), match_source(20)],
-                player_sources(10),
+                player_sources(10) + player_sources(20)[:2],
                 [],
                 [match_source(10)],
                 player_sources(10),
                 [],
                 [match_source(20)],
-                [],
+                player_sources(20)[:2],
                 [],
                 [],
             ]
@@ -304,15 +305,15 @@ class BackfillTests(unittest.TestCase):
         self.assertIn("m.match_id > 0", match_queries[1])
         self.assertIn("LIMIT 1", match_queries[1])
         self.assertIn("SUSPECTED PLAYER TRUNCATION", output.getvalue())
-        self.assertEqual(rows.zero_player_match_ids, [20])
-        self.assertEqual(rows.player_row_count_anomalies, {20: 0})
+        self.assertEqual(rows.zero_player_match_ids, [])
+        self.assertEqual(rows.player_row_count_anomalies, {20: 2})
         self.assertEqual([row["match_id"] for row in rows.matches], [10, 20])
 
     def test_interior_short_player_count_is_recorded_as_anomaly(self) -> None:
         client = ScriptedExplorer(
             [
                 [match_source(10), match_source(20)],
-                player_sources(20),
+                player_sources(10)[:2] + player_sources(20),
                 [],
                 [],
             ]
@@ -322,9 +323,23 @@ class BackfillTests(unittest.TestCase):
             rows = fetch_month_rows(client, "2021-01", initial_page_size=2)
 
         self.assertNotIn("SUSPECTED PLAYER TRUNCATION", output.getvalue())
-        self.assertEqual(rows.zero_player_match_ids, [10])
-        self.assertEqual(rows.player_row_count_anomalies, {10: 0})
-        self.assertEqual(len(rows.players), 10)
+        self.assertEqual(rows.zero_player_match_ids, [])
+        self.assertEqual(rows.player_row_count_anomalies, {10: 2})
+        self.assertEqual(len(rows.players), 12)
+
+    def test_zero_player_rows_abort_month_and_name_match(self) -> None:
+        client = ScriptedExplorer(
+            [
+                [match_source(10)],
+                [],
+                [],
+            ]
+        )
+        with self.assertRaisesRegex(
+            ZeroPlayerRowsError,
+            r"month=2021-01 match_ids=\[10\]; aborting month",
+        ):
+            fetch_month_rows(client, "2021-01", initial_page_size=1)
 
     def test_first_match_page_must_cover_every_selected_sql_column(self) -> None:
         source = match_source(10)
@@ -404,7 +419,7 @@ class BackfillTests(unittest.TestCase):
             client = ScriptedExplorer(
                 [
                     [match_source(10), match_source(20)],
-                    player_sources(20),
+                    player_sources(10)[:2] + player_sources(20),
                     [],
                     [],
                 ]
@@ -420,10 +435,10 @@ class BackfillTests(unittest.TestCase):
                     initial_page_size=2,
                 )
 
-            self.assertEqual(summary.zero_player_matches, 1)
-            self.assertEqual(summary.player_row_count_anomalies, {10: 0})
+            self.assertEqual(summary.zero_player_matches, 0)
+            self.assertEqual(summary.player_row_count_anomalies, {10: 2})
             self.assertIn(
-                "zero_player_matches=1 player_row_count_anomalies=1",
+                "zero_player_matches=0 player_row_count_anomalies=1",
                 output.getvalue(),
             )
 
@@ -638,9 +653,14 @@ class BackfillTests(unittest.TestCase):
             self.assertIn("filesystem_writes=0", output.getvalue())
             self.assertIn("mock_keyset_cursors=[0, 102, 103]", output.getvalue())
             self.assertIn("null_team_id_matches=3", output.getvalue())
-            self.assertIn("zero_player_match_ids=[101]", output.getvalue())
+            self.assertIn("zero_player_match_ids=[]", output.getvalue())
             self.assertIn(
-                "player_row_count_anomalies={101: 0}", output.getvalue()
+                "mock_complete_player_page_match_ids=[101, 102]",
+                output.getvalue(),
+            )
+            self.assertIn(
+                "mock_deliberate_player_anomaly={103: 2}",
+                output.getvalue(),
             )
 
     def test_no_arguments_refuses_live_execution(self) -> None:

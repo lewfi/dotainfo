@@ -78,6 +78,10 @@ class ExplorerRateLimitError(RuntimeError):
     """Raised after /explorer remains rate-limited through five retries."""
 
 
+class ZeroPlayerRowsError(RuntimeError):
+    """Raised when a match has no player rows and the month must abort."""
+
+
 class Explorer(Protocol):
     def query(self, sql: str) -> list[Mapping[str, Any]]: ...
 
@@ -430,10 +434,18 @@ def fetch_month_rows(
         player_counts = {match_id: 0 for match_id in match_ids}
         for row in source_players:
             player_counts[_required_match_id(row, "players")] += 1
+        zero_player_ids = sorted(
+            match_id for match_id, count in player_counts.items() if count == 0
+        )
+        if zero_player_ids:
+            raise ZeroPlayerRowsError(
+                f"player query returned zero rows for month={month} "
+                f"match_ids={zero_player_ids}; aborting month"
+            )
         short_player_counts = {
             match_id: count
             for match_id, count in player_counts.items()
-            if count < PLAYER_ROWS_PER_MATCH
+            if 0 < count < PLAYER_ROWS_PER_MATCH
         }
         tail_short_ids: list[int] = []
         for match_id in reversed(match_ids):
@@ -460,9 +472,6 @@ def fetch_month_rows(
             for match_id, count in player_counts.items()
             if count != PLAYER_ROWS_PER_MATCH
         }
-        zero_player_ids = sorted(
-            match_id for match_id, count in player_anomalies.items() if count == 0
-        )
 
         draft_ids = {
             _required_match_id(row, "draft") for row in source_draft
@@ -477,7 +486,6 @@ def fetch_month_rows(
             row["radiant_team_id"] is None or row["dire_team_id"] is None
             for row in mapped_matches
         )
-        result.zero_player_match_ids.extend(zero_player_ids)
         result.player_row_count_anomalies.update(player_anomalies)
         result.zero_draft_match_ids.extend(zero_draft_ids)
         result.pages += 1
@@ -887,10 +895,10 @@ def _mock_players(match_id: int) -> list[JsonObject]:
 def validate_offline_dry_run() -> MonthRows:
     script = [
         ("matches", [_mock_match(101), _mock_match(102)]),
-        ("players", _mock_players(102)),
+        ("players", _mock_players(101) + _mock_players(102)),
         ("draft", [{"match_id": 101, "is_pick": True, "hero_id": 1, "team": 0, "ord": 0}]),
         ("matches", [_mock_match(103)]),
-        ("players", _mock_players(103)),
+        ("players", _mock_players(103)[:2]),
         ("draft", [{"match_id": 103, "is_pick": False, "hero_id": 2, "team": 1, "ord": 1}]),
         ("matches", []),
     ]
@@ -937,7 +945,11 @@ def validate_offline_dry_run() -> MonthRows:
     print(f"mock_draft={len(rows.draft)}")
     print(f"null_team_id_matches={rows.null_team_id_matches}")
     print(f"zero_player_match_ids={rows.zero_player_match_ids}")
-    print(f"player_row_count_anomalies={rows.player_row_count_anomalies}")
+    print("mock_complete_player_page_match_ids=[101, 102]")
+    print(
+        "mock_deliberate_player_anomaly="
+        f"{rows.player_row_count_anomalies}"
+    )
     print(f"zero_draft_match_ids={rows.zero_draft_match_ids}")
     print(f"patch_format={patch_format}")
     print(

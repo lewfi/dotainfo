@@ -28,10 +28,15 @@ dated. Counts marked approximate grow over time:
 | Fact | Value |
 |---|---|
 | Pro matches since 2021-01-01 | **~147,495 as of 2026-08-30 and growing** (147,224 on 2026-08-25) |
+| Backfill-query matches on 2026-08-30 | **147,524** with `leagueid > 0` and `start_time >= 1609459200` |
 | Distinct leagues | 960 |
 | Earliest `start_time` | 1609488182 (2021-01-01) |
 | Latest `start_time` | 1787645902 (2026-08-25, live) |
 | Average new pro matches | **~71/day** |
+
+The 147,524 observation uses the exact league and time predicates queried by backfill. It is
+a separate same-day population from the approximate 147,495 figure above; the predicates are
+not interchangeable.
 
 Daily pro match volume varies from 0 to ~190; the ~71/day figure is a long-run average
 across 2,067 days including TI and major seasons. Observed: 2026-08-17, 2026-08-18,
@@ -291,10 +296,11 @@ megabytes live. Do not store them.
 Fields including `stuns`, `teamfight_participation`, `lane_role`, and `is_roaming` are null
 for unparsed matches. Handle nulls; do not drop the rows.
 
-Ten rows per match is the expected shape, but whether it holds across the full 2021+
-population is not yet measured. Step 9 preparation will check it with one aggregate Explorer
-query. Backfill must retain and report genuine short or long player-row counts rather than
-filtering the match or permanently blocking its month.
+A 2026-08-30 SQL Explorer measurement over all 147,524 matches with `leagueid > 0` and
+`start_time >= 1609459200` found 147,523 with exactly ten `player_matches` rows and one with
+exactly two rows. Matches with at least one player row and eligible matches both totalled
+147,524, so zero matches had zero player rows. That zero is derived by subtraction of the two
+counts, not measured with a direct anti-join.
 
 `backpack_3` is absent from REST player responses, so `fetch.py` always writes it as null.
 It exists as a real `player_matches` SQL column, but all 4,350 rows in the bounded 2026-07
@@ -596,10 +602,14 @@ no `LIMIT`; they are bounded by `match_id > :cursor AND match_id <= :window_end`
 `player_matches` rows per match before accepting a page. Because results are ordered by
 `match_id, player_slot`, a short contiguous suffix at the highest match IDs is treated as
 suspected server-side truncation: halve the match page and retry the same cursor, using the
-same window-reduction path as a timeout. A non-ten count away from that tail is a data
-anomaly, not truncation; retain it, record its match ID and observed count, and continue. A
-one-match window cannot be reduced further, so its non-ten count is likewise recorded as an
-anomaly. Derive the zero-player IDs and summary counts from those recorded observations.
+same window-reduction path as a timeout. Exactly ten rows is normal. A count from one through
+nine away from that tail is a data anomaly, not truncation; retain it, record its match ID and
+observed count, and continue. A one-match window cannot be reduced further, so a one-through-
+nine count there is likewise recorded as an anomaly. A count of zero aborts the month with
+the match ID in the error and has no override, because zero was absent from the measured
+population and is the remaining signal of silent truncation at a one-match window. Counts
+above ten are also recorded as non-truncation anomalies. Derive the zero-player IDs and
+summary counts from the observations rather than hardcoding them.
 Zero `picks_bans` rows are valid (about 0.93% of matches) and are reported but do not abort.
 Expect roughly 400–600 explorer calls total.
 
