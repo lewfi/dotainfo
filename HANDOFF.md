@@ -148,6 +148,11 @@ running measurement is 43,783 matches in 22,929,262 bytes, or 523.70 bytes per m
 combined rate supplements rather than replaces the 521.77 single-month and 535.80 full-2021
 observations; all three describe SQL-backfilled rows with null advantage arrays.
 
+The approved 2023-01 through 2023-11 batch adds 28,477 matches in 14,462,480 bytes, or
+507.8653 bytes per match. Across all 36 backfilled months now committed—2021-01 through
+2023-12—the running measurement is 72,260 matches in 37,391,742 bytes, or 517.4611 bytes
+per match. Like the earlier historical measurements, these rows have null advantage arrays.
+
 Two formats, by lifecycle stage:
 
 - **Hot month** — `data/matches/2026-08.ndjson`, appended to on every run. Newline-delimited
@@ -252,6 +257,16 @@ leave them null.
 The `league_tier` domain is open-ended. Do not hardcode an enum; the live API has returned
 `"excluded"` in addition to the currently documented public tiers.
 
+Across the 36 committed backfill months from 2021-01 through 2023-12, direct Parquet reads
+find 59,807 `professional` and 12,453 `premium` matches and no `excluded` or null-tier row.
+Finding 23 measured the full backfill population at 111,259 professional, 12,865 premium,
+and 23,400 excluded matches. Arithmetic therefore implies that the roughly 75,264 matches
+remaining in 2024, 2025, and 2026-01 through 2026-07 contain all 23,400 excluded matches and
+only about 412 premium matches. This is an implication to test against the next backfill
+chunk's tier distribution, not a measurement of those months. If confirmed, it puts the
+v1 premium-plus-professional default view in question for the recent era, where the excluded
+population is concentrated.
+
 A 2026-08-30 SQL null sweep over 147,495 matches found `series_id` and `series_type` null on
 209 rows (0.14%), and both captain fields null on 1,781 rows (1.21%). Seven rows (0.005%) are
 null across `radiant_win`, both score fields, `first_blood_time`, `game_mode`, `lobby_type`,
@@ -283,14 +298,25 @@ what the data supports, not a defect to fix.
   columns described above. Null-ID matches retain a null corresponding name and must render
   without one.
 
-A 2026-by-month SQL sweep on 2026-08-30 found no systematic recent rise in null team IDs;
-instead, the August spike was entirely event-specific. August had 116/621 (18.68%) null
-`radiant_team_id` and 111/621 (17.87%) null `dire_team_id`, and every one belonged to league
-20134: 116/185 (62.70%) radiant and 111/185 (60.00%) dire. The other 436 August matches had
-zero null team IDs. The 299-match incremental sample contains those same 116 and 111 nulls,
-so its apparent 38.80%/37.12% rate is a sampling-composition effect. Nameless rendering is
-therefore not the general recent case, but it is common within an affected event and must be
-treated as normal presentation rather than an exceptional error.
+A 2026-by-month SQL sweep on 2026-08-30 found no systematic recent rise in null team IDs.
+Instead, committed observations show that null IDs concentrate in qualifier and open events;
+a single event can account for almost an entire month's spike, or the spike can be diffuse
+across several events, and neither shape is anomalous. In 2022-06, 989/2,990 matches had at
+least one null team ID, with 969 in league 14284, Perfect World Super Challenge—all 969
+matches in that league—and 971 matches null on both sides. In 2023-11, 391 of 441 null-team
+matches belonged to league 15909, ESL One Kuala Lumpur Qualifiers. By contrast, 2021-11 was
+diffuse: its 345/2,293 null-team matches were spread across Intel World Open, four DPC
+regional qualifiers, a Douyu invitational, a show match, and a few smaller events. The
+2026-08 spike was again single-event: all 116/621 (18.68%) null radiant IDs and all 111/621
+(17.87%) null dire IDs belonged to league 20134, while the other 436 August matches had none.
+The 299-match incremental sample contains those same August nulls, so its apparent
+38.80%/37.12% rate is a sampling-composition effect. Nameless rendering remains normal
+presentation within affected events rather than an exceptional error.
+
+Direct reads of the 2022 shards find 1,322 matches with at least one null team ID: 1,280 are
+`professional` and 42 are `premium`. The 42 premium rows occur in four DPC qualifier leagues.
+Thus 100% of 2022's null-team matches survive v1's premium-plus-professional default view;
+the tier filter does not reduce nameless rendering for that year.
 
 The committed 2023-12 backfill shard provides a dated direct comparison: on 2026-08-30 it
 contained 40/2,025 (1.98%) null `radiant_team_id` values and 40/2,025 (1.98%) null
@@ -381,6 +407,11 @@ draft-unavailable state:
 Match 7485890286 is also the only known match in the measured 2021+ population with a
 `player_matches` row count other than ten: it has two player rows. One committed record
 therefore exercises both the short-player anomaly and draft-unavailable cases.
+
+The committed direct no-draft observations form a series, not a universal rate: 167/16,807
+(0.99%) in 2021, 174/24,951 (0.70%) in 2022, 157/28,477 (0.55%) in 2023-01 through
+2023-11, and 21/2,025 (1.04%) in 2023-12. The running committed total is 519/72,260
+(0.718%).
 
 ### `data/reference/` — refreshed weekly in v0
 
@@ -768,6 +799,19 @@ Explorer query over `[1640995200, 1672531200)`, both advantage columns were null
 and every null team ID had a corresponding null team name on the same side. The checkpoint
 now records all twelve months of 2021 and 2022 plus 2023-12 as completed.
 
+A fourth explicitly approved bounded invocation selected exactly 2023-01 through 2023-11,
+skipping completed 2023-12, and completed all eleven in 559.051 seconds with 77 Explorer
+query calls. No `TIMEOUT`, `TRUNCATED PLAYER TAIL`, `PLAYER TAIL HALVING CAP REACHED`, or
+player-row anomaly line appeared. Direct Parquet reads found 28,477 distinct matches with no
+duplicate match IDs within the batch or across all 36 backfilled months; both advantage
+columns were null throughout, and every null team ID had a corresponding null team name on
+the same side. The batch occupies 14,462,480 bytes, or 507.8653 bytes per match; all 36
+months contain 72,260 matches at 517.4611 bytes per match. The first independent verification
+attempt failed with HTTP 400 because shell quoting stripped SQL literals. A replacement
+verification issued from a Python file through `ExplorerClient` grouped the exact
+`[1672531200, 1701388800)` window by UTC month and league tier: every monthly total and tier
+distribution matched Parquet, with no `excluded` or null-tier row.
+
 ### v0 acceptance criteria
 
 - [ ] Two consecutive scheduled runs complete, the second adding only genuinely new matches
@@ -797,7 +841,11 @@ Observable Plot for charts, plain CSS. No React, no Tailwind, no UI framework.
 
 - `/` — most recent 100 matches. Team names, score, duration, league, relative time.
   Default the view to `league_tier IN ('premium','professional')`; the tier filter is why
-  we stored it.
+  we stored it. Do not assume this filter reduces nameless rendering: all 1,322 null-team
+  matches committed for 2022 are premium or professional and survive it. The arithmetic
+  concentration of all 23,400 measured excluded matches in the still-uncommitted recent era
+  must be tested by the next backfill chunk; if confirmed, revisit whether this default is
+  appropriate for the home feed and 90-day window.
 - `/matches/[id]` — draft order (picks and bans, both teams, in `ord` sequence), both boxscores
   (hero, K/D/A, LH/DN, GPM/XPM, net worth, items), and the gold-advantage graph when
   `radiant_gold_adv` is non-null. If the match has no draft rows, render a clean
