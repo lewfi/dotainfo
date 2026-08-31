@@ -601,15 +601,15 @@ Parallel queries against `player_matches` and `picks_bans` use the same match-ID
 no `LIMIT`; they are bounded by `match_id > :cursor AND match_id <= :window_end`. Count
 `player_matches` rows per match before accepting a page. Because results are ordered by
 `match_id, player_slot`, a short contiguous suffix at the highest match IDs is treated as
-suspected server-side truncation: halve the match page and retry the same cursor, using the
-same window-reduction path as a timeout. Exactly ten rows is normal. A count from one through
-nine away from that tail is a data anomaly, not truncation; retain it, record its match ID and
-observed count, and continue. A one-match window cannot be reduced further, so a one-through-
-nine count there is likewise recorded as an anomaly. A count of zero aborts the month with
-the match ID in the error and has no override, because zero was absent from the measured
-population and is the remaining signal of silent truncation at a one-match window. Counts
-above ten are also recorded as non-truncation anomalies. Derive the zero-player IDs and
-summary counts from the observations rather than hardcoding them.
+suspected server-side truncation; "short" here includes counts from zero through nine. If the
+page can still be reduced, halve it and retry the same cursor using the same path as a timeout
+before classifying any tail count. Exactly ten rows is normal. Once halving has bottomed out,
+or for a short count away from the tail, classify the observation: one through nine is a data
+anomaly that is retained and reported, while zero aborts the month with the match ID in the
+error and has no override. Zero was absent from the measured population and is the remaining
+signal of silent truncation at a one-match window. Counts above ten are also recorded as
+non-truncation anomalies. A successful result has no zero-player field; fatal IDs are reported
+by `ZeroPlayerRowsError`.
 Zero `picks_bans` rows are valid (about 0.93% of matches) and are reported but do not abort.
 Expect roughly 400–600 explorer calls total.
 

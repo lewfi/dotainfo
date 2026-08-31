@@ -278,17 +278,17 @@ class BackfillTests(unittest.TestCase):
                 f"missing exponential delay {expected} in {sleeps}",
             )
 
-    def test_tail_short_player_count_halves_and_retries_same_cursor(self) -> None:
+    def test_trailing_zero_player_counts_halve_and_retry_same_cursor(self) -> None:
         client = ScriptedExplorer(
             [
                 [match_source(10), match_source(20)],
-                player_sources(10) + player_sources(20)[:2],
+                player_sources(10),
                 [],
                 [match_source(10)],
                 player_sources(10),
                 [],
                 [match_source(20)],
-                player_sources(20)[:2],
+                player_sources(20),
                 [],
                 [],
             ]
@@ -305,8 +305,8 @@ class BackfillTests(unittest.TestCase):
         self.assertIn("m.match_id > 0", match_queries[1])
         self.assertIn("LIMIT 1", match_queries[1])
         self.assertIn("SUSPECTED PLAYER TRUNCATION", output.getvalue())
-        self.assertEqual(rows.zero_player_match_ids, [])
-        self.assertEqual(rows.player_row_count_anomalies, {20: 2})
+        self.assertIn("counts={20: 0}", output.getvalue())
+        self.assertEqual(rows.player_row_count_anomalies, {})
         self.assertEqual([row["match_id"] for row in rows.matches], [10, 20])
 
     def test_interior_short_player_count_is_recorded_as_anomaly(self) -> None:
@@ -323,15 +323,14 @@ class BackfillTests(unittest.TestCase):
             rows = fetch_month_rows(client, "2021-01", initial_page_size=2)
 
         self.assertNotIn("SUSPECTED PLAYER TRUNCATION", output.getvalue())
-        self.assertEqual(rows.zero_player_match_ids, [])
         self.assertEqual(rows.player_row_count_anomalies, {10: 2})
         self.assertEqual(len(rows.players), 12)
 
-    def test_zero_player_rows_abort_month_and_name_match(self) -> None:
+    def test_interior_zero_player_rows_abort_month_and_name_match(self) -> None:
         client = ScriptedExplorer(
             [
-                [match_source(10)],
-                [],
+                [match_source(10), match_source(20)],
+                player_sources(20),
                 [],
             ]
         )
@@ -339,6 +338,17 @@ class BackfillTests(unittest.TestCase):
             ZeroPlayerRowsError,
             r"month=2021-01 match_ids=\[10\]; aborting month",
         ):
+            fetch_month_rows(client, "2021-01", initial_page_size=2)
+
+    def test_zero_player_rows_abort_after_halving_bottoms_out(self) -> None:
+        client = ScriptedExplorer(
+            [
+                [match_source(10)],
+                [],
+                [],
+            ]
+        )
+        with self.assertRaisesRegex(ZeroPlayerRowsError, r"match_ids=\[10\]"):
             fetch_month_rows(client, "2021-01", initial_page_size=1)
 
     def test_first_match_page_must_cover_every_selected_sql_column(self) -> None:
@@ -435,12 +445,12 @@ class BackfillTests(unittest.TestCase):
                     initial_page_size=2,
                 )
 
-            self.assertEqual(summary.zero_player_matches, 0)
             self.assertEqual(summary.player_row_count_anomalies, {10: 2})
             self.assertIn(
-                "zero_player_matches=0 player_row_count_anomalies=1",
+                "player_row_count_anomalies=1",
                 output.getvalue(),
             )
+            self.assertNotIn("zero_player_matches=", output.getvalue())
 
     def test_write_time_dedup_keeps_one_match_id(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
@@ -653,7 +663,7 @@ class BackfillTests(unittest.TestCase):
             self.assertIn("filesystem_writes=0", output.getvalue())
             self.assertIn("mock_keyset_cursors=[0, 102, 103]", output.getvalue())
             self.assertIn("null_team_id_matches=3", output.getvalue())
-            self.assertIn("zero_player_match_ids=[]", output.getvalue())
+            self.assertNotIn("zero_player_match_ids=", output.getvalue())
             self.assertIn(
                 "mock_complete_player_page_match_ids=[101, 102]",
                 output.getvalue(),

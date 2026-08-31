@@ -94,7 +94,6 @@ class MonthRows:
     pages: int = 0
     explorer_queries: int = 0
     null_team_id_matches: int = 0
-    zero_player_match_ids: list[int] = field(default_factory=list)
     player_row_count_anomalies: dict[int, int] = field(default_factory=dict)
     zero_draft_match_ids: list[int] = field(default_factory=list)
 
@@ -119,7 +118,6 @@ class BackfillSummary:
     duplicate_matches_skipped: int = 0
     explorer_queries: int = 0
     null_team_id_matches: int = 0
-    zero_player_matches: int = 0
     player_row_count_anomalies: dict[int, int] = field(default_factory=dict)
     zero_draft_matches: int = 0
     late_matches_written: int = 0
@@ -434,18 +432,10 @@ def fetch_month_rows(
         player_counts = {match_id: 0 for match_id in match_ids}
         for row in source_players:
             player_counts[_required_match_id(row, "players")] += 1
-        zero_player_ids = sorted(
-            match_id for match_id, count in player_counts.items() if count == 0
-        )
-        if zero_player_ids:
-            raise ZeroPlayerRowsError(
-                f"player query returned zero rows for month={month} "
-                f"match_ids={zero_player_ids}; aborting month"
-            )
         short_player_counts = {
             match_id: count
             for match_id, count in player_counts.items()
-            if 0 < count < PLAYER_ROWS_PER_MATCH
+            if count < PLAYER_ROWS_PER_MATCH
         }
         tail_short_ids: list[int] = []
         for match_id in reversed(match_ids):
@@ -466,6 +456,15 @@ def fetch_month_rows(
                 f"counts={tail_counts}"
             )
             continue
+
+        zero_player_ids = sorted(
+            match_id for match_id, count in player_counts.items() if count == 0
+        )
+        if zero_player_ids:
+            raise ZeroPlayerRowsError(
+                f"player query returned zero rows for month={month} "
+                f"match_ids={zero_player_ids}; aborting month"
+            )
 
         player_anomalies = {
             match_id: count
@@ -815,7 +814,6 @@ def run_backfill(
         summary.duplicate_matches_skipped += result.duplicate_matches_skipped
         summary.explorer_queries += fetched.explorer_queries
         summary.null_team_id_matches += fetched.null_team_id_matches
-        summary.zero_player_matches += len(fetched.zero_player_match_ids)
         summary.player_row_count_anomalies.update(
             fetched.player_row_count_anomalies
         )
@@ -837,7 +835,6 @@ def run_backfill(
             f"matches_written={result.matches_written} "
             f"duplicates_skipped={result.duplicate_matches_skipped} "
             f"null_team_id_matches={fetched.null_team_id_matches} "
-            f"zero_player_matches={len(fetched.zero_player_match_ids)} "
             "player_row_count_anomalies="
             f"{len(fetched.player_row_count_anomalies)} "
             f"zero_draft_matches={len(fetched.zero_draft_match_ids)} "
@@ -931,6 +928,16 @@ def validate_offline_dry_run() -> MonthRows:
         row["radiant_gold_adv"] is None and row["radiant_xp_adv"] is None
         for row in rows.matches
     )
+    mock_player_counts = {
+        row["match_id"]: 0 for row in rows.matches
+    }
+    for row in rows.players:
+        mock_player_counts[row["match_id"]] += 1
+    mock_complete_player_page_match_ids = sorted(
+        match_id
+        for match_id, count in mock_player_counts.items()
+        if count == PLAYER_ROWS_PER_MATCH
+    )
 
     print("mode=dry-run")
     print("source=mocked-explorer-responses")
@@ -944,8 +951,10 @@ def validate_offline_dry_run() -> MonthRows:
     print(f"mock_players={len(rows.players)}")
     print(f"mock_draft={len(rows.draft)}")
     print(f"null_team_id_matches={rows.null_team_id_matches}")
-    print(f"zero_player_match_ids={rows.zero_player_match_ids}")
-    print("mock_complete_player_page_match_ids=[101, 102]")
+    print(
+        "mock_complete_player_page_match_ids="
+        f"{mock_complete_player_page_match_ids}"
+    )
     print(
         "mock_deliberate_player_anomaly="
         f"{rows.player_row_count_anomalies}"
