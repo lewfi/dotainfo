@@ -987,10 +987,21 @@ Observable Plot for charts, plain CSS. No React, no Tailwind, no UI framework.
   June, peaks at 81.65% in May, and falls to 14.71% in July. The
   premium-plus-professional default would hide most matches in several recent months, so
   revisit whether it is appropriate for the home feed and 90-day window.
-- `/matches/[id]` — draft order (picks and bans, both teams, in `ord` sequence), both boxscores
-  (hero, K/D/A, LH/DN, GPM/XPM, net worth, items), and the gold-advantage graph when
-  `radiant_gold_adv` is non-null. If the match has no draft rows, render a clean
-  draft-unavailable state just as an unparsed match renders without the gold graph.
+- `/matches/[id]` has two page types divided by the build's trailing-90-day boundary:
+  - **Full recent page:** pre-rendered for matches inside the window, with draft order (picks
+    and bans, both teams, in `ord` sequence), both boxscores (hero, K/D/A, LH/DN, GPM/XPM,
+    net worth, items), and the gold-advantage graph when `radiant_gold_adv` is non-null. If
+    the match has no draft rows, render a clean draft-unavailable state just as an unparsed
+    match renders without the gold graph.
+  - **Historical summary page:** rendered client-side for older matches from the selected
+    per-month JSON payload. It shows teams, result, score, league, duration, patch, and date,
+    with no draft, boxscores, or advantage graph. This meaningful summary is what “reachable”
+    means for an older match in v1; it is not a full-detail page.
+
+Both page types apply the same absent-name rule. The committed data contains 7,058 matches
+with at least one null team ID and 655 match-side appearances whose non-null team ID has an
+empty or whitespace-only denormalized name after trimming. Each case renders without a team
+name and without an error.
 
 **Build scope — this is a hard constraint.** Cloudflare caps builds at 20 minutes. Do not
 pre-render all roughly 147,495-and-growing match pages. Pre-render **only matches from the
@@ -998,8 +1009,19 @@ last 90 days**. Do not size the 90-day pre-render window from the ~71/day long-r
 The trailing-90-day match count is volatile in both directions: 2026-01 through 2026-03
 totalled 7,294 matches, above the original ~6,400 estimate, while 2026-06 through 2026-08
 totalled 2,169. Plan for a 2,000–7,500 page range, and count the real window at build time
-rather than assuming a figure. Older matches resolve through a catch-all route that reads a
-small per-month JSON index client-side.
+rather than assuming a figure. Older matches resolve through a catch-all route that first
+uses the compact month/minimum-ID/maximum-ID range manifest and then reads the candidate
+month's summary JSON client-side. The payload is the match row excluding
+`radiant_gold_adv` and `radiant_xp_adv`; its match IDs provide the per-month existence check.
+Across the current 68 months, those 68 payloads occupy 88,248,288 bytes raw and 8,644,307
+bytes gzipped—about 127 KB gzipped per month on average. With the shared manifest, the
+summary design adds 69 deployment files.
+
+Cloudflare Pages constrains this design to 20,000 files on the Free plan, 25 MiB per asset,
+and a 20-minute build timeout. Full-page monthly JSON is rejected: four measured months
+exceed 25 MiB, and three more are within 1% below the limit, making the design both invalid
+for current data and fragile as shards grow. IDs-only JSON is also rejected because it would
+reduce “reachable” to an unavailable notice rather than a meaningful destination.
 
 **Deploy:** Cloudflare Pages, connected to the repo, building on push to `main`. The ingest
 job's commits trigger builds automatically.
@@ -1008,10 +1030,13 @@ job's commits trigger builds automatically.
 
 - [ ] `npm run build` completes in under 10 minutes locally
 - [ ] Home feed renders with correct team names and results
-- [ ] A match page renders the full draft when present, a clean unavailable state when absent,
-      and both boxscores
+- [ ] A recent full match page renders the full draft when present, a clean unavailable state
+      when absent, and both boxscores
 - [ ] A parsed match shows the gold graph; an unparsed one renders cleanly without it
-- [ ] A match older than 90 days is still reachable
+- [ ] A match older than 90 days renders its summary page with the correct teams, result, and
+      league; an unknown match ID produces a clean not-found state rather than an error
+- [ ] Null-ID, empty-name, and whitespace-only-name teams render without a name or an error on
+      both full and summary pages
 - [ ] Deployed and publicly accessible
 
 ---
@@ -1232,7 +1257,7 @@ consistent with finding 6's zero month crossings, not a permanent guarantee. If 
 month overlaps an existing range, routing must return every candidate month and check each
 candidate's ID index rather than choosing one arbitrarily.
 
-### What the historical catch-all can render—decision required
+### Historical catch-all payload decision
 
 The following offline measurement uses one compact UTF-8 JSON file plus LF per committed
 month. “Full” is `{"matches":[full rows],"players":[full rows],"draft":[full rows]}`;
@@ -1324,15 +1349,14 @@ totals of 1,290,788,944 / 148,363,575 bytes, 88,253,185 / 8,645,390 bytes, and 1
 630,378 bytes respectively. Each option adds 69 deployment files: 68 monthly payloads plus
 the manifest.
 
-**Recommendation, not a selected direction:** use the match-only summary if “reachable” is
-approved to mean a meaningful historical summary containing teams, result, league, duration,
-and other match-row metadata, but not box scores, draft, or advantage graph. It is far smaller
-than full pages while still giving an old match a useful destination. IDs-only is cheapest but
-turns “reachable” into a not-available notice; full pages preserve the strongest meaning but
-are much larger and do not fit the current platform asset limit without changing the design.
-The v1 acceptance criterion “a match older than 90 days is still reachable” must define
-whether reachable means full detail, summary, or merely a recognized unavailable state before
-step 15 can have an approval gate. No option is selected here.
+**Decision:** use the match-only summary. For v1, “reachable” means a meaningful historical
+destination containing teams, result, score, league, duration, patch, and date, but not
+boxscores, draft, or advantage graph. IDs-only is rejected because a recognized-unavailable
+notice is not a meaningful destination. Full-page monthly JSON is rejected because four
+measured months exceed the platform's 25 MiB asset limit and three more are within 1% below
+it: 2024-03 (26,109,610 bytes), 2025-01 (26,059,628), and 2025-10 (26,186,810). The match-only
+payload contract is the complete match row excluding `radiant_gold_adv` and
+`radiant_xp_adv`.
 
 ### Cloudflare Pages constraints checked 2026-08-31
 
@@ -1342,9 +1366,10 @@ documented setting is enabled, each asset may be at most 25 MiB (26,214,400 byte
 time out after 20 minutes. All three options add only 69 files and therefore fit the file-count
 limit. Match-only and IDs-only fit the individual asset limit. Full-page JSON as measured is
 ruled out: 2022-06 (26,234,143), 2023-11 (27,208,203), 2024-01 (27,200,538), and 2025-09
-(26,343,358) each exceed 25 MiB raw. Serving precompressed or split payloads would be a
-different design requiring its own decision and measurement. The timeout does not directly
-rule out the two smaller options; actual generation time remains a step-level acceptance
+(26,343,358) each exceed 25 MiB raw. Three additional months are within 1% below the cap, as
+listed in the decision above. Serving precompressed or split payloads would be a different
+design requiring its own decision and measurement. The timeout does not directly rule out
+the selected summary option; actual generation time remains a step-level acceptance
 measurement.
 
 ### Proposed v1 implementation sequence—requires approval
@@ -1360,24 +1385,30 @@ is approved or started.
     home/detail queries. Approval gate: an offline audit reproduces the committed match,
     30/90/180-day, tier, and duplicate counts in this appendix.
 12. **Reference and presentation model.** Resolve teams, leagues, players, and heroes with
-    denormalized-name fallbacks and explicit missing-logo/name states; pin the v1 hero-icon
-    source if approved. Approval gate: tests cover complete joins, the seven genuinely
-    nameless team appearances, null team IDs, and all 127 draft heroes.
+    denormalized-name fallbacks and explicit missing-logo/name states; define a shared match
+    summary model used by both page types; pin the v1 hero-icon source if approved. Approval
+    gate: tests cover complete joins, the 655 empty/whitespace name appearances, the 7,058
+    matches with a null team ID, and all 127 draft heroes.
 13. **Home feed and tier control.** Render the newest 100 matches with results, duration,
     league, relative time, and a visible tier filter. Approval gate: ordering and tier counts
     match the offline query, all-tier and premium-plus-professional views are both testable,
     and the chosen default is explicitly approved.
-14. **Recent match pages and dynamic pre-render budget.** Render detail pages only for the
-    measured trailing 90-day set, including box scores, draft, and advantage graph when
-    available. Approval gate: normal, no-draft, null-team, and null-advantage fixtures render;
-    generated route count equals the data-layer count for an injected build clock.
-15. **Historical catch-all route.** Blocked on an explicit definition of “reachable”: full
-    detail, match-only summary, or recognized unavailable state. After that decision, generate
-    the range manifest and selected monthly payload, then resolve older match IDs client-side
-    without pre-rendering every page. Approval gate: known old IDs—including 7485890286—route
-    through the manifest and render the approved state, unknown and range-gap IDs fail cleanly,
-    overlapping future ranges check every candidate index, and generated byte counts match the
-    selected option's measured contract.
+14. **Recent full match pages and dynamic pre-render budget.** Build the full page and
+    pre-render it only for the measured trailing 90-day set, including boxscores, draft, and
+    advantage graph when available. Approval gate: normal, no-draft, null-team,
+    empty/whitespace-name, and null-advantage fixtures render; generated route count equals
+    the data-layer count for an injected build clock.
+15. **Historical summary artifacts and catch-all route.** Generate one match-only JSON payload
+    per committed month (68 currently) plus the range manifest, then use them to render the
+    client-side summary for older IDs. Approval gate: generated payloads exclude both
+    advantage arrays and total
+    88,248,288 raw / 8,644,307 gzipped bytes for the current fixture; known old IDs—including
+    7485890286—render correct teams, result, score, league, duration, patch, and date; unknown
+    and range-gap IDs produce a clean not-found state; overlapping future ranges check every
+    candidate. Step 14 and step 15 remain separate because the former owns pre-rendered
+    full-detail pages and a moving 90-day route set, while the latter owns persistent monthly
+    summary artifacts and client-side routing. Their shared summary UI contract is established
+    in step 12 so the split does not duplicate presentation logic.
 16. **Accessibility, responsive styling, and build profiling.** Finish the plain-CSS visual
     system, keyboard/focus behavior, metadata, error states, and reproducible timing output.
     Approval gate: accessibility checks pass, representative narrow/wide renders are reviewed,
