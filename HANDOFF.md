@@ -135,6 +135,13 @@ estimate is informative for the roughly 65 historical backfill months that make 
 the dataset, but it understates future incremental months and neither sample alone confirms
 or refutes the original 120–150 MB projection for the mixed population.
 
+The next approved step 9 batch covered the full 2021 calendar year and provides a better
+historical estimate across varying monthly volumes. Its 16,807 matches occupy 9,005,271 bytes
+across the 36 match, player, and draft Parquet files, or 535.80 bytes per match. This revises
+the historical SQL-backfill estimate from the single-month 521.77 figure to a full-year
+weighted average; it retains the same null-advantage-array caveat and still does not estimate
+the size of REST-populated months.
+
 Two formats, by lifecycle stage:
 
 - **Hot month** — `data/matches/2026-08.ndjson`, appended to on every run. Newline-delimited
@@ -736,6 +743,15 @@ and 21 matches having no draft rows. No match had zero player rows. Both advanta
 were null on all 2,025 matches. Null team IDs and names matched exactly at 40 radiant and 40
 dire rows, with no null-ID/non-null-name violation. The three 2023-12 NDJSON shards were
 absent after publication, and the gitignored checkpoint records 2023-12 as completed.
+
+A second explicitly approved bounded invocation selected exactly 2021-01 through 2021-12,
+skipping the already checkpointed 2023-12 month, and completed all twelve in 321.282 seconds
+with 51 Explorer query calls. No `TIMEOUT`, `TRUNCATED PLAYER TAIL`,
+`PLAYER TAIL HALVING CAP REACHED`, or player-row anomaly appeared. Direct Parquet reads found
+16,807 distinct matches with no within- or cross-month duplicate match IDs, and every monthly
+count matched one independent grouped Explorer query over the 2021 window. All match rows had
+null advantage arrays, every null team ID had a matching null team name on the same side, and
+the checkpoint now records all twelve 2021 months plus 2023-12 as completed.
 
 ### v0 acceptance criteria
 
