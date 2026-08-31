@@ -15,6 +15,7 @@ import time
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
+from email.utils import parsedate_to_datetime
 from pathlib import Path
 from textwrap import dedent
 from typing import Any, Protocol
@@ -35,7 +36,12 @@ from ingest.compact import (
     verify_staged_parquet,
     write_staged_parquet,
 )
-from ingest.fetch import atomic_write_text, read_ndjson_match_ids
+from ingest.fetch import (
+    append_rows_atomically,
+    atomic_write_text,
+    dataset_paths,
+    read_ndjson_match_ids,
+)
 from ingest.schema import DRAFT_SCHEMA, MATCH_SCHEMA, PLAYER_SCHEMA
 from ingest.slim import shard_month, slim_sql_draft, slim_sql_match, slim_sql_player
 
@@ -50,13 +56,30 @@ MIN_PAGE_SIZE = 1
 EXPLORER_INTERVAL_SECONDS = 5.0
 EXPLORER_TIMEOUT_SECONDS = 120
 EXPLORER_URL = "https://api.opendota.com/api/explorer"
+EXPLORER_RATE_LIMIT_RETRIES = 5
+RATE_LIMIT_BACKOFF_SECONDS = 1.1
 CHECKPOINT_VERSION = 1
+PLAYER_ROWS_PER_MATCH = 10
+
+MATCH_QUERY_COLUMNS = tuple(
+    name
+    for name in MATCH_SCHEMA.names
+    if name not in {"radiant_gold_adv", "radiant_xp_adv"}
+)
 
 JsonObject = dict[str, Any]
 
 
 class ExplorerTimeout(TimeoutError):
     """A SQL Explorer query timed out and may be retried with a smaller window."""
+
+
+class ExplorerRateLimitError(RuntimeError):
+    """Raised after /explorer remains rate-limited through five retries."""
+
+
+class ChildQueryIncompleteError(RuntimeError):
+    """Raised when a child query does not return a complete match window."""
 
 
 class Explorer(Protocol):
@@ -71,6 +94,8 @@ class MonthRows:
     pages: int = 0
     explorer_queries: int = 0
     null_team_id_matches: int = 0
+    zero_player_match_ids: list[int] = field(default_factory=list)
+    zero_draft_match_ids: list[int] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -81,6 +106,7 @@ class WriteResult:
     draft_written: int
     duplicate_matches_skipped: int
     wrote_files: bool
+    write_target: str
 
 
 @dataclass
@@ -92,6 +118,8 @@ class BackfillSummary:
     duplicate_matches_skipped: int = 0
     explorer_queries: int = 0
     null_team_id_matches: int = 0
+    zero_draft_matches: int = 0
+    late_matches_written: int = 0
 
 
 class ExplorerClient:
@@ -107,35 +135,77 @@ class ExplorerClient:
         self._opener = opener
         self._sleep = sleeper
         self._clock = clock
-        self._last_call_started: float | None = None
+        self._last_call_finished: float | None = None
 
     def _wait_for_slot(self) -> None:
-        if self._last_call_started is not None:
-            elapsed = self._clock() - self._last_call_started
+        if self._last_call_finished is not None:
+            elapsed = self._clock() - self._last_call_finished
             remaining = EXPLORER_INTERVAL_SECONDS - elapsed
             if remaining > 0:
                 self._sleep(remaining)
-        self._last_call_started = self._clock()
+
+    @staticmethod
+    def _retry_after_seconds(error: HTTPError, retry_number: int) -> float:
+        header = error.headers.get("Retry-After") if error.headers is not None else None
+        if header:
+            try:
+                return max(0.0, float(header))
+            except ValueError:
+                try:
+                    retry_at = parsedate_to_datetime(header)
+                    if retry_at.tzinfo is None:
+                        retry_at = retry_at.replace(tzinfo=timezone.utc)
+                    return max(
+                        0.0,
+                        (retry_at - datetime.now(timezone.utc)).total_seconds(),
+                    )
+                except (TypeError, ValueError, OverflowError):
+                    pass
+        return RATE_LIMIT_BACKOFF_SECONDS * (2 ** (retry_number - 1))
 
     def query(self, sql: str) -> list[Mapping[str, Any]]:
-        self._wait_for_slot()
         request = Request(
             f"{EXPLORER_URL}?{urlencode({'sql': sql})}",
             headers={"User-Agent": "dotainfo-backfill/1"},
         )
-        try:
-            with self._opener(request, timeout=EXPLORER_TIMEOUT_SECONDS) as response:
-                payload = json.load(response)
-        except HTTPError as error:
-            if error.code in {408, 504}:
-                raise ExplorerTimeout(f"HTTP {error.code}") from error
-            raise
-        except (TimeoutError, socket.timeout) as error:
-            raise ExplorerTimeout(str(error) or "request timed out") from error
-        except URLError as error:
-            if isinstance(error.reason, (TimeoutError, socket.timeout)):
-                raise ExplorerTimeout(str(error.reason)) from error
-            raise
+        for retry_number in range(EXPLORER_RATE_LIMIT_RETRIES + 1):
+            self._wait_for_slot()
+            rate_limit_delay: float | None = None
+            try:
+                with self._opener(
+                    request, timeout=EXPLORER_TIMEOUT_SECONDS
+                ) as response:
+                    payload = json.load(response)
+            except HTTPError as error:
+                if error.code in {408, 504}:
+                    raise ExplorerTimeout(f"HTTP {error.code}") from error
+                if error.code != 429:
+                    raise
+                if retry_number >= EXPLORER_RATE_LIMIT_RETRIES:
+                    error.close()
+                    raise ExplorerRateLimitError(
+                        "HTTP 429 persisted after "
+                        f"{EXPLORER_RATE_LIMIT_RETRIES} in-run retries"
+                    ) from error
+                rate_limit_delay = self._retry_after_seconds(
+                    error, retry_number + 1
+                )
+                error.close()
+            except (TimeoutError, socket.timeout) as error:
+                raise ExplorerTimeout(str(error) or "request timed out") from error
+            except URLError as error:
+                if isinstance(error.reason, (TimeoutError, socket.timeout)):
+                    raise ExplorerTimeout(str(error.reason)) from error
+                raise
+            finally:
+                # The next call is spaced from completion, including response reading.
+                self._last_call_finished = self._clock()
+            if rate_limit_delay is not None:
+                self._sleep(rate_limit_delay)
+                continue
+            break
+        else:
+            raise AssertionError("unreachable")
 
         if not isinstance(payload, Mapping):
             raise TypeError("/explorer response must be an object")
@@ -272,6 +342,15 @@ def _required_match_id(row: Mapping[str, Any], source: str) -> int:
     return match_id
 
 
+def _validate_match_columns(row: Mapping[str, Any]) -> None:
+    missing = sorted(set(MATCH_QUERY_COLUMNS) - set(row))
+    if missing:
+        raise ValueError(
+            "SQL match query result is missing expected columns: "
+            + ", ".join(missing)
+        )
+
+
 def fetch_month_rows(
     client: Explorer,
     month: str,
@@ -284,6 +363,7 @@ def fetch_month_rows(
     result = MonthRows()
     cursor = 0
     page_size = initial_page_size
+    match_columns_validated = False
 
     def query(sql: str) -> list[Mapping[str, Any]]:
         result.explorer_queries += 1
@@ -294,6 +374,9 @@ def fetch_month_rows(
             source_matches = query(build_match_query(month, cursor, page_size))
             if not source_matches:
                 break
+            if not match_columns_validated:
+                _validate_match_columns(source_matches[0])
+                match_columns_validated = True
             match_ids = [
                 _required_match_id(row, "matches") for row in source_matches
             ]
@@ -332,6 +415,33 @@ def fetch_month_rows(
                     f"{sorted(unexpected)}"
                 )
 
+        player_counts = {match_id: 0 for match_id in match_ids}
+        for row in source_players:
+            player_counts[_required_match_id(row, "players")] += 1
+        zero_player_ids = sorted(
+            match_id for match_id, count in player_counts.items() if count == 0
+        )
+        incomplete_player_counts = {
+            match_id: count
+            for match_id, count in player_counts.items()
+            if count != PLAYER_ROWS_PER_MATCH
+        }
+        if zero_player_ids:
+            print(
+                f"ZERO PLAYER ROWS month={month} match_ids={zero_player_ids}"
+            )
+        if incomplete_player_counts:
+            raise ChildQueryIncompleteError(
+                f"player query incomplete for month={month}: "
+                f"expected {PLAYER_ROWS_PER_MATCH} rows per match, "
+                f"received {incomplete_player_counts}"
+            )
+
+        draft_ids = {
+            _required_match_id(row, "draft") for row in source_draft
+        }
+        zero_draft_ids = sorted(page_ids - draft_ids)
+
         mapped_matches = [slim_sql_match(row) for row in source_matches]
         result.matches.extend(mapped_matches)
         result.players.extend(slim_sql_player(row) for row in source_players)
@@ -340,6 +450,7 @@ def fetch_month_rows(
             row["radiant_team_id"] is None or row["dire_team_id"] is None
             for row in mapped_matches
         )
+        result.zero_draft_match_ids.extend(zero_draft_ids)
         result.pages += 1
         cursor = window_end
 
@@ -477,18 +588,32 @@ def write_month(data_dir: Path, month: str, fetched: MonthRows) -> WriteResult:
                 f"month {month} mixes hot and closed shards: "
                 f"ndjson={source_exists}, parquet={destination_exists}"
             )
-        if new_matches:
-            raise AlreadyCompactedError(
-                f"refusing to rewrite closed month {month} with backfill rows"
-            )
-        return WriteResult(month, 0, 0, 0, duplicate_count, False)
+        if not new_matches:
+            return WriteResult(month, 0, 0, 0, duplicate_count, False, "none")
+        late_paths = dataset_paths(data_dir, month, late=True)
+        late_rows = {
+            "matches": new_matches,
+            "players": new_players,
+            "draft": new_draft,
+        }
+        for name in ("matches", "players", "draft"):
+            append_rows_atomically(late_paths[name], late_rows[name])
+        return WriteResult(
+            month=month,
+            matches_written=len(new_matches),
+            players_written=len(new_players),
+            draft_written=len(new_draft),
+            duplicate_matches_skipped=duplicate_count,
+            wrote_files=True,
+            write_target="late",
+        )
 
     if any(source_exists.values()) and not all(source_exists.values()):
         raise CorruptShardStateError(
             f"month {month} must have all three NDJSON shards: {source_exists}"
         )
     if not new_matches and not any(source_exists.values()):
-        return WriteResult(month, 0, 0, 0, duplicate_count, False)
+        return WriteResult(month, 0, 0, 0, duplicate_count, False, "none")
 
     existing_tables = {
         "matches": read_ndjson(sources["matches"], MATCH_SCHEMA)
@@ -535,6 +660,7 @@ def write_month(data_dir: Path, month: str, fetched: MonthRows) -> WriteResult:
         draft_written=len(new_draft),
         duplicate_matches_skipped=duplicate_count,
         wrote_files=True,
+        write_target="parquet",
     )
 
 
@@ -579,6 +705,8 @@ def run_backfill(
     run_date: date | None = None,
     start_month: str = START_MONTH,
     initial_page_size: int = INITIAL_PAGE_SIZE,
+    only_month: str | None = None,
+    max_months: int | None = None,
 ) -> BackfillSummary:
     effective_date = run_date or datetime.now(timezone.utc).date()
     upper_bound = last_fully_closed_month(effective_date)
@@ -589,11 +717,34 @@ def run_backfill(
     print("mode=write")
     print(f"start_month={start_month}")
     print(f"last_fully_closed_month={upper_bound}")
-    for month in iter_months(start_month, upper_bound):
+    if only_month is not None:
+        parse_month(only_month)
+        if month_start(only_month) < month_start(start_month):
+            raise ValueError(
+                f"requested month {only_month} precedes start month {start_month}"
+            )
+        if month_start(only_month) > month_start(upper_bound):
+            raise ValueError(
+                f"requested month {only_month} is not fully closed; "
+                f"upper bound is {upper_bound}"
+            )
+        candidate_months = [only_month]
+        print(f"only_month={only_month}")
+    else:
+        candidate_months = iter_months(start_month, upper_bound)
+
+    pending_months: list[str] = []
+    for month in candidate_months:
         if month in completed:
             summary.resumed_months.append(month)
             print(f"SKIP completed month={month}")
             continue
+        pending_months.append(month)
+    if max_months is not None:
+        pending_months = pending_months[:max_months]
+        print(f"max_months={max_months}")
+
+    for month in pending_months:
         fetched = fetch_month_rows(
             client, month, initial_page_size=initial_page_size
         )
@@ -605,11 +756,22 @@ def run_backfill(
         summary.duplicate_matches_skipped += result.duplicate_matches_skipped
         summary.explorer_queries += fetched.explorer_queries
         summary.null_team_id_matches += fetched.null_team_id_matches
+        summary.zero_draft_matches += len(fetched.zero_draft_match_ids)
+        if result.write_target == "late":
+            summary.late_matches_written += result.matches_written
+        if fetched.zero_draft_match_ids:
+            print(
+                f"ZERO DRAFT ROWS month={month} "
+                f"match_ids={fetched.zero_draft_match_ids}"
+            )
         print(
             f"COMPLETE month={month} pages={fetched.pages} "
             f"matches_written={result.matches_written} "
             f"duplicates_skipped={result.duplicate_matches_skipped} "
             f"null_team_id_matches={fetched.null_team_id_matches} "
+            "zero_player_matches=0 "
+            f"zero_draft_matches={len(fetched.zero_draft_match_ids)} "
+            f"write_target={result.write_target} "
             f"files_written={str(result.wrote_files).lower()}"
         )
     return summary
@@ -639,29 +801,34 @@ class _ScriptedExplorer:
 
 
 def _mock_match(match_id: int) -> JsonObject:
-    return {
-        "match_id": match_id,
-        "start_time": 1609459200 + match_id,
-        "patch": "7.41",
-        "is_parsed": True,
-        "radiant_team_id": None,
-        "radiant_team_name": "must be cleared",
-        "dire_team_id": None,
-        "dire_team_name": "must be cleared",
-        "radiant_win": None,
-        "radiant_score": None,
-        "dire_score": None,
-        "game_mode": None,
-    }
+    row = {name: None for name in MATCH_QUERY_COLUMNS}
+    row.update(
+        {
+            "match_id": match_id,
+            "start_time": 1609459200 + match_id,
+            "patch": "7.41",
+            "is_parsed": True,
+            "radiant_team_id": None,
+            "radiant_team_name": "must be cleared",
+            "dire_team_id": None,
+            "dire_team_name": "must be cleared",
+        }
+    )
+    return row
+
+
+def _mock_players(match_id: int) -> list[JsonObject]:
+    slots = list(range(5)) + list(range(128, 133))
+    return [{"match_id": match_id, "player_slot": slot} for slot in slots]
 
 
 def validate_offline_dry_run() -> MonthRows:
     script = [
         ("matches", [_mock_match(101), _mock_match(102)]),
-        ("players", [{"match_id": 101, "player_slot": 0}, {"match_id": 102, "player_slot": 128}]),
+        ("players", _mock_players(101) + _mock_players(102)),
         ("draft", [{"match_id": 101, "is_pick": True, "hero_id": 1, "team": 0, "ord": 0}]),
         ("matches", [_mock_match(103)]),
-        ("players", [{"match_id": 103, "player_slot": 0}]),
+        ("players", _mock_players(103)),
         ("draft", [{"match_id": 103, "is_pick": False, "hero_id": 2, "team": 1, "ord": 1}]),
         ("matches", []),
     ]
@@ -677,6 +844,24 @@ def validate_offline_dry_run() -> MonthRows:
     if any(row["radiant_xp_adv"] is not None for row in rows.matches):
         raise AssertionError("backfilled xp advantage must be null")
 
+    tables = (
+        pa.Table.from_pylist(rows.matches, schema=MATCH_SCHEMA),
+        pa.Table.from_pylist(rows.players, schema=PLAYER_SCHEMA),
+        pa.Table.from_pylist(rows.draft, schema=DRAFT_SCHEMA),
+    )
+    schemas_valid = all(
+        table.schema.equals(schema)
+        for table, schema in zip(
+            tables, (MATCH_SCHEMA, PLAYER_SCHEMA, DRAFT_SCHEMA), strict=True
+        )
+    )
+    patch_values = sorted({row["patch"] for row in rows.matches})
+    patch_format = patch_values[0] if len(patch_values) == 1 else patch_values
+    advantage_arrays_all_null = all(
+        row["radiant_gold_adv"] is None and row["radiant_xp_adv"] is None
+        for row in rows.matches
+    )
+
     print("mode=dry-run")
     print("source=mocked-explorer-responses")
     print("live_api_calls=0")
@@ -689,26 +874,67 @@ def validate_offline_dry_run() -> MonthRows:
     print(f"mock_players={len(rows.players)}")
     print(f"mock_draft={len(rows.draft)}")
     print(f"null_team_id_matches={rows.null_team_id_matches}")
-    print("patch_format=7.41")
-    print("advantage_arrays=all-null")
-    print("schemas_valid=true")
+    print("zero_player_match_ids=[]")
+    print(f"zero_draft_match_ids={rows.zero_draft_match_ids}")
+    print(f"patch_format={patch_format}")
+    print(
+        "advantage_arrays="
+        + ("all-null" if advantage_arrays_all_null else "unexpected-non-null")
+    )
+    print(f"schemas_valid={str(schemas_valid).lower()}")
     print("DRY RUN: zero live API calls and zero filesystem writes performed")
     return rows
 
 
-def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+def positive_int(value: str) -> int:
+    parsed = int(value)
+    if parsed <= 0:
+        raise argparse.ArgumentTypeError("must be a positive integer")
+    return parsed
+
+
+def month_argument(value: str) -> str:
+    try:
+        parse_month(value)
+    except ValueError as error:
+        raise argparse.ArgumentTypeError(str(error)) from error
+    return value
+
+
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument(
+    mode = parser.add_mutually_exclusive_group(required=True)
+    mode.add_argument(
         "--dry-run",
         action="store_true",
         help="validate offline with mocked responses; make no network calls or writes",
     )
-    parser.add_argument("--start-month", default=START_MONTH)
+    mode.add_argument(
+        "--execute-live",
+        action="store_true",
+        help="explicitly authorize live /explorer queries and data writes",
+    )
+    parser.add_argument("--start-month", type=month_argument, default=START_MONTH)
+    bounds = parser.add_mutually_exclusive_group()
+    bounds.add_argument(
+        "--month",
+        type=month_argument,
+        help="process exactly one fully closed month",
+    )
+    bounds.add_argument(
+        "--max-months",
+        type=positive_int,
+        help="process at most this many incomplete months",
+    )
     parser.add_argument("--data-dir", type=Path, default=DATA_DIR, help=argparse.SUPPRESS)
     parser.add_argument(
         "--checkpoint", type=Path, default=CHECKPOINT_PATH, help=argparse.SUPPRESS
     )
-    return parser.parse_args(argv)
+    return parser
+
+
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    return build_parser().parse_args(argv)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -721,6 +947,8 @@ def main(argv: list[str] | None = None) -> int:
         data_dir=args.data_dir,
         checkpoint_path=args.checkpoint,
         start_month=args.start_month,
+        only_month=args.month,
+        max_months=args.max_months,
     )
     return 0
 

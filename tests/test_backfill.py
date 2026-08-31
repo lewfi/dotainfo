@@ -4,18 +4,24 @@ import io
 import json
 import tempfile
 import unittest
-from contextlib import redirect_stdout
+from contextlib import redirect_stderr, redirect_stdout
 from datetime import date
+from email.message import Message
 from pathlib import Path
 from unittest.mock import patch
+from urllib.error import HTTPError
 
 import pyarrow as pa
 import pyarrow.parquet as pq
 
 from ingest.backfill import (
     EXPLORER_INTERVAL_SECONDS,
+    EXPLORER_RATE_LIMIT_RETRIES,
+    ChildQueryIncompleteError,
     ExplorerClient,
+    ExplorerRateLimitError,
     ExplorerTimeout,
+    MATCH_QUERY_COLUMNS,
     MonthRows,
     build_draft_query,
     build_match_query,
@@ -46,20 +52,32 @@ class ScriptedExplorer:
 
 
 def match_source(match_id: int, *, patch_name: str = "7.41") -> dict[str, object]:
-    return {
-        "match_id": match_id,
-        "start_time": 1609459200 + match_id,
-        "patch": patch_name,
-        "is_parsed": True,
-        "radiant_team_id": None,
-        "radiant_team_name": "cleared by mapper",
-        "dire_team_id": None,
-        "dire_team_name": "cleared by mapper",
-        "radiant_win": None,
-        "radiant_score": None,
-        "dire_score": None,
-        "game_mode": None,
-    }
+    row: dict[str, object] = {name: None for name in MATCH_QUERY_COLUMNS}
+    row.update(
+        {
+            "match_id": match_id,
+            "start_time": 1609459200 + match_id,
+            "patch": patch_name,
+            "is_parsed": True,
+            "radiant_team_id": None,
+            "radiant_team_name": "cleared by mapper",
+            "dire_team_id": None,
+            "dire_team_name": "cleared by mapper",
+        }
+    )
+    return row
+
+
+def player_sources(match_id: int) -> list[dict[str, object]]:
+    slots = list(range(5)) + list(range(128, 133))
+    return [{"match_id": match_id, "player_slot": slot} for slot in slots]
+
+
+def rate_limit_error(retry_after: str | None = None) -> HTTPError:
+    headers = Message()
+    if retry_after is not None:
+        headers["Retry-After"] = retry_after
+    return HTTPError("https://example.test", 429, "Too Many Requests", headers, None)
 
 
 def match_row(match_id: int, *, gold: list[int] | None = None) -> dict[str, object]:
@@ -121,10 +139,10 @@ class BackfillTests(unittest.TestCase):
         client = ScriptedExplorer(
             [
                 [match_source(10), match_source(20)],
-                [{"match_id": 10, "player_slot": 0}],
+                player_sources(10) + player_sources(20),
                 [{"match_id": 20, "is_pick": True, "hero_id": 1, "team": 0, "ord": 0}],
                 [match_source(30)],
-                [{"match_id": 30, "player_slot": 128}],
+                player_sources(30),
                 [],
                 [],
             ]
@@ -141,6 +159,7 @@ class BackfillTests(unittest.TestCase):
         self.assertTrue(all(row["radiant_win"] is None for row in rows.matches))
         self.assertEqual(rows.null_team_id_matches, 3)
         self.assertEqual(rows.pages, 2)
+        self.assertEqual(rows.zero_draft_match_ids, [10, 30])
         self.assertFalse(client.responses)
 
         player_query = build_player_query("2021-01", 0, 20)
@@ -148,13 +167,15 @@ class BackfillTests(unittest.TestCase):
         self.assertIn("pm.match_id > 0 AND pm.match_id <= 20", player_query)
         self.assertIn("pb.match_id > 0 AND pb.match_id <= 20", draft_query)
         self.assertIn("pb.ord", draft_query)
+        self.assertNotIn("LIMIT", player_query)
+        self.assertNotIn("LIMIT", draft_query)
 
     def test_timeout_halves_window_and_retries_same_cursor(self) -> None:
         client = ScriptedExplorer(
             [
                 ExplorerTimeout("mock timeout"),
                 [match_source(10)],
-                [],
+                player_sources(10),
                 [],
                 [],
             ]
@@ -187,6 +208,7 @@ class BackfillTests(unittest.TestCase):
                 self.close()
 
         def opener(request, timeout):
+            now[0] += 30.0
             return Response(b'{"rows": []}')
 
         client = ExplorerClient(
@@ -199,6 +221,82 @@ class BackfillTests(unittest.TestCase):
 
         self.assertEqual(sleeps, [EXPLORER_INTERVAL_SECONDS])
         self.assertGreaterEqual(sleeps[0], 5.0)
+
+    def test_explorer_client_honors_retry_after_on_http_429(self) -> None:
+        now = [0.0]
+        sleeps: list[float] = []
+        responses: list[object] = [rate_limit_error("7"), b'{"rows": []}']
+
+        def sleeper(seconds: float) -> None:
+            sleeps.append(seconds)
+            now[0] += seconds
+
+        class Response(io.BytesIO):
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                self.close()
+
+        def opener(request, timeout):
+            response = responses.pop(0)
+            if isinstance(response, BaseException):
+                raise response
+            return Response(response)
+
+        client = ExplorerClient(
+            opener=opener, sleeper=sleeper, clock=lambda: now[0]
+        )
+        self.assertEqual(client.query("SELECT 1"), [])
+        self.assertEqual(sleeps, [7.0])
+        self.assertFalse(responses)
+
+    def test_explorer_client_stops_after_five_rate_limit_retries(self) -> None:
+        now = [0.0]
+        sleeps: list[float] = []
+        calls = [0]
+
+        def sleeper(seconds: float) -> None:
+            sleeps.append(seconds)
+            now[0] += seconds
+
+        def opener(request, timeout):
+            calls[0] += 1
+            raise rate_limit_error()
+
+        client = ExplorerClient(
+            opener=opener, sleeper=sleeper, clock=lambda: now[0]
+        )
+        with self.assertRaisesRegex(ExplorerRateLimitError, "five|5"):
+            client.query("SELECT 1")
+
+        self.assertEqual(calls[0], EXPLORER_RATE_LIMIT_RETRIES + 1)
+        for expected in [1.1, 2.2, 4.4, 8.8, 17.6]:
+            self.assertTrue(
+                any(abs(actual - expected) < 1e-9 for actual in sleeps),
+                f"missing exponential delay {expected} in {sleeps}",
+            )
+
+    def test_player_query_requires_every_match_and_reports_zero_rows(self) -> None:
+        client = ScriptedExplorer(
+            [
+                [match_source(10), match_source(20)],
+                player_sources(10),
+                [],
+            ]
+        )
+        output = io.StringIO()
+        with redirect_stdout(output):
+            with self.assertRaises(ChildQueryIncompleteError):
+                fetch_month_rows(client, "2021-01", initial_page_size=2)
+        self.assertIn("ZERO PLAYER ROWS month=2021-01 match_ids=[20]", output.getvalue())
+
+    def test_first_match_page_must_cover_every_selected_sql_column(self) -> None:
+        source = match_source(10)
+        del source["duration"]
+        client = ScriptedExplorer([[source]])
+        with self.assertRaisesRegex(ValueError, "missing expected columns: duration"):
+            fetch_month_rows(client, "2021-01", initial_page_size=2)
 
     def test_checkpoint_resume_skips_completed_months(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
@@ -234,6 +332,36 @@ class BackfillTests(unittest.TestCase):
     def test_upper_bound_uses_compaction_boundary(self) -> None:
         self.assertEqual(last_fully_closed_month(date(2026, 9, 3)), "2026-07")
         self.assertEqual(last_fully_closed_month(date(2026, 9, 12)), "2026-08")
+
+    def test_run_can_be_bounded_to_one_month(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            client = ScriptedExplorer([[]])
+            with redirect_stdout(io.StringIO()):
+                summary = run_backfill(
+                    client,
+                    data_dir=root / "data",
+                    checkpoint_path=root / "checkpoint.json",
+                    run_date=date(2026, 9, 12),
+                    only_month="2026-08",
+                )
+            self.assertEqual(summary.completed_months, ["2026-08"])
+            self.assertEqual(len(client.queries), 1)
+
+    def test_run_can_be_bounded_to_small_number_of_months(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            client = ScriptedExplorer([[]])
+            with redirect_stdout(io.StringIO()):
+                summary = run_backfill(
+                    client,
+                    data_dir=root / "data",
+                    checkpoint_path=root / "checkpoint.json",
+                    run_date=date(2021, 3, 12),
+                    max_months=1,
+                )
+            self.assertEqual(summary.completed_months, ["2021-01"])
+            self.assertEqual(len(client.queries), 1)
 
     def test_write_time_dedup_keeps_one_match_id(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
@@ -295,6 +423,56 @@ class BackfillTests(unittest.TestCase):
             table = pq.read_table(paths["matches"])
             self.assertEqual(table.column("radiant_gold_adv").to_pylist(), [[100, 200]])
 
+    def test_new_rows_for_closed_month_append_to_all_late_files(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            data_dir = Path(temporary_directory) / "data"
+            paths = {
+                "matches": data_dir / "matches" / "2021-01.parquet",
+                "players": data_dir / "players" / "2021-01.parquet",
+                "draft": data_dir / "draft" / "2021-01.parquet",
+            }
+            for path in paths.values():
+                path.parent.mkdir(parents=True, exist_ok=True)
+            pq.write_table(
+                pa.Table.from_pylist([match_row(1, gold=[100])], schema=MATCH_SCHEMA),
+                paths["matches"],
+            )
+            pq.write_table(
+                pa.Table.from_pylist([player_row(1)], schema=PLAYER_SCHEMA),
+                paths["players"],
+            )
+            pq.write_table(
+                pa.Table.from_pylist([draft_row(1)], schema=DRAFT_SCHEMA),
+                paths["draft"],
+            )
+            parquet_before = {name: path.read_bytes() for name, path in paths.items()}
+            fetched = MonthRows(
+                matches=[match_row(1), match_row(2)],
+                players=[player_row(1), player_row(2)],
+                draft=[draft_row(1), draft_row(2)],
+            )
+
+            result = write_month(data_dir, "2021-01", fetched)
+            duplicate_result = write_month(data_dir, "2021-01", fetched)
+
+            self.assertEqual(result.write_target, "late")
+            self.assertEqual(result.matches_written, 1)
+            self.assertEqual(duplicate_result.matches_written, 0)
+            self.assertEqual(
+                [json.loads(line)["match_id"] for line in (data_dir / "matches" / "late.ndjson").read_text(encoding="utf-8").splitlines()],
+                [2],
+            )
+            self.assertEqual(
+                [json.loads(line)["match_id"] for line in (data_dir / "players" / "late.ndjson").read_text(encoding="utf-8").splitlines()],
+                [2],
+            )
+            self.assertEqual(
+                [json.loads(line)["match_id"] for line in (data_dir / "draft" / "late.ndjson").read_text(encoding="utf-8").splitlines()],
+                [2],
+            )
+            for name, path in paths.items():
+                self.assertEqual(path.read_bytes(), parquet_before[name])
+
     def test_zero_match_month_creates_no_files(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             data_dir = Path(temporary_directory) / "data"
@@ -332,6 +510,14 @@ class BackfillTests(unittest.TestCase):
             self.assertIn("filesystem_writes=0", output.getvalue())
             self.assertIn("mock_keyset_cursors=[0, 102, 103]", output.getvalue())
             self.assertIn("null_team_id_matches=3", output.getvalue())
+
+    def test_no_arguments_refuses_live_execution(self) -> None:
+        stderr = io.StringIO()
+        with redirect_stderr(stderr):
+            with self.assertRaises(SystemExit) as raised:
+                main([])
+        self.assertEqual(raised.exception.code, 2)
+        self.assertIn("usage:", stderr.getvalue())
 
     def test_match_query_uses_month_keyset_and_limit(self) -> None:
         query = build_match_query("2021-01", 123, 456)

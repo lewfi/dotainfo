@@ -121,7 +121,9 @@ Two formats, by lifecycle stage:
   file and deletion of the old one, and never touch the closed shard again.
 - **Closed months** — `data/matches/2026-07.parquet`.
 - **Late arrivals** — a match whose `start_time` belongs to an already-compacted month is
-  appended to `data/matches/late.ndjson`; readers UNION it with the monthly shards.
+  appended to `data/matches/late.ndjson`. Its player and draft rows are appended to the
+  parallel `data/players/late.ndjson` and `data/draft/late.ndjson` files. Readers UNION each
+  late-arrival table with that table's monthly shards.
 
 If the repo ever exceeds ~500 MB, the escape hatch is to move `data/` to GitHub Release
 assets. Do not build that now. Re-evaluate this threshold and escape hatch after the first
@@ -148,8 +150,8 @@ repo/
     failed_permanent.ndjson
     .run-summary.json # local/CI run counts, gitignored
     matches/          # YYYY-MM.ndjson (hot) | YYYY-MM.parquet (closed) | late.ndjson
-    players/          # YYYY-MM.ndjson | .parquet   (10 rows per match)
-    draft/            # YYYY-MM.ndjson | .parquet   (variable rows, including zero)
+    players/          # YYYY-MM.ndjson | .parquet | late.ndjson (10 rows per match)
+    draft/            # YYYY-MM.ndjson | .parquet | late.ndjson (variable, including zero)
     reference/
       teams.parquet  players.parquet  leagues.parquet  heroes.parquet
   site/               # Astro
@@ -557,8 +559,9 @@ race.
 Loads 2021-01-01 → present via `/explorer` SQL. Per-match REST calls are not an option here:
 roughly 147,493 and growing would consume three months of quota.
 
-Chunk by month (68 months), keyset-paginated within each chunk so a row cap or timeout
-cannot silently truncate results:
+Chunk by calendar month from 2021-01 through the run-date-derived upper bound,
+keyset-paginated within each chunk so a row cap or timeout cannot silently truncate
+results:
 
 ```sql
 SELECT m.match_id, m.start_time, m.duration, m.leagueid, l.name AS league_name,
@@ -582,7 +585,12 @@ ORDER BY m.match_id
 LIMIT 2000
 ```
 
-Parallel queries against `player_matches` and `picks_bans` for the same match_id window.
+Parallel queries against `player_matches` and `picks_bans` use the same match-ID window. The
+`LIMIT 2000` shown above applies only to the match query. The player and draft queries carry
+no `LIMIT`; they are bounded by `match_id > :cursor AND match_id <= :window_end`. Before a
+page is accepted, every match must have its expected ten `player_matches` rows. Matches with
+zero player rows are printed and the month aborts rather than checkpointing truncated data.
+Zero `picks_bans` rows are valid (about 0.93% of matches) and are reported but do not abort.
 Expect roughly 400–600 explorer calls total.
 
 The hard upper bound is the last fully closed month, computed from the run date by reusing
@@ -596,8 +604,19 @@ REST data always has precedence over SQL backfill data. REST is the only source 
 would silently destroy that match's gold graph. Deduplication occurs at write time: immediately
 before publishing a month, read its existing match IDs from monthly NDJSON or Parquet and the
 late-arrival shard, skip those matches and all of their backfilled player/draft rows, and retain
-the existing rows unchanged. This preserves the v0 acceptance criterion that every data file
+the existing rows unchanged. This preserves the v0 acceptance criterion that each match shard
 itself contains no duplicate `match_id`; readers must not be responsible for repairing overlap.
+
+If an eligible month has already been compacted, new SQL-only match rows are late arrivals,
+not an error. Never rewrite its Parquet files. Append the new match rows to
+`data/matches/late.ndjson` and their corresponding child rows to
+`data/players/late.ndjson` and `data/draft/late.ndjson`, using the same schema-shaped NDJSON
+rows and atomic append helper as `fetch.py`. Apply write-time match-ID deduplication against
+both the closed Parquet shard and existing `matches/late.ndjson`; an existing REST match
+therefore protects its match, player, and draft rows together. A valid zero-draft match simply
+adds no draft row. This path is required for the measured 2026-08 case: the forward REST
+shard currently contains 327 distinct matches while the independent SQL sweep found 621, so
+the roughly 294 missing rows must remain reachable after the ingest cron closes August.
 
 Write each completed historical month directly to `.parquet`, with all three tables staged and
 verified before publication. Existing eligible NDJSON rows may be carried into that first
@@ -612,6 +631,18 @@ window still times out, fail without advancing the checkpoint. Source team names
 `teams` joins shown above. If a team ID is null, write the corresponding team name as null and
 continue without dropping the match; report such rows in the month's `null_team_id_matches`
 summary count rather than adding a schema column.
+
+Live execution is fail-closed: invoking the module without arguments prints usage and exits
+non-zero. `--execute-live` is the explicit opt-in required to contact `/explorer` and write
+data. Step 9 can be bounded without editing code by passing `--month YYYY-MM` for exactly one
+fully closed month or `--max-months N` for a small number of incomplete checkpoint months.
+`--dry-run` remains entirely mocked and cannot be combined with `--execute-live`.
+
+Explorer spacing is measured from the completion of response reading, so even a query that
+takes longer than five seconds is followed by at least a five-second pause before the next
+call. HTTP 429 responses honor `Retry-After`; without it they use exponential backoff from
+1.1 seconds, with at most five in-run retries. On the first non-empty match page, the returned
+column names must cover every selected match column before nullable schema projection occurs.
 
 `radiant_gold_adv` / `radiant_xp_adv` are not practical to backfill via explorer. Leave them
 null for historical rows and populate them going forward. The match page must render without
