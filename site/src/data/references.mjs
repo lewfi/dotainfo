@@ -170,6 +170,7 @@ export class ReferenceResolver {
         [
           [reference?.name, 'reference-current'],
           [denormalizedName, 'match-write-time'],
+          [reference?.tag, 'reference-tag'],
         ],
         MISSING_LABELS.team,
       ),

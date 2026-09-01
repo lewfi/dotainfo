@@ -74,6 +74,7 @@ try {
 const matchUsedTeamIds = new Set();
 const missingTeamIds = new Set();
 const referenceTeamsWithoutLogo = new Set();
+const resolvedTagFallbackTeamIds = new Set();
 const matchLeagueIds = new Set();
 const missingLeagueIds = new Set();
 const missingDraftHeroIds = new Set();
@@ -89,6 +90,7 @@ let nullTeamIdAppearances = 0;
 let unusableMatchNameAppearances = 0;
 let missingTeamAppearances = 0;
 let referenceNoLogoAppearances = 0;
+let resolvedTagFallbackAppearances = 0;
 let resolvedMissingTeamNameAppearances = 0;
 let invalidTeamDisplayStates = 0;
 let invalidTeamLogoStates = 0;
@@ -134,6 +136,10 @@ for (const match of matches) {
     if (team.name.status === 'missing') {
       resolvedMissingTeamNameAppearances += 1;
     }
+    if (team.name.source === 'reference-tag') {
+      resolvedTagFallbackAppearances += 1;
+      resolvedTagFallbackTeamIds.add(teamId);
+    }
     if (!validDisplayName(team.name)) {
       invalidTeamDisplayStates += 1;
       invalidResolvedDisplayNames += 1;
@@ -175,6 +181,8 @@ const observed = Object.freeze({
   missingReferenceTeamAppearances: missingTeamAppearances,
   referenceTeamIdsWithoutLogo: referenceTeamsWithoutLogo.size,
   referenceTeamWithoutLogoAppearances: referenceNoLogoAppearances,
+  resolvedTagFallbackTeamIds: resolvedTagFallbackTeamIds.size,
+  resolvedTagFallbackAppearances,
   resolvedMissingTeamNameAppearances,
   matchLeagueIds: matchLeagueIds.size,
   missingLeagueIds: [...missingLeagueIds].sort((left, right) => left - right),

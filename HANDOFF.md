@@ -1444,8 +1444,11 @@ These steps continue the canonical numbering in `AGENTS.md`.
     denormalized-name fallbacks and explicit missing-logo/name states; define a shared match
     summary model used by both page types. Hero icons use the single exported base URL
     `https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/`; derive the
-    filename from the reference hero's machine name and do not download icon files. Approval
-    gate: scan every committed match shard and assert that every team slot has a defined,
+    filename from the reference hero's machine name and do not download icon files.
+    Team display fallback order is trimmed current reference name, trimmed write-time match
+    name, trimmed current reference tag, then the explicit missing-name state. Tag fallback is
+    a distinct source state so later presentation can distinguish it from a real name.
+    Approval gate: scan every committed match shard and assert that every team slot has a defined,
     non-empty display state and an explicit available/missing logo state, every league and
     draft hero resolves, and resolved display names are trimmed and non-empty. Report observed
     null-ID, unusable-name, missing-reference, and missing-logo counts without pinning them,

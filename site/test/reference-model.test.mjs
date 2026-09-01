@@ -61,6 +61,8 @@ test('team resolution trims names and exposes explicit fallback and no-logo stat
     teams: [
       { team_id: 1, name: ' Current Name ', tag: 'TAG', logo_url: ' https://logo.test/1 ' },
       { team_id: 2, name: '  ', tag: null, logo_url: ' ' },
+      { team_id: 3, name: ' ', tag: ' RECOVERED ', logo_url: null },
+      { team_id: 4, name: '', tag: '  ', logo_url: null },
     ],
   });
 
@@ -81,6 +83,16 @@ test('team resolution trims names and exposes explicit fallback and no-logo stat
   assert.equal(absentReference.referenceFound, false);
   assert.equal(absentReference.name.display, 'Unreferenced Snapshot');
   assert.deepEqual(absentReference.logo, { status: 'missing', url: null });
+
+  const tagFallback = references.resolveTeam({ teamId: 3, denormalizedName: '\t' });
+  assert.equal(tagFallback.name.status, 'available');
+  assert.equal(tagFallback.name.display, 'RECOVERED');
+  assert.equal(tagFallback.name.source, 'reference-tag');
+
+  const noNameOrTag = references.resolveTeam({ teamId: 4, denormalizedName: ' ' });
+  assert.equal(noNameOrTag.name.status, 'missing');
+  assert.equal(noNameOrTag.name.display, 'Team name unavailable');
+  assert.equal(noNameOrTag.name.source, null);
 
   const missing = references.resolveTeam({ teamId: null, denormalizedName: ' \t ' });
   assert.equal(missing.name.status, 'missing');
