@@ -1,0 +1,63 @@
+:root {
+  color-scheme: dark;
+  font-family: system-ui, sans-serif;
+  color: #f5f5f5;
+  background: #17191d;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+a {
+  color: inherit;
+}
+
+.site-shell {
+  width: min(100% - 2rem, 64rem);
+  min-height: 100vh;
+  margin-inline: auto;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+}
+
+.site-header,
+.site-footer {
+  padding-block: 1.25rem;
+}
+
+.site-name {
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.intro {
+  max-width: 42rem;
+  padding-block: 6rem;
+}
+
+.eyebrow {
+  color: #d9a441;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+h1 {
+  margin-block: 0.5rem 1rem;
+  font-size: clamp(2.25rem, 7vw, 4.5rem);
+  line-height: 1;
+}
+
+p {
+  line-height: 1.6;
+}
+
+.site-footer {
+  color: #a9adb5;
+  font-size: 0.875rem;
+}
