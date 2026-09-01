@@ -1426,8 +1426,11 @@ These steps continue the canonical numbering in `AGENTS.md`.
     build succeed from scratch and emit a runnable static index without reading live APIs.
 11. **Local data catalog and query layer.** Add DuckDB-backed readers that UNION Parquet, hot
     NDJSON, and late NDJSON, use explicit UTC cutoffs, prune shards/columns, and expose tested
-    home/detail queries. Approval gate: an offline audit reproduces the committed match,
-    30/90/180-day, tier, and duplicate counts in this appendix.
+    home/detail queries. Approval gate: an offline audit reproduces the committed match, tier,
+    and duplicate counts in this appendix. For an injected clock, it also computes each
+    30/90/180-day window through the query layer and through an independent unpruned scan of
+    every committed match shard, then asserts equal totals and tier counts. Window counts are
+    reported rather than pinned because they move with each ingest run.
     Completion gate: reproduce 146,875 matches across 67 backfilled months in 75,620,523
     bytes; tier totals of 110,786 professional, 12,718 premium, and 23,371 excluded; 1,367
     matches with no draft rows; and exactly one match with a player row count other than ten.

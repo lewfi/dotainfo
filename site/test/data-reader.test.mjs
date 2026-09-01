@@ -7,6 +7,7 @@ import test from 'node:test';
 
 import { createCatalog, lateShards } from '../src/data/catalog.mjs';
 import { buildClockEpoch } from '../src/data/clock.mjs';
+import { directWindowAudit } from '../src/data/direct-window-audit.mjs';
 import { openDuckDB } from '../src/data/duckdb.mjs';
 import { DataReader } from '../src/data/queries.mjs';
 import { HOME_COLUMNS } from '../src/data/schema.mjs';
@@ -45,6 +46,37 @@ async function fixtureDataRoot(t, { withLate }) {
     for (const table of TABLES) {
       const source = path.join(FIXTURES, 'parquet-seed', table, '2025-12.ndjson');
       const target = path.join(root, table, '2025-12.parquet');
+      await database.connection.run(`
+        COPY (
+          SELECT * FROM read_json_auto(${sqlPath(source)}, format = 'newline_delimited')
+        ) TO ${sqlPath(target)} (FORMAT PARQUET)
+      `);
+    }
+  } finally {
+    database.close();
+  }
+  return root;
+}
+
+async function boundaryFixtureDataRoot(t) {
+  const root = await mkdtemp(path.join(tmpdir(), 'dotainfo-step11-boundaries-'));
+  const resolvedTemp = path.resolve(tmpdir());
+  assert.ok(path.resolve(root).startsWith(`${resolvedTemp}${path.sep}`));
+  t.after(async () => rm(root, { recursive: true, force: true }));
+  for (const table of TABLES) {
+    await mkdir(path.join(root, table), { recursive: true });
+  }
+  await copyFile(
+    path.join(FIXTURES, 'late', 'matches', 'late.ndjson'),
+    path.join(root, 'matches', 'late.ndjson'),
+  );
+
+  const database = await openDuckDB();
+  try {
+    const seedRoot = path.join(FIXTURES, 'window-boundaries', 'matches');
+    for (const seedName of await readdir(seedRoot)) {
+      const source = path.join(seedRoot, seedName);
+      const target = path.join(root, 'matches', seedName.replace('.ndjson', '.parquet'));
       await database.connection.run(`
         COPY (
           SELECT * FROM read_json_auto(${sqlPath(source)}, format = 'newline_delimited')
@@ -150,4 +182,30 @@ test('window query uses injected UTC half-open cutoffs and month pruning', async
   assert.equal(ninety.count, 4);
   assert.ok(ninety.sources.includes('matches/2025-12.parquet'));
   assert.throws(() => buildClockEpoch('2026-01-31T00:00:00'), /ending in Z/);
+});
+
+test('window query filters rows across both straddling boundary months', async (t) => {
+  const dataRoot = await boundaryFixtureDataRoot(t);
+  const catalog = await createCatalog({ dataRoot });
+  const reader = await DataReader.create(catalog);
+  t.after(() => reader.close());
+
+  const clock = '2026-01-15T00:00:00Z';
+  const queryResult = await reader.window({ clock, days: 30 });
+  const [directResult] = await directWindowAudit({
+    clock,
+    days: [30],
+    matchRoot: path.join(dataRoot, 'matches'),
+  });
+
+  assert.equal(queryResult.startEpoch, 1765843200);
+  assert.equal(queryResult.endEpoch, 1768435200);
+  assert.deepEqual(
+    { count: queryResult.count, tiers: queryResult.tiers },
+    { count: 3, tiers: { professional: 2, premium: 1 } },
+  );
+  assert.deepEqual(
+    { count: directResult.count, tiers: directResult.tiers },
+    { count: 3, tiers: { professional: 2, premium: 1 } },
+  );
 });

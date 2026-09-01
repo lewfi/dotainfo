@@ -27,7 +27,10 @@ async function selectRows(connection, shards, table, columns, suffix = '') {
   if (shards.length === 0) {
     return [];
   }
-  return queryRows(connection, `${sourceUnionSql(shards, table, columns)}\n${suffix}`);
+  return queryRows(
+    connection,
+    `SELECT * FROM (\n${sourceUnionSql(shards, table, columns)}\n) AS shard_rows\n${suffix}`,
+  );
 }
 
 export class DataReader {
