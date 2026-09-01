@@ -93,11 +93,13 @@ export class DataReader {
 
   async detail(matchId) {
     validateMatchId(matchId);
+    // Write-time deduplication should make overlap unreachable, but regular REST rows must
+    // still take precedence over SQL-backfilled late rows if duplicate data is encountered.
     const candidates = [
-      ...lateShards(this.catalog, 'matches'),
       ...regularShards(this.catalog, 'matches').sort(
         (left, right) => right.month.localeCompare(left.month),
       ),
+      ...lateShards(this.catalog, 'matches'),
     ];
     const scanned = [];
     let match = null;

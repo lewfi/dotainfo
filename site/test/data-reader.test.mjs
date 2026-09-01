@@ -58,6 +58,15 @@ async function fixtureDataRoot(t, { withLate }) {
   return root;
 }
 
+async function precedenceFixtureDataRoot(t) {
+  const root = await fixtureDataRoot(t, { withLate: true });
+  await copyFile(
+    path.join(FIXTURES, 'precedence', 'matches', 'late.ndjson'),
+    path.join(root, 'matches', 'late.ndjson'),
+  );
+  return root;
+}
+
 async function boundaryFixtureDataRoot(t) {
   const root = await mkdtemp(path.join(tmpdir(), 'dotainfo-step11-boundaries-'));
   const resolvedTemp = path.resolve(tmpdir());
@@ -158,9 +167,30 @@ test('detail query reads the present late-arrival fixture', async (t) => {
   assert.equal(detail.match.match_id, 1500);
   assert.deepEqual(detail.players.map((row) => row.account_id), [5500]);
   assert.deepEqual(detail.draft.map((row) => row.hero_id), [4]);
-  assert.deepEqual(detail.sources.matches, ['matches/late.ndjson']);
+  assert.deepEqual(detail.sources.matches, [
+    'matches/2026-01.ndjson',
+    'matches/2025-12.parquet',
+    'matches/late.ndjson',
+  ]);
   assert.ok(detail.sources.players.includes('players/late.ndjson'));
   assert.ok(detail.sources.draft.includes('draft/late.ndjson'));
+});
+
+test('detail query gives a regular REST row precedence over a duplicate late row', async (t) => {
+  const dataRoot = await precedenceFixtureDataRoot(t);
+  const catalog = await createCatalog({ dataRoot });
+  const reader = await DataReader.create(catalog);
+  t.after(() => reader.close());
+
+  const detail = await reader.detail(1001);
+  assert.equal(detail.match.league_name, 'Seed League');
+  assert.equal(detail.match.duration, 1800);
+  assert.deepEqual(detail.match.radiant_gold_adv, [0, 100]);
+  assert.deepEqual(detail.match.radiant_xp_adv, [0, 80]);
+  assert.deepEqual(detail.sources.matches, [
+    'matches/2026-01.ndjson',
+    'matches/2025-12.parquet',
+  ]);
 });
 
 test('window query uses injected UTC half-open cutoffs and month pruning', async (t) => {

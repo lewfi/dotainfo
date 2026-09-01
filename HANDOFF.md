@@ -1431,6 +1431,11 @@ These steps continue the canonical numbering in `AGENTS.md`.
     30/90/180-day window through the query layer and through an independent unpruned scan of
     every committed match shard, then asserts equal totals and tier counts. Window counts are
     reported rather than pinned because they move with each ingest run.
+    `detail()` scans regular match shards sequentially, followed by late shards, without
+    `match_id` range pruning, so an arbitrary old ID costs one query per shard until found.
+    Match-ID ranges are non-overlapping and month-ordered across all committed monthly shards,
+    so single-candidate routing is available if a build path ever needs it; step 15 already
+    owns the range manifest. This is a recorded cost property, not a step 11 defect to fix.
     Completion gate: reproduce 146,875 matches across 67 backfilled months in 75,620,523
     bytes; tier totals of 110,786 professional, 12,718 premium, and 23,371 excluded; 1,367
     matches with no draft rows; and exactly one match with a player row count other than ten.
