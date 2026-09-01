@@ -167,10 +167,13 @@ The final approved closed-history batch, 2026-01 through 2026-07, adds 13,816 ma
 7,176,722 bytes, or 519.4501 bytes per match. Across all 67 backfilled months now
 committed—2021-01 through 2026-07—the measurement is 146,875 matches in 75,620,523 bytes,
 or 514.8631 bytes per match. These are likewise SQL-backfilled rows with null advantage
-arrays. The 649-match difference from the dated 147,524-match population is almost entirely
-the independently measured 621-match 2026-08 window (95.7%); the remaining 28 are not
-independently classified and the population measurements were taken while August was still
-growing.
+arrays. Finding 23's tier totals leave a 649-match residual after those closed months: 473
+professional, 147 premium, and 29 excluded. A later Explorer query over August 1-30 found
+472 professional, 147 premium, and 29 excluded, or 648 total, so the residual reconciles to
+within one professional match. The previously recorded independently measured 621-match
+August count is inconsistent with that result and is withdrawn; there is no remaining
+±28-match uncertainty to classify. The full `[1785542400, 1788220800)` August query found
+484 professional, 147 premium, and 29 excluded matches, or 660 total.
 
 Two formats, by lifecycle stage:
 
@@ -298,9 +301,11 @@ roughly 26% and 34% through October, then accelerated to 58.5% in November and 6
 December. Destiny League and successive Dota 2 Space League IDs dominate most months;
 Ultras Dota Pro League and European Pro League also become substantial late in the year.
 Across all 60 committed months the measured tier totals are 106,269 professional, 12,718
-premium, and 14,072 excluded. Relative to finding 23, arithmetic leaves 4,990 professional,
-147 premium, and 9,328 excluded matches for 2026-01 through 2026-07; these remain
-implications for the final historical chunk, not measurements.
+premium, and 14,072 excluded. Relative to finding 23, arithmetic then left 4,990
+professional, 147 premium, and 9,328 excluded matches for 2026 onward. The later closed
+2026-01 through 2026-07 batch accounts for 4,517 professional, zero premium, and 9,299
+excluded, leaving the directly recomputed residual of 473 professional, 147 premium, and 29
+excluded.
 
 The 2026-01 through 2026-07 batch directly measures 4,517 professional, zero premium, and
 9,299 excluded matches. Excluded shares are 51.43%, 71.71%, 81.02%, 69.01%, 81.65%, 52.11%,
@@ -312,18 +317,47 @@ leagues, led by Destiny League (570), Ultras Dota Pro League (428), Dota 2 Space
 tier totals are 110,786 professional, 12,718 premium, and 23,371 excluded, with no null-tier
 row.
 
-**Cross-path coverage question.** The committed 2026-08 REST shard has 327 rows: 315
-professional, 12 premium, and zero excluded. The SQL-backed closed months immediately before
-it are 67.31% excluded overall and remain 14.71% excluded even in July. The tension is
-therefore real and large enough that `/proMatches` plausibly omits excluded-tier leagues, or
-the forward path otherwise fails to see them; the closed-month comparison does not by itself
-identify which mechanism is responsible. Applying July's observed share to the independently
-measured 621 SQL matches in August estimates roughly 91 excluded matches, which would explain
-about 31% of the roughly 294-match REST/SQL gap. This is a scale estimate, not an August tier
-measurement. HANDOFF finding 7's earlier “no `/proMatches` coverage gap” conclusion predates
-excluded-tier leagues and does not resolve this evidence. August remains a separate bounded
-backfill to run on or after 2026-09-12; it will directly measure the tier split and exercise
-the real `late.ndjson` publication path for the first time.
+Annual premium counts, recomputed from the committed Parquet through 2025 and from the bounded
+August Explorer result for 2026, are:
+
+| Year | Premium matches |
+|---:|---:|
+| 2021 | 4,694 |
+| 2022 | 3,881 |
+| 2023 | 3,878 |
+| 2024 | 121 |
+| 2025 | 144 |
+| 2026 through August | 147 |
+
+The 2021-2025 figures are unchanged. The closed 2026-01 through 2026-07 months contain zero
+premium matches, but that is not a 2026 year total: league 19719, The International 2026,
+ran from 2026-08-13 through 2026-08-23 and contributes all 147 August premium matches.
+
+**Cross-path coverage question.** The current committed 2026-08 REST shard has 340 rows:
+328 professional, 12 premium, and zero excluded. The SQL-backed closed months immediately
+before it are 67.31% excluded overall and remain 14.71% excluded even in July. That tension
+is still evidence worth retaining, and HANDOFF finding 7's earlier “no `/proMatches`
+coverage gap” conclusion predates excluded-tier leagues. The earlier July-share scale
+estimate suggested roughly 91 excluded matches, but it used the now-withdrawn 621-match
+August count and was explicitly not an August tier measurement; the bounded query instead
+measures 29 excluded matches.
+
+All 29 excluded matches occurred on August 1-3, while the REST shard begins at
+`2026-08-22T07:17:23Z`, so there is no excluded-tier overlap to compare. The September 12
+backfill reads SQL and will return those 29 whether or not `/proMatches` omits excluded-tier
+leagues. It therefore cannot settle the cross-path question. Current data leave the question
+unresolvable; resolving it requires a future window in which excluded matches exist while
+`fetch.py` is live.
+
+The overlapping live-tier evidence is stronger. Within the exact span from the first REST row
+at `2026-08-22T07:17:23Z` through the shard's last row at `2026-08-31T22:41:16Z`, REST and
+SQL agree on every per-day professional and premium count and on every null-team-ID count.
+The REST daily tier counts are premium 5 and 7 on August 22-23, then professional 13, 20,
+44, 189, 50, and 12 on August 24, 25, 28, 29, 30, and 31. The corresponding daily null
+radiant/dire counts are 0/0, 0/0, 0/0, 0/0, 11/7, 97/96, 10/8, and 0/0. In untrimmed UTC
+day buckets, the only discrepancy is a boundary effect: SQL has four additional TI matches
+on August 22 that started before the shard's first row. This is evidence of no REST coverage
+defect for the professional and premium tiers that were live during the overlap.
 
 A 2026-08-30 SQL null sweep over 147,495 matches found `series_id` and `series_type` null on
 209 rows (0.14%), and both captain fields null on 1,781 rows (1.21%). Seven rows (0.005%) are
@@ -375,11 +409,12 @@ least one null team ID, with 969 in league 14284, Perfect World Super Challenge�
 matches in that league—and 971 matches null on both sides. In 2023-11, 391 of 441 null-team
 matches belonged to league 15909, ESL One Kuala Lumpur Qualifiers. By contrast, 2021-11 was
 diffuse: its 345/2,293 null-team matches were spread across Intel World Open, four DPC
-regional qualifiers, a Douyu invitational, a show match, and a few smaller events. The
-2026-08 spike was again single-event: all 116/621 (18.68%) null radiant IDs and all 111/621
-(17.87%) null dire IDs belonged to league 20134, while the other 436 August matches had none.
-The 299-match incremental sample contains those same August nulls, so its apparent
-38.80%/37.12% rate is a sampling-composition effect. Nameless rendering remains normal
+regional qualifiers, a Douyu invitational, a show match, and a few smaller events. A direct
+read of the committed 2026-08 REST shard finds 118/340 null radiant IDs and 111/340 null dire
+IDs across its actual `2026-08-22T07:17:23Z` through `2026-08-31T22:41:16Z` UTC span; these
+are shard-snapshot rates, not full-month rates. Every null belongs to league 20134, which has
+192 rows in the shard, while the other 148 shard rows have none. The concentration is again
+event-specific and is a sampling-composition effect. Nameless rendering remains normal
 presentation within affected events rather than an exceptional error.
 
 Direct reads of the 2022 shards find 1,322 matches with at least one null team ID: 1,280 are
@@ -814,9 +849,16 @@ not an error. Never rewrite its Parquet files. Append the new match rows to
 rows and atomic append helper as `fetch.py`. Apply write-time match-ID deduplication against
 both the closed Parquet shard and existing `matches/late.ndjson`; an existing REST match
 therefore protects its match, player, and draft rows together. A valid zero-draft match simply
-adds no draft row. This path is required for the measured 2026-08 case: the forward REST
-shard currently contains 327 distinct matches while the independent SQL sweep found 621, so
-the roughly 294 missing rows must remain reachable after the ingest cron closes August.
+adds no draft row. This path is required for the measured 2026-08 case. Once August is
+sealed, derive the outstanding set from the sealed shard rather than pinning a moving count:
+outstanding matches equal `660 - sealed August rows`, split as `484 - sealed professional
+rows`, `147 - sealed premium rows`, and `29 - sealed excluded rows`.
+
+Snapshot computed at `2026-09-01T19:12:35Z` from fetched `origin/main`
+`6d95899965dac59120294a475ded3e026bbf5d59`: the committed shard has 340 rows split
+328/12/0, leaving 320 SQL-only rows split 156 professional, 135 premium, and 29 excluded.
+The snapshot is roughly two fifths premium because of The International 2026, not
+overwhelmingly professional; recompute it after later ingest runs or compaction.
 
 The three late files cannot be published as one filesystem-atomic group. Publish draft first,
 players second, and the match deduplication key last. Before each child append, remove rows
@@ -983,8 +1025,9 @@ Observable Plot for charts, plain CSS. No React, no Tailwind, no UI framework.
   3,511 matches for the year, while only 121 matches are premium. The 2025 backfill then
   finds 10,561 excluded matches (34.28%) and only 144 premium, with excluded reaching 69.1%
   in December. The 2026-01 through 2026-07 backfill directly finds another 9,299 excluded
-  matches and no premium matches; excluded exceeds half of every month from January through
-  June, peaks at 81.65% in May, and falls to 14.71% in July. The
+  matches and no premium matches in those seven closed months; The International 2026 then
+  contributes 147 premium matches in August. Excluded exceeds half of every month from
+  January through June, peaks at 81.65% in May, and falls to 14.71% in July. The
   premium-plus-professional default would hide most matches in several recent months, so
   revisit whether it is appropriate for the home feed and 90-day window.
 - `/matches/[id]` has two page types divided by the build's trailing-90-day boundary:
@@ -1084,9 +1127,11 @@ August shard; the missing August population can change both counts and tier shar
 | 180 days | 1772582400 | 9,046 | 6,148 | 12 | 2,886 |
 
 The committed 90-day count is below §7's 2,000-page planning floor only because August is
-partial. Replacing its 327 committed rows with the independently measured 621 gives 2,075
-pages, inside the 2,000–7,500 range. The 294 missing rows' tier distribution is unknown, so
-only that adjusted total—not an adjusted tier split—is supported by the data.
+partial. For this appendix's half-open window ending `2026-08-31T00:00:00Z`, replacing its
+327 committed rows with the later measured 648 rows through August 30 gives 2,102 pages,
+inside the 2,000–7,500 range. That SQL population is 29 excluded, 147 premium, and 472
+professional; relative to the appendix snapshot, the added rows are 29 excluded, 135
+premium, and 157 professional.
 
 ### Default-view behavior
 
