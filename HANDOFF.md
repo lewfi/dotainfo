@@ -1417,10 +1417,9 @@ design requiring its own decision and measurement. The timeout does not directly
 the selected summary option; actual generation time remains a step-level acceptance
 measurement.
 
-### Proposed v1 implementation sequence—requires approval
+### Canonical v1 implementation sequence
 
-This proposal continues canonical numbering without changing `AGENTS.md`. None of these steps
-is approved or started.
+These steps continue the canonical numbering in `AGENTS.md`.
 
 10. **Static-site scaffold.** Add the pinned Node/Astro toolchain, static-output configuration,
     minimal page shell, and package scripts. Approval gate: a clean install and production
@@ -1429,6 +1428,10 @@ is approved or started.
     NDJSON, and late NDJSON, use explicit UTC cutoffs, prune shards/columns, and expose tested
     home/detail queries. Approval gate: an offline audit reproduces the committed match,
     30/90/180-day, tier, and duplicate counts in this appendix.
+    Completion gate: reproduce 146,875 matches across 67 backfilled months in 75,620,523
+    bytes; tier totals of 110,786 professional, 12,718 premium, and 23,371 excluded; 1,367
+    matches with no draft rows; and exactly one match with a player row count other than ten.
+    Successful query execution alone is insufficient.
 12. **Reference and presentation model.** Resolve teams, leagues, players, and heroes with
     denormalized-name fallbacks and explicit missing-logo/name states; define a shared match
     summary model used by both page types; pin the v1 hero-icon source if approved. Approval
