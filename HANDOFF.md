@@ -1442,11 +1442,14 @@ These steps continue the canonical numbering in `AGENTS.md`.
     Successful query execution alone is insufficient.
 12. **Reference and presentation model.** Resolve teams, leagues, players, and heroes with
     denormalized-name fallbacks and explicit missing-logo/name states; define a shared match
-    summary model used by both page types; pin the v1 hero-icon source if approved. Approval
-    gate: tests cover complete joins and all 127 draft heroes. Across the 69 monthly match
-    shards committed in the 2026-09-01 snapshot (67 closed Parquet shards plus
-    `2026-08.ndjson` and `2026-09.ndjson`), they also cover the 655 empty/whitespace name
-    appearances and the 7,058 matches with a null team ID.
+    summary model used by both page types. Hero icons use the single exported base URL
+    `https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/`; derive the
+    filename from the reference hero's machine name and do not download icon files. Approval
+    gate: scan every committed match shard and assert that every team slot has a defined,
+    non-empty display state and an explicit available/missing logo state, every league and
+    draft hero resolves, and resolved display names are trimmed and non-empty. Report observed
+    null-ID, unusable-name, missing-reference, and missing-logo counts without pinning them,
+    because scheduled ingest and weekly reference refreshes can change those counts.
 13. **Home feed and tier control.** Render the newest 100 matches with results, duration,
     league, relative time, and a visible tier filter. Approval gate: ordering and tier counts
     match the offline query, all-tier and premium-plus-professional views are both testable,

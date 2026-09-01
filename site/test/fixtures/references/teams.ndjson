@@ -1,0 +1,3 @@
+{"team_id":1,"name":" Reference Team ","tag":"REF","logo_url":" https://cdn.example.test/team-1.png "}
+{"team_id":2,"name":"   ","tag":"","logo_url":" "}
+{"team_id":3,"name":"No Logo Team","tag":null,"logo_url":null}
