@@ -6,10 +6,15 @@
   "scripts": {
     "dev": "node scripts/run-astro.mjs dev",
     "build": "node scripts/run-astro.mjs build",
-    "preview": "node scripts/run-astro.mjs preview"
+    "preview": "node scripts/run-astro.mjs preview",
+    "test": "node --test",
+    "audit:data": "node scripts/audit-data.mjs"
   },
   "engines": {
     "node": ">=22.12.0 <23"
+  },
+  "dependencies": {
+    "@duckdb/node-api": "1.5.5-r.4"
   },
   "devDependencies": {
     "astro": "7.2.10"
