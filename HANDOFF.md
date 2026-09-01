@@ -1435,8 +1435,10 @@ These steps continue the canonical numbering in `AGENTS.md`.
 12. **Reference and presentation model.** Resolve teams, leagues, players, and heroes with
     denormalized-name fallbacks and explicit missing-logo/name states; define a shared match
     summary model used by both page types; pin the v1 hero-icon source if approved. Approval
-    gate: tests cover complete joins, the 655 empty/whitespace name appearances, the 7,058
-    matches with a null team ID, and all 127 draft heroes.
+    gate: tests cover complete joins and all 127 draft heroes. Across the 69 monthly match
+    shards committed in the 2026-09-01 snapshot (67 closed Parquet shards plus
+    `2026-08.ndjson` and `2026-09.ndjson`), they also cover the 655 empty/whitespace name
+    appearances and the 7,058 matches with a null team ID.
 13. **Home feed and tier control.** Render the newest 100 matches with results, duration,
     league, relative time, and a visible tier filter. Approval gate: ordering and tier counts
     match the offline query, all-tier and premium-plus-professional views are both testable,
@@ -1447,10 +1449,11 @@ These steps continue the canonical numbering in `AGENTS.md`.
     empty/whitespace-name, and null-advantage fixtures render; generated route count equals
     the data-layer count for an injected build clock.
 15. **Historical summary artifacts and catch-all route.** Generate one match-only JSON payload
-    per committed month (68 currently) plus the range manifest, then use them to render the
-    client-side summary for older IDs. Approval gate: generated payloads exclude both
-    advantage arrays and total
-    88,248,288 raw / 8,644,307 gzipped bytes for the current fixture; known old IDs—including
+    per committed monthly match shard at gate time plus the range manifest, then use them to
+    render the client-side summary for older IDs. Approval gate: generated payload count
+    equals the committed monthly match-shard count at gate time; payloads exclude both
+    advantage arrays; raw and gzipped byte totals are derived across all committed monthly
+    match shards at gate time; known old IDs—including
     7485890286—render correct teams, result, score, league, duration, patch, and date; unknown
     and range-gap IDs produce a clean not-found state; overlapping future ranges check every
     candidate. Step 14 and step 15 remain separate because the former owns pre-rendered
