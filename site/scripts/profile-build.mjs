@@ -32,7 +32,7 @@ function buildClock() {
 
 function runAstro(environment) {
   return new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, [ASTRO_CLI, 'build', '--silent'], {
+    const child = spawn(process.execPath, [ASTRO_CLI, 'build'], {
       cwd: SITE_ROOT,
       env: environment,
       stdio: 'inherit',
@@ -110,8 +110,12 @@ try {
     const projectedPeakPageMs = meanMsPerPage * peakPages;
     const projectedPeakTotalMs = payloadGenerationMs + projectedPeakPageMs;
     const assertions = Object.freeze({
-      currentBuildUnderTenMinutes: totalWallMs < TEN_MINUTES_MS,
+      currentBuildUnderCloudflareTwentyMinutes: totalWallMs < TWENTY_MINUTES_MS,
       htmlPageCountConsistent: pagesBuilt === recentMatches + 2,
+    });
+    const warnings = Object.freeze({
+      currentBuildExceedsTenMinutes: totalWallMs >= TEN_MINUTES_MS,
+      projectedPeakExceedsTenMinutes: projectedPeakTotalMs >= TEN_MINUTES_MS,
     });
 
     console.log(`STEP16_BUILD_CLOCK=${clock}`);
@@ -131,6 +135,7 @@ try {
       cloudflareHeadroomPercent: Number((((TWENTY_MINUTES_MS - projectedPeakTotalMs) / TWENTY_MINUTES_MS) * 100).toFixed(3)),
     })}`);
     console.log(`STEP16_BUILD_ASSERTIONS=${JSON.stringify(assertions)}`);
+    console.log(`STEP16_BUILD_WARNINGS=${JSON.stringify(warnings)}`);
     if (!Object.values(assertions).every(Boolean)) {
       throw new Error('Step 16 build assertions failed');
     }

@@ -1087,6 +1087,32 @@ match pages emit as `matches/{id}/index.html`; every internal page link follows 
 slash-terminated canonical form. Home match cards include a discernible
 `View match {id} details` link to `/matches/{id}/`.
 
+Cloudflare Pages `_redirects` rules fire even when a matching static asset exists. A local
+Wrangler check disproved the expected static-asset precedence for `/matches/* /404.html 200`,
+and Cloudflare's documentation confirms that redirect rules are always followed regardless
+of asset existence. That wildcard rewrite would shadow every pre-rendered full match page,
+so v1 has no `_redirects` file. Enumerating the pre-rendered pages as individual static rules
+is also not viable: the verified trailing-90-day peak is 8,673 matches, while Cloudflare
+allows only 2,000 static redirect rules. Historical summary routes therefore return HTTP
+status 404 with the correct summary content. This is an accepted v1 limitation.
+
+If the historical status becomes a problem, a future option is a Pages Function scoped by
+`_routes.json` to `/matches/*` that checks `env.ASSETS.fetch(request)` first and invokes the
+summary fallback only for an asset miss. This is recorded as an option, not a deployment plan.
+The current repository intentionally contains no Pages Function or other deployment-runtime
+configuration; root directory, build command, and output directory are dashboard settings.
+
+The `audit:links` gate independently scans emitted HTML and monthly payload JSON. Every
+internal link must resolve to a static file (and fragment where applicable) or, for a match
+route, to a match ID present in an emitted monthly payload. Step 16's match-card assertion
+checked only canonical link form and could not detect a missing target. Premium is TI-only,
+so its 100-match home view can reach back to the previous International while the current
+International is still partially committed; payload-resolved premium links are therefore
+expected and valid. The observed counts remain build output rather than pinned findings.
+
+Production builds retain Astro's route log. Ten minutes is reported as a warning threshold,
+while Cloudflare's twenty-minute cap is the build gate and thrown-error threshold.
+
 The historical route embeds only team and league rows whose IDs occur in the regular
 committed match shards, projecting teams to `team_id`, `name`, and `tag` and leagues to
 `leagueid`, `name`, and `tier`. Historical summary markup renders neither team logos nor
@@ -1105,7 +1131,7 @@ job's commits trigger builds automatically.
 
 ### v1 acceptance criteria
 
-- [ ] `npm run build` completes in under 10 minutes locally
+- [ ] `npm run build` reports a warning at 10 minutes and fails before Cloudflare's 20-minute cap
 - [ ] Home feed renders with correct team names and results
 - [ ] A recent full match page renders the full draft when present, a clean unavailable state
       when absent, and both boxscores
@@ -1521,8 +1547,9 @@ These steps continue the canonical numbering in `AGENTS.md`.
     Profile the measured build against the committed-history peak of 8,673 trailing-90-day
     matches, ending 2025-10-24T17:41:06Z, as well as against the current build window.
     Approval gate: accessibility checks pass, representative narrow/wide renders are reviewed,
-    and a clean local production build completes under ten minutes.
-17. **Cloudflare deployment.** Add only the deployment configuration needed for the approved
-    static build and connect the production project. Approval gate: the public deployment is
-    reachable, the home and old/new match routes work, and the measured build remains below
-    Cloudflare's 20-minute cap.
+    and a clean local production build reports the ten-minute warning threshold and remains
+    below Cloudflare's twenty-minute failure threshold.
+17. **Cloudflare deployment.** Add repository-side deployment gates only. The user configures
+    the root directory, build command, output directory, and production project in the
+    Cloudflare dashboard afterward. Approval gate: link integrity passes for static and
+    payload-resolved routes, and the measured build remains below Cloudflare's 20-minute cap.

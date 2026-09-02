@@ -14,7 +14,8 @@
     "audit:home": "node scripts/audit-home.mjs",
     "audit:recent": "node scripts/audit-recent.mjs",
     "audit:historical": "node scripts/audit-historical.mjs",
-    "audit:a11y": "node scripts/audit-accessibility.mjs"
+    "audit:a11y": "node scripts/audit-accessibility.mjs",
+    "audit:links": "node scripts/audit-links.mjs"
   },
   "engines": {
     "node": ">=22.12.0 <23"
