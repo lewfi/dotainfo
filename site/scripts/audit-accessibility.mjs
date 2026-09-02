@@ -373,6 +373,21 @@ const describedBy = (tierGroup.get('aria-describedby') ?? '').split(/\s+/).filte
 const tierButtons = [...homeHtml.matchAll(/<button\b[^>]*data-home-view-option=["'][^"']+["'][^>]*>/gi)];
 const tierButtonAttributes = tierButtons.map((match) => attributes(match[0]));
 const controlled = tierButtonAttributes.map((button) => button.get('aria-controls') ?? '');
+const defaultTierButton = tierButtonAttributes.find(
+  (button) => button.get('data-home-view-option') === 'default',
+);
+const visibleHomeViews = [...homeHtml.matchAll(
+  /<section\b[^>]*data-home-view=["']([^"']+)["'][^>]*>/gi,
+)].filter((match) => !/\shidden(?:\s|>|=)/i.test(match[0])).map((match) => match[1]);
+const currentViewOutput = decodeText(
+  homeHtml.match(/<strong\b[^>]*data-current-view-output[^>]*>([\s\S]*?)<\/strong>/i)?.[1] ?? '',
+);
+const hiddenCountOutput = decodeText(
+  homeHtml.match(/<strong\b[^>]*data-hidden-count-output[^>]*>([\s\S]*?)<\/strong>/i)?.[1] ?? '',
+);
+const hiddenRangeOutput = decodeText(
+  homeHtml.match(/<span\b[^>]*data-hidden-range[^>]*>([\s\S]*?)<\/span>/i)?.[1] ?? '',
+);
 const homeMatchCards = [...homeHtml.matchAll(/<li\b[^>]*>/gi)]
   .filter((match) => (attributes(match[0]).get('class') ?? '').split(/\s+/).includes('match-card'));
 const homeMatchLinks = [...homeHtml.matchAll(/<a\b[^>]*>/gi)]
@@ -381,7 +396,7 @@ const homeTeamLogos = [...homeHtml.matchAll(/<img\b[^>]*data-team-logo[^>]*>/gi)
   .map((match) => attributes(match[0]));
 const tierViewIds = new Set(tierButtonAttributes.map((button) => button.get('data-home-view-option')));
 const tierAssertions = Object.freeze({
-  nativeKeyboardControl: tierButtons.length === 5
+  nativeKeyboardControl: tierButtons.length === 6
     && tierButtonAttributes.every((button) => (
       (button.get('type') ?? '').toLowerCase() === 'button'
       && !button.has('disabled')
@@ -392,13 +407,30 @@ const tierAssertions = Object.freeze({
   selectedStateInMarkup: tierButtonAttributes.filter(
     (button) => button.get('aria-pressed') === 'true',
   ).length === 1 && tierButtonAttributes.every((button) => button.has('aria-pressed')),
+  approvedDefaultSelectedInMarkup: defaultTierButton?.get('aria-pressed') === 'true'
+    && defaultTierButton.get('data-view-label') === 'Top tier + Pro'
+    && visibleHomeViews.length === 1
+    && visibleHomeViews[0] === 'default',
   currentStateDescribed: describedBy.length >= 1
     && describedBy.every((id) => idExists(homeHtml, id))
     && /role=["']status["']/i.test(homeHtml),
-  controlsReferenceViews: controlled.length === 5 && controlled.every((id) => idExists(homeHtml, id)),
-  openTierDomainMapsToOther: ['all', 'top', 'pro', 'amateur', 'other'].every(
+  controlsReferenceViews: controlled.length === 6 && controlled.every((id) => idExists(homeHtml, id)),
+  openTierDomainMapsToOther: ['default', 'all', 'top', 'pro', 'amateur', 'other'].every(
     (id) => tierViewIds.has(id),
   ),
+  everyViewCarriesHiddenCountAndHalfOpenRange: tierButtonAttributes.every((button) => (
+    /^\d+$/.test(button.get('data-hidden-count') ?? '')
+    && /^\d{4}-\d{2}-\d{2}T/.test(button.get('data-range-start') ?? '')
+    && /^\d{4}-\d{2}-\d{2}T/.test(button.get('data-range-end') ?? '')
+  )),
+  defaultHiddenCountAndRangeAreVisibleAndCorrect:
+    currentViewOutput === defaultTierButton?.get('data-view-label')
+    && hiddenCountOutput === defaultTierButton?.get('data-hidden-count')
+    && hiddenRangeOutput.includes(`${defaultTierButton?.get('data-range-start')} inclusive`)
+    && hiddenRangeOutput.includes(`${defaultTierButton?.get('data-range-end')} exclusive`),
+  activeViewUpdatesHiddenCountAndRange:
+    /hiddenCount\.textContent\s*=\s*option\.dataset\.hiddenCount/.test(homeHtml)
+    && /hiddenRange\.textContent\s*=\s*`Counted from \$\{option\.dataset\.rangeStart\} inclusive to \$\{option\.dataset\.rangeEnd\} exclusive\.`/.test(homeHtml),
   categoryHintsAreVisible: /Top tier<\/strong>\s*=\s*Flagship events/i.test(homeHtml)
     && /Other<\/strong>\s*=\s*Unclassified, excluded/i.test(homeHtml),
   stateNotColorOnly: /Current view:/i.test(homeHtml) && /matches hidden/i.test(homeHtml),

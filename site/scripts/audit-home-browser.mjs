@@ -284,7 +284,7 @@ try {
       && viewports[1].scrollWidth === 320
       && !viewports[1].horizontalOverflow,
     noJavaScriptLeavesDefaultViewVisible: visibleWithoutJavaScript.length === 1
-      && visibleWithoutJavaScript[0] === 'all',
+      && visibleWithoutJavaScript[0] === 'default',
     noJavaScriptHonorsBothPreferences: noJavaScript[0].backgroundPixel === 'rgb(246, 242, 234)'
       && noJavaScript[1].backgroundPixel === 'rgb(15, 17, 20)',
   });

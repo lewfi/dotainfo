@@ -78,7 +78,10 @@ async function directView(connection, catalog, { clock, limit, tiers }) {
     `SELECT league_tier FROM (\n${union}\n) AS all_rows `
       + `WHERE start_time >= ${startEpoch} AND start_time < ${endEpoch}`,
   );
-  return { rows, startEpoch, endEpoch, tierCounts: sortedTierCounts(rangeRows) };
+  const hiddenCount = rangeRows.reduce((count, row) => (
+    tiers === null || tiers.includes(row.league_tier) ? count : count + 1
+  ), 0);
+  return { rows, startEpoch, endEpoch, tierCounts: sortedTierCounts(rangeRows), hiddenCount };
 }
 
 test('filtered home query widens into older shards until it finds the matching limit', async (t) => {
@@ -137,12 +140,17 @@ test('home views match an offline query by ordering and range-scoped tier counts
     'professional',
   ]);
   assert.deepEqual(home.views.map((view) => view.id), [
+    'default',
     'all',
     'top',
     'pro',
     'amateur',
     'other',
   ]);
+  const defaultView = home.views[0];
+  assert.equal(defaultView.label, 'Top tier + Pro');
+  assert.deepEqual(defaultView.selectedTiers, ['premium', 'professional']);
+  assert.equal(defaultView.hiddenCount, 2);
   const other = home.views.find((view) => view.id === 'other');
   assert.deepEqual(other.selectedTiers, ['excluded', 'future-tier']);
   assert.ok(other.matches.some((match) => match.league.tier.value === 'future-tier'));
@@ -166,6 +174,7 @@ test('home views match an offline query by ordering and range-scoped tier counts
       `${view.id} ordering`,
     );
     assert.deepEqual(view.tierCounts, expected.tierCounts, `${view.id} tier counts`);
+    assert.equal(view.hiddenCount, expected.hiddenCount, `${view.id} hidden count`);
     assert.deepEqual(view.range, {
       startEpoch: expected.startEpoch,
       endEpoch: expected.endEpoch,

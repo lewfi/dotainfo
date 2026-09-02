@@ -33,6 +33,14 @@ const OTHER_CATEGORY = Object.freeze({
   hint: 'Unclassified, excluded, or a tier we do not recognise yet',
 });
 
+const DEFAULT_CATEGORY = Object.freeze({
+  id: 'default',
+  label: 'Top tier + Pro',
+  badge: 'TOP + PRO',
+  hint: 'Flagship events and the regular professional circuit (source values: premium, professional)',
+  tiers: DEFAULT_HOME_TIERS,
+});
+
 const ALL_CATEGORY = Object.freeze({
   id: 'all',
   label: 'All results',
@@ -148,15 +156,17 @@ export async function createHomeFeedViews({ reader, references, clock, limit = 1
     (tier) => homeTierCategory(tier).id === OTHER_CATEGORY.id,
   );
   const categoryQueries = await Promise.all([
+    reader.home({ clock, limit, tiers: DEFAULT_HOME_TIERS }),
     ...TIER_CATEGORIES.map((category) => reader.home({ clock, limit, tiers: category.tiers })),
     reader.home({ clock, limit, tiers: otherTiers }),
   ]);
   const categories = [...TIER_CATEGORIES, OTHER_CATEGORY];
   const views = [
+    homeView(DEFAULT_CATEGORY, categoryQueries[0], references),
     homeView(ALL_CATEGORY, allQuery, references),
     ...categories.map((category, index) => homeView(
       category,
-      categoryQueries[index],
+      categoryQueries[index + 1],
       references,
     )),
   ];

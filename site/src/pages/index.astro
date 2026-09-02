@@ -68,7 +68,7 @@ function isoFromEpoch(epoch) {
       ))}
     </div>
     <p id="tier-hints" class="tier-hints">
-      {home.views.slice(1).map((view) => (
+      {home.views.filter((view) => view.id !== 'all').map((view) => (
         <span><strong>{view.label}</strong> = {view.hint}.</span>
       ))}
     </p>
