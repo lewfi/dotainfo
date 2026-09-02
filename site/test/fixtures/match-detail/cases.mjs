@@ -99,10 +99,29 @@ export const DETAIL_FIXTURE_CASES = Object.freeze([
     }),
   }),
   Object.freeze({
-    id: 'null-advantage',
+    id: 'tag-fallback',
     detail: detail({
       ...baseMatch,
       match_id: 4005,
+      radiant_team_id: 5,
+      radiant_team_name: ' ',
+    }),
+  }),
+  Object.freeze({
+    id: 'null-result-score',
+    detail: detail({
+      ...baseMatch,
+      match_id: 4006,
+      radiant_win: null,
+      radiant_score: null,
+      dire_score: null,
+    }),
+  }),
+  Object.freeze({
+    id: 'null-advantage',
+    detail: detail({
+      ...baseMatch,
+      match_id: 4007,
       radiant_gold_adv: null,
       radiant_xp_adv: null,
     }),
@@ -115,6 +134,7 @@ export function fixtureReferences() {
       { team_id: 1, name: 'Radiant Current', tag: 'RAD', logo_url: null },
       { team_id: 2, name: 'Dire Current', tag: 'DIRE', logo_url: null },
       { team_id: 3, name: ' ', tag: null, logo_url: null },
+      { team_id: 5, name: ' ', tag: 'TAG ONLY', logo_url: null },
     ],
     leagues: [
       { leagueid: 10, name: 'Fixture League', tier: 'future-tier', banner: null },

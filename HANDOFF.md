@@ -1227,6 +1227,47 @@ and win-probability features remain unbuilt because the data model does not supp
 Cards, tables, and the advantage graph also retain their step 17 presentation until the
 separate step 19 component-restyling work.
 
+**Match summary card and home feed - step 19 complete.** The home page and shared match
+summary use the reference's visual language without adopting its invented product or data:
+flat token-backed surfaces, one-pixel borders, square corners, a compact four-column wide
+feed row that becomes one column at the existing narrow breakpoint, 22px home heading,
+13-16px card type, 10px/0.09em uppercase metadata, and 16px/20px card padding. Draft,
+boxscore, and advantage-graph selectors retain their step 18 presentation for step 20.
+
+The committed-data inventory was run before the CSS change at build clock
+`2026-09-02T07:20:17Z`. The five emitted views contain 500 card placements but only 300
+unique matches because the combined and individual tier views overlap. Counts below keep
+card placements, side appearances, and unique matches distinct:
+
+| Degraded case | Current 500-card output | Rendered state and evidence |
+|---|---:|---|
+| Null Radiant or Dire team ID | 166 side appearances in 110 card placements; 40 unique matches | Keep any resolved/write-time display, or `Team name unavailable`; add the visible `Team ID unavailable` micro-label. Real match `8974900056` exercises the fully missing Radiant identity. |
+| Non-null ID with blank/whitespace write-time name | 0 | Continue the step 12 reference-name then tag fallback. Fixture `4004` reaches `Team name unavailable` plus `No resolved name`, never a blank. |
+| Reference-tag-only resolution | 0 | Display the trimmed tag plus the visible `Tag fallback` label. Fixture `4005` renders `TAG ONLY`. |
+| Null result with both scores null | 0 | Render an em dash in each score cell plus `Score unavailable` and `Result unavailable`. Fixture `4006` covers the maximally degraded row. |
+| Missing logo | 215 side appearances in 150 card placements; 72 unique matches and 10 distinct non-null team IDs | Render `Logo unavailable` as visible text rather than an empty image slot or repeated logo URL. Real match `8973266808`, Radiant team ID `6137196`, exercises this state. |
+
+The complete committed-data scan still reports 7,058 matches / 10,489 appearances with a
+null team ID, 655 non-null-ID appearances with an unusable write-time name across 74 team
+IDs, 281 tag-fallback appearances, all seven maximally degraded null-result/null-score rows,
+and 1,782 reference teams without a logo. The home-window counts intentionally move with
+ingest and are therefore produced by `npm run audit:home-card-states`, not pinned assertions.
+
+Historical summary artifacts intentionally omit `logo_url` to keep the 404 reference blob
+small. The shared renderer therefore suppresses only the logo-state annotation on the
+client-rendered historical card; otherwise every card uses the same names, result, score,
+league, duration, patch, date, and degraded-state markup. This avoids falsely labelling every
+historical reference row as missing a logo when that field was deliberately not shipped.
+
+Artifact budgets were measured before and after against the same committed checkout.
+`dist/index.html` moved from 440,700 to 479,492 bytes (+38,792, +8.802%) across its 500 card
+placements. `dist/404.html` stayed exactly 560,375 bytes, so the roughly 555 KB embedded
+reference blob did not regrow. Headless Chrome rendered real matches `8974900056` and
+`8973266808` plus fixtures `4004`, `4005`, and `4006`; all state labels remained visible and
+the card geometry stayed intact. The reference's search, following/accounts, live ticker,
+team/player pages, standings, brackets, head-to-head, and win probability remain deferred or
+unbuilt exactly as section 8 requires.
+
 ### v1 acceptance criteria
 
 - [ ] `npm run build` reports a warning at 10 minutes and fails before Cloudflare's 20-minute cap
@@ -1659,3 +1700,10 @@ These steps continue the canonical numbering in `AGENTS.md`.
     CSS contains both complete token sets, every step 16 contrast pair passes in both themes,
     every emitted page runs the blocking theme bootstrap before its first stylesheet, and the
     keyboard-operable pressed-state control is present on `404.html` as well as static pages.
+19. **Match summary card and home feed styling.** Apply the reference's flat card surface,
+    one-pixel square borders, compact spacing/type scale, and small-uppercase labels to the
+    existing home feed and shared match summary only. Preserve explicit states for null team
+    IDs, unusable names, tag-only names, null results/scores, and missing logos; do not add any
+    reference-only feature. Approval gate: inventory the exact five-view build window, render
+    a real committed match or fixture for every degraded state, keep the historical-card gate
+    passing, and measure both `dist/index.html` and `dist/404.html` before and after.

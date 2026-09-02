@@ -52,6 +52,9 @@ test('normal and edge-case fixtures produce complete detail models without ten-p
   assert.equal(models['null-team'].summary.teams.radiant.name.status, 'missing');
   assert.equal(models['whitespace-name'].summary.teams.radiant.name.status, 'missing');
   assert.equal(models['whitespace-name'].summary.teams.dire.name.status, 'missing');
+  assert.equal(models['tag-fallback'].summary.teams.radiant.name.source, 'reference-tag');
+  assert.equal(models['null-result-score'].summary.result.status, 'missing');
+  assert.equal(models['null-result-score'].summary.score.status, 'missing');
 });
 
 test('Astro renders all Step 14 fixtures with defined team displays and conditional sections', async (t) => {
@@ -84,4 +87,10 @@ test('Astro renders all Step 14 fixtures with defined team displays and conditio
   assert.doesNotMatch(pages['null-advantage'], /data-advantage-graph/);
   assert.match(pages['null-team'], /Team name unavailable/);
   assert.match(pages['whitespace-name'], /Team name unavailable/);
+  assert.match(pages['tag-fallback'], /TAG ONLY/);
+  assert.match(pages['tag-fallback'], /Tag fallback/);
+  assert.match(pages['null-result-score'], /Result unavailable/);
+  assert.match(pages['null-result-score'], /Score unavailable/);
+  assert.match(pages.normal, /data-logo-state="missing"/);
+  assert.match(pages.normal, /Logo unavailable/);
 });

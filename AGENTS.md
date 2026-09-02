@@ -25,6 +25,7 @@ Refer to steps by these numbers only. Do not renumber.
 16. Accessibility, responsive styling, and build profiling
 17. Cloudflare deployment
 18. Theme token system and dual light/dark modes
+19. Match summary card and home feed styling
 
 ## Never
 

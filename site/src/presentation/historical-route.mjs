@@ -65,6 +65,7 @@ export function historicalRouteView(matchId, resolved, references) {
         dateDisplay: 'absolute',
         headingId: 'historical-match-heading',
         headingLevel: 'h2',
+        showLogoState: false,
         showPatch: true,
       })
       + '</section>',
