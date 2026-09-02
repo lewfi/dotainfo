@@ -1132,6 +1132,12 @@ warning threshold it leaves 300,055 ms, reported as 50.009% headroom. Thus 299,9
 slowdown will not make `projectedPeakExceedsTenMinutes` true. That warning begins firing only
 if the projection reaches ten minutes, and remains advisory rather than a build failure.
 
+**Advisor-error record.** The advisor misread `tenMinuteHeadroomMs: 300054.573` as a
+55 ms margin below the ten-minute threshold. The corresponding projection is approximately
+299,945 ms, which has 50.009% headroom against 600,000 ms; the projected build would need to
+roughly double before `projectedPeakExceedsTenMinutes` fires. Codex caught the arithmetic
+error before it was recorded as a planning fact.
+
 Cloudflare correctly read `site/.node-version`: the production log reported
 `Installing nodejs 22.20.0`. Cloudflare also warns that Node 22.20.0 is in LTS maintenance
 and nearing end of life; changing the pinned runtime remains a separate toolchain decision.
@@ -1155,8 +1161,19 @@ exclude `late.ndjson`. Once late arrivals leave the trailing 90-day pre-render w
 become unreachable through the historical route. This first affects the roughly 320 planned
 late rows for 2026-08, including 135 TI 2026 premium matches, around 2026-11-29.
 
-**Deploy:** Cloudflare Pages, connected to the repo, building on push to `main`. The ingest
-job's commits trigger builds automatically.
+**Deploy - step 17 complete:** Cloudflare Pages is connected to the repo and builds on pushes
+to `main`; the ingest job's commits trigger builds automatically. The approval gate passed on
+the live `dotainfo.pages.dev` deployment. `/matches/7485890286/` was measured returning HTTP
+404 with the correct historical summary content, confirming the accepted v1 status-code
+limitation rather than a blank or error page.
+
+The browser's default `/favicon.ico` probe previously fell through to the catch-all and
+transferred the 557,384-byte `404.html` response (about 149 kB gzipped) as an image. The site
+now publishes the 226-byte `site/public/favicon.svg` static asset and every page explicitly
+links `/favicon.svg`. The independent `audit:links` gate requires every emitted HTML page to
+contain an icon reference and resolves each referenced asset against `dist/`. `site/public/`
+is reserved for static assets; it contains no `_redirects`, `_routes.json`, or deployment
+runtime configuration.
 
 ### v1 acceptance criteria
 
@@ -1578,7 +1595,7 @@ These steps continue the canonical numbering in `AGENTS.md`.
     Approval gate: accessibility checks pass, representative narrow/wide renders are reviewed,
     and a clean local production build reports the ten-minute warning threshold and remains
     below Cloudflare's twenty-minute failure threshold.
-17. **Cloudflare deployment.** Add repository-side deployment gates only. The user configures
+17. **Cloudflare deployment (complete).** Add repository-side deployment gates only. The user configures
     the root directory, build command, output directory, and production project in the
     Cloudflare dashboard afterward. Approval gate: link integrity passes for static and
     payload-resolved routes, and the measured build remains below Cloudflare's 20-minute cap.

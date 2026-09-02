@@ -100,6 +100,39 @@ for (const filename of payloadFiles) {
 
 const htmlByFile = new Map();
 for (const filename of htmlFiles) htmlByFile.set(filename, await readFile(filename, 'utf8'));
+const iconReferences = [];
+for (const [filename, html] of htmlByFile) {
+  const source = routeForHtml(outputRoot, filename);
+  const base = new URL(source, 'https://dotainfo.invalid');
+  const pageIcons = [];
+  for (const match of html.matchAll(/<link\b[^>]*>/gi)) {
+    const parsed = attributes(match[0]);
+    const rel = parsed.get('rel')?.toLowerCase().split(/\s+/) ?? [];
+    if (!rel.includes('icon')) continue;
+    const href = parsed.get('href') ?? '';
+    const targetUrl = href ? new URL(href, base) : null;
+    const targetFile = targetUrl?.origin === base.origin
+      ? outputPathForRoute(outputRoot, targetUrl.pathname)
+      : null;
+    const resolved = targetFile !== null && await exists(targetFile);
+    const reference = Object.freeze({ source, href, targetFile, resolved });
+    iconReferences.push(reference);
+    pageIcons.push(reference);
+  }
+  if (pageIcons.length === 0) {
+    iconReferences.push(Object.freeze({ source, href: null, targetFile: null, resolved: false }));
+  }
+}
+
+const iconAssets = [];
+for (const targetFile of new Set(
+  iconReferences.filter((icon) => icon.resolved).map((icon) => icon.targetFile),
+)) {
+  iconAssets.push(Object.freeze({
+    path: `/${path.relative(outputRoot, targetFile).replaceAll('\\', '/')}`,
+    bytes: (await readFile(targetFile)).byteLength,
+  }));
+}
 const links = [];
 for (const [filename, html] of htmlByFile) {
   const base = new URL(routeForHtml(outputRoot, filename), 'https://dotainfo.invalid');
@@ -174,6 +207,10 @@ const assertions = Object.freeze({
   everyInternalHrefResolves: resolutionCounts.unresolved === 0,
   homeViewsWereFound: homeViews.length > 0,
   everyHomeViewLinkResolves: homeViews.every((view) => view.unresolved === 0),
+  everyHtmlPageHasIconReference:
+    new Set(iconReferences.filter((icon) => icon.href).map((icon) => icon.source)).size
+      === htmlFiles.length,
+  everyIconReferenceResolves: iconReferences.every((icon) => icon.resolved),
 });
 
 console.log(`STEP17_HOME_LINKS=${JSON.stringify({
@@ -194,6 +231,18 @@ console.log(`STEP17_INTERNAL_HREFS=${JSON.stringify({
   payloadMatchIds: payloadMatches.size,
   internalHrefs: links.length,
   resolutionCounts,
+})}`);
+console.log(`STEP17_ICONS=${JSON.stringify({
+  htmlFiles: htmlFiles.length,
+  pagesWithIcon: new Set(
+    iconReferences.filter((icon) => icon.href).map((icon) => icon.source),
+  ).size,
+  references: iconReferences.filter((icon) => icon.href).length,
+  resolved: iconReferences.filter((icon) => icon.resolved).length,
+  unresolved: iconReferences
+    .filter((icon) => !icon.resolved)
+    .map(({ source, href }) => ({ source, href })),
+  assets: iconAssets,
 })}`);
 console.log(`STEP17_LINK_ASSERTIONS=${JSON.stringify(assertions)}`);
 assert.ok(Object.values(assertions).every(Boolean), 'Step 17 link-integrity assertions failed');
