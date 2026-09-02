@@ -2,20 +2,52 @@ import assert from 'node:assert/strict';
 import { readdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
 
+const SHARED_TOKENS = Object.freeze({
+  '--sans': '-apple-system, "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif',
+  '--mono': 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+});
+const THEME_TOKENS = Object.freeze([
+  '--bg', '--surface', '--surface-2', '--line', '--line-strong',
+  '--fg', '--fg-2', '--fg-3', '--accent-a', '--accent-b',
+  '--win-bg', '--win-fg', '--focus',
+]);
+const TEXT_FOREGROUNDS = Object.freeze([
+  ['fg', '--fg'],
+  ['fg_2', '--fg-2'],
+  ['fg_3', '--fg-3'],
+  ['accent_a', '--accent-a'],
+  ['accent_b', '--accent-b'],
+]);
+const TEXT_BACKGROUNDS = Object.freeze([
+  ['bg', '--bg'],
+  ['surface', '--surface'],
+  ['surface_2', '--surface-2'],
+]);
+const TEXT_PAIRS = Object.freeze([
+  ...TEXT_FOREGROUNDS.flatMap(([foregroundName, foreground]) => (
+    TEXT_BACKGROUNDS.map(([backgroundName, background]) => (
+      [`${foregroundName}_on_${backgroundName}`, foreground, background, 4.5, 'text']
+    ))
+  )),
+  ['win_fg_on_win_bg', '--win-fg', '--win-bg', 4.5, 'text'],
+]);
+const STRUCTURAL_BORDER_PAIRS = Object.freeze([
+  ['line_strong_against_bg', '--line-strong', '--bg', 3, 'structural-border'],
+  ['line_strong_against_surface', '--line-strong', '--surface', 3, 'structural-border'],
+]);
+const FOCUS_PAIRS = Object.freeze([
+  ['focus_against_bg', '--focus', '--bg', 3, 'focus'],
+  ['focus_against_surface', '--focus', '--surface', 3, 'focus'],
+  ['focus_against_surface_2', '--focus', '--surface-2', 3, 'focus'],
+]);
+const REFERENCE_LINE_TOKENS = Object.freeze({
+  light: '#a89c88',
+  dark: '#4a535d',
+});
 const CONTRAST_PAIRS = Object.freeze([
-  ['text_on_background', '--color-text', '--color-bg', 4.5],
-  ['text_on_surface', '--color-text', '--color-surface', 4.5],
-  ['text_on_raised_surface', '--color-text', '--color-surface-raised', 4.5],
-  ['muted_on_background', '--color-muted', '--color-bg', 4.5],
-  ['muted_on_surface', '--color-muted', '--color-surface', 4.5],
-  ['accent_on_background', '--color-accent', '--color-bg', 4.5],
-  ['winner_on_surface', '--color-winner', '--color-surface', 4.5],
-  ['error_on_background', '--color-error', '--color-bg', 4.5],
-  ['border_against_background', '--color-border', '--color-bg', 3],
-  ['border_against_surface', '--color-border', '--color-surface', 3],
-  ['focus_against_background', '--color-focus', '--color-bg', 3],
-  ['focus_against_surface', '--color-focus', '--color-surface', 3],
-  ['focus_against_raised_surface', '--color-focus', '--color-surface-raised', 3],
+  ...TEXT_PAIRS,
+  ...STRUCTURAL_BORDER_PAIRS,
+  ...FOCUS_PAIRS,
 ]);
 
 function argument(name) {
@@ -160,8 +192,16 @@ function cssRules(css) {
 
 function declarations(body) {
   const tokens = new Map();
-  for (const declaration of body.matchAll(/(--color-[\w-]+)\s*:\s*(#[0-9a-f]{6})\s*;?/gi)) {
+  for (const declaration of body.matchAll(/(--[\w-]+)\s*:\s*(#[0-9a-f]{6})\s*;?/gi)) {
     tokens.set(declaration[1], declaration[2].toLowerCase());
+  }
+  return tokens;
+}
+
+function customProperties(body) {
+  const tokens = new Map();
+  for (const declaration of body.matchAll(/(--[\w-]+)\s*:\s*([^;{}]+)\s*;?/gi)) {
+    tokens.set(declaration[1], declaration[2].trim().replaceAll(/\s+/g, ' '));
   }
   return tokens;
 }
@@ -214,6 +254,56 @@ function darkPreferenceOverrides(rules) {
 
 function palettesEqual(left, right, requiredTokens) {
   return [...requiredTokens].every((token) => left.get(token) === right.get(token));
+}
+
+function plainRootProperties(rules) {
+  const tokens = new Map();
+  for (const rule of rules) {
+    if (rule.media.length > 0 || !selectorIncludes(rule.selector, ':root')) continue;
+    for (const [token, value] of customProperties(rule.body)) tokens.set(token, value);
+  }
+  return tokens;
+}
+
+function borderUses(body, token) {
+  const escaped = token.replaceAll('-', '\\-');
+  return new RegExp(
+    `\\bborder(?:-[\\w-]+)?\\s*:[^;{}]*var\\(\\s*${escaped}\\s*\\)`,
+    'i',
+  ).test(body);
+}
+
+function selectorParts(selector) {
+  return selector.split(',').map((part) => part.trim()).filter(Boolean);
+}
+
+function decorativeLineAudit(rules) {
+  const structuralSelectors = new Set();
+  for (const rule of rules) {
+    if (!borderUses(rule.body, '--line-strong')) continue;
+    for (const selector of selectorParts(rule.selector)) structuralSelectors.add(selector);
+  }
+
+  const uses = [];
+  const violations = [];
+  for (const rule of rules) {
+    if (!borderUses(rule.body, '--line')) continue;
+    for (const selector of selectorParts(rule.selector)) {
+      const structuralAncestor = [...structuralSelectors]
+        .filter((candidate) => selector.startsWith(`${candidate} `))
+        .sort((left, right) => right.length - left.length)[0] ?? null;
+      const result = Object.freeze({ selector, structuralAncestor });
+      uses.push(result);
+      if (!structuralAncestor) violations.push(result);
+    }
+  }
+  return Object.freeze({
+    assertion: 'Every CSS border using --line must target a descendant selector of a separately declared ancestor whose border uses --line-strong.',
+    structuralSelectors: [...structuralSelectors].sort(),
+    decorativeUses: uses,
+    violations,
+    pass: uses.length > 0 && violations.length === 0,
+  });
 }
 
 async function emittedCss(html, outputRoot) {
@@ -348,14 +438,20 @@ const themeBootstrapFailures = themeBootstrapResults.filter(
 
 const css = await emittedCss(homeHtml, outputRoot);
 const rules = cssRules(css);
-const requiredThemeTokens = new Set(
-  CONTRAST_PAIRS.flatMap(([, foreground, background]) => [foreground, background]),
-);
+const requiredThemeTokens = new Set(THEME_TOKENS);
+const plainRootTokens = plainRootProperties(rules);
+const sharedTokenAssertions = Object.freeze(Object.fromEntries(
+  Object.entries(SHARED_TOKENS).map(([token, expected]) => [
+    token.slice(2).replaceAll('-', '_'),
+    plainRootTokens.get(token) === expected,
+  ]),
+));
 const explicitPalettes = new Map(['light', 'dark'].map((theme) => {
   const tokens = themePalette(rules, theme);
   for (const token of requiredThemeTokens) {
     assert.ok(tokens.has(token), `missing ${theme} palette token ${token}`);
   }
+  assert.equal(tokens.size, requiredThemeTokens.size, `unexpected token in ${theme} palette`);
   return [theme, tokens];
 }));
 const noAttributeDefault = noAttributePalette(rules, false);
@@ -369,10 +465,11 @@ const themeContrasts = [...noAttributePalettes].map(([theme, tokens]) => {
   for (const token of requiredThemeTokens) {
     assert.ok(tokens.has(token), `missing no-attribute ${theme} palette token ${token}`);
   }
-  const pairs = CONTRAST_PAIRS.map(([name, foreground, background, minimum]) => {
+  const pairs = CONTRAST_PAIRS.map(([name, foreground, background, minimum, kind]) => {
     const ratio = contrastRatio(tokens.get(foreground), tokens.get(background));
     return Object.freeze({
       name,
+      kind,
       foreground: tokens.get(foreground),
       background: tokens.get(background),
       ratio: Number(ratio.toFixed(3)),
@@ -390,9 +487,27 @@ const themeContrasts = [...noAttributePalettes].map(([theme, tokens]) => {
     tightest,
   });
 });
+const referenceLineContrasts = themeContrasts.map(({ theme, tokens }) => {
+  const foreground = REFERENCE_LINE_TOKENS[theme];
+  const background = tokens['--surface'];
+  const ratio = contrastRatio(foreground, background);
+  return Object.freeze({
+    theme,
+    foreground,
+    background,
+    ratio: Number(ratio.toFixed(3)),
+    minimum: 3,
+    pass: ratio >= 3,
+  });
+});
 
 const hasEveryToken = (tokens) => [...requiredThemeTokens].every((token) => tokens.has(token));
+const legacyTokenPattern = new RegExp(`--${'color'}-[\\w-]+`, 'gi');
+const legacyTokens = [...new Set([...css.matchAll(legacyTokenPattern)].map((match) => match[0]))]
+  .sort();
+const decorativeLines = decorativeLineAudit(rules);
 const noJavaScriptThemeAssertions = Object.freeze({
+  plainRootDeclaresBothSharedTokens: Object.values(sharedTokenAssertions).every(Boolean),
   defaultDeclaresEveryTokenOnPlainRoot: hasEveryToken(noAttributeDefault),
   darkPreferenceOverridesEveryTokenOnPlainRoot: hasEveryToken(darkOverrides),
   darkPreferenceResolvesEveryToken: hasEveryToken(noAttributeDark),
@@ -419,9 +534,14 @@ const assertions = Object.freeze({
   themeIsAppliedBeforeFirstPaint: themeBootstrapFailures.length === 0,
   colorsResolveWithoutJavaScript: Object.values(noJavaScriptThemeAssertions).every(Boolean),
   notFoundIsRendered: Object.values(notFoundAssertions).every(Boolean),
+  emittedCssHasNoLegacyColorTokens: legacyTokens.length === 0,
+  referenceLineValuesFailStructuralThreshold: referenceLineContrasts.every(
+    (entry) => !entry.pass,
+  ),
   everyContrastPairPasses: themeContrasts.every(
     ({ pairs }) => pairs.every((entry) => entry.pass),
   ),
+  decorativeLinesStayInsideStructurallyBoundedComponents: decorativeLines.pass,
 });
 
 console.log(`STEP16_HTML=${JSON.stringify({
@@ -438,10 +558,20 @@ console.log(`STEP18_THEME_BOOTSTRAP=${JSON.stringify({
 })}`);
 console.log(`STEP18_NO_JS_CASCADE=${JSON.stringify({
   assertions: noJavaScriptThemeAssertions,
+  sharedTokens: Object.fromEntries(
+    Object.keys(SHARED_TOKENS).map((token) => [token, plainRootTokens.get(token)]),
+  ),
   defaultTokens: Object.fromEntries(noAttributeDefault),
   darkPreferenceTokens: Object.fromEntries(noAttributeDark),
 })}`);
-console.log(`STEP18_CONTRAST=${JSON.stringify(themeContrasts)}`);
+console.log(`STEP21_TOKEN_MIGRATION=${JSON.stringify({
+  requiredSharedTokens: Object.keys(SHARED_TOKENS),
+  requiredThemeTokens: THEME_TOKENS,
+  legacyTokens,
+})}`);
+console.log(`STEP21_BORDER_RULE=${JSON.stringify(decorativeLines)}`);
+console.log(`STEP21_REFERENCE_LINE_CONTRAST=${JSON.stringify(referenceLineContrasts)}`);
+console.log(`STEP21_CONTRAST=${JSON.stringify(themeContrasts)}`);
 console.log(`STEP16_ASSERTIONS=${JSON.stringify(assertions)}`);
 assert.ok(Object.values(assertions).every(Boolean), 'Step 16 accessibility assertions failed');
 console.log('STEP16_ACCESSIBILITY_STATUS=PASS');

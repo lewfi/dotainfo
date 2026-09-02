@@ -1,64 +1,78 @@
 :root {
   color-scheme: light;
-  --color-bg: #efede5;
-  --color-surface: #faf8f2;
-  --color-surface-raised: #f4f2e9;
-  --color-text: #16170f;
-  --color-muted: #5f6058;
-  --color-accent: #097049;
-  --color-winner: #0a6e4c;
-  --color-border: #84857a;
-  --color-focus: #1f5fbf;
-  --color-error: #b33325;
+  --sans: -apple-system, "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --bg: #f6f2ea;
+  --surface: #fffcf6;
+  --surface-2: #ece6db;
+  --line: #ded6c8;
+  --line-strong: #968b79;
+  --fg: #201e1a;
+  --fg-2: #544e45;
+  --fg-3: #6b6459;
+  --accent-a: #00673f;
+  --accent-b: #92361f;
+  --win-bg: #00673f;
+  --win-fg: #fffcf6;
+  --focus: #00579a;
   --radius-small: 0.35rem;
   --radius-medium: 0.75rem;
   --shadow-card: 0 0.5rem 1.5rem rgb(0 0 0 / 20%);
-  color: var(--color-text);
-  background: var(--color-bg);
+  color: var(--fg);
+  background: var(--bg);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
     color-scheme: dark;
-    --color-bg: #14160f;
-    --color-surface: #1c1f16;
-    --color-surface-raised: #252921;
-    --color-text: #f2f1e8;
-    --color-muted: #a9ab9c;
-    --color-accent: #4fcb98;
-    --color-winner: #7fe0b6;
-    --color-border: #7e8272;
-    --color-focus: #7dd3fc;
-    --color-error: #ff9e90;
+    --bg: #0f1114;
+    --surface: #171a1e;
+    --surface-2: #1e2227;
+    --line: #2a2f36;
+    --line-strong: #5f676f;
+    --fg: #e7eaed;
+    --fg-2: #aab2ba;
+    --fg-3: #8b949d;
+    --accent-a: #73cd9f;
+    --accent-b: #f59d87;
+    --win-bg: #73cd9f;
+    --win-fg: #0f1114;
+    --focus: #87dcf7;
   }
 }
 
 :root[data-theme='light'] {
   color-scheme: light;
-  --color-bg: #efede5;
-  --color-surface: #faf8f2;
-  --color-surface-raised: #f4f2e9;
-  --color-text: #16170f;
-  --color-muted: #5f6058;
-  --color-accent: #097049;
-  --color-winner: #0a6e4c;
-  --color-border: #84857a;
-  --color-focus: #1f5fbf;
-  --color-error: #b33325;
+  --bg: #f6f2ea;
+  --surface: #fffcf6;
+  --surface-2: #ece6db;
+  --line: #ded6c8;
+  --line-strong: #968b79;
+  --fg: #201e1a;
+  --fg-2: #544e45;
+  --fg-3: #6b6459;
+  --accent-a: #00673f;
+  --accent-b: #92361f;
+  --win-bg: #00673f;
+  --win-fg: #fffcf6;
+  --focus: #00579a;
 }
 
 :root[data-theme='dark'] {
   color-scheme: dark;
-  --color-bg: #14160f;
-  --color-surface: #1c1f16;
-  --color-surface-raised: #252921;
-  --color-text: #f2f1e8;
-  --color-muted: #a9ab9c;
-  --color-accent: #4fcb98;
-  --color-winner: #7fe0b6;
-  --color-border: #7e8272;
-  --color-focus: #7dd3fc;
-  --color-error: #ff9e90;
+  --bg: #0f1114;
+  --surface: #171a1e;
+  --surface-2: #1e2227;
+  --line: #2a2f36;
+  --line-strong: #5f676f;
+  --fg: #e7eaed;
+  --fg-2: #aab2ba;
+  --fg-3: #8b949d;
+  --accent-a: #73cd9f;
+  --accent-b: #f59d87;
+  --win-bg: #73cd9f;
+  --win-fg: #0f1114;
+  --focus: #87dcf7;
 }
 
 * {
@@ -67,14 +81,14 @@
 
 html {
   min-width: 20rem;
-  background: var(--color-bg);
+  background: var(--bg);
 }
 
 body {
   margin: 0;
-  color: var(--color-text);
-  background: var(--color-bg);
-  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  color: var(--fg);
+  background: var(--bg);
+  font-family: var(--sans);
   font-feature-settings: 'tnum' 1;
   font-size: 14px;
 }
@@ -85,11 +99,11 @@ a {
 }
 
 a:hover {
-  color: var(--color-accent);
+  color: var(--accent-a);
 }
 
 :focus-visible {
-  outline: 0.2rem solid var(--color-focus);
+  outline: 0.2rem solid var(--focus);
   outline-offset: 0.2rem;
 }
 
@@ -98,10 +112,10 @@ a:hover {
   z-index: 10;
   inset: 0.5rem auto auto 0.5rem;
   padding: 0.65rem 0.9rem;
-  border: 0.12rem solid var(--color-focus);
+  border: 0.12rem solid var(--focus);
   border-radius: var(--radius-small);
-  color: var(--color-text);
-  background: var(--color-surface-raised);
+  color: var(--fg);
+  background: var(--surface-2);
   transform: translateY(-200%);
 }
 
@@ -127,7 +141,7 @@ main {
 }
 
 .site-header {
-  border-bottom: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--line-strong);
 }
 
 .site-header nav {
@@ -152,7 +166,7 @@ main {
 
 .theme-control-label,
 .eyebrow {
-  color: var(--color-muted);
+  color: var(--fg-2);
   font-size: 10px;
   letter-spacing: 0.09em;
   text-transform: uppercase;
@@ -165,16 +179,16 @@ main {
 .theme-option {
   min-height: 2rem;
   padding-inline: 0.55rem;
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--line-strong);
   border-radius: var(--radius-small);
-  color: var(--color-text);
-  background: var(--color-surface);
+  color: var(--fg);
+  background: var(--surface);
   font: inherit;
   cursor: pointer;
 }
 
 .theme-option[aria-pressed='true'] {
-  background: var(--color-surface-raised);
+  background: var(--surface-2);
   font-weight: 700;
 }
 
@@ -201,7 +215,7 @@ main {
 
 .home-intro p:last-child {
   margin: 0;
-  color: var(--color-muted);
+  color: var(--fg-2);
   font-size: 13px;
 }
 
@@ -240,9 +254,9 @@ img {
   align-items: center;
   gap: 0.65rem;
   padding: 0.75rem 1rem;
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--line-strong);
   border-radius: 0;
-  background: var(--color-surface);
+  background: var(--surface);
 }
 
 .tier-control h2,
@@ -254,7 +268,7 @@ img {
 
 .tier-control label {
   margin-left: auto;
-  color: var(--color-muted);
+  color: var(--fg-2);
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.09em;
@@ -265,17 +279,17 @@ img {
   min-height: 2.75rem;
   margin-left: 0;
   padding-inline: 0.65rem 2rem;
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--line-strong);
   border-radius: 0;
-  color: var(--color-text);
-  background: var(--color-bg);
+  color: var(--fg);
+  background: var(--bg);
   font: inherit;
 }
 
 .hidden-count {
   flex-basis: 100%;
   margin: 0;
-  color: var(--color-muted);
+  color: var(--fg-2);
   font-size: 11px;
 }
 
@@ -291,7 +305,7 @@ img {
 
 .home-view > p {
   margin-block: 0.25rem 0;
-  color: var(--color-muted);
+  color: var(--fg-2);
   font-size: 11px;
 }
 
@@ -301,7 +315,7 @@ img {
   gap: 0.35rem 0.9rem;
   margin-block: 0.75rem;
   padding: 0;
-  color: var(--color-muted);
+  color: var(--fg-2);
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.09em;
@@ -317,17 +331,17 @@ img {
 }
 
 .detail-section {
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--line-strong);
   border-radius: 0;
-  background: var(--color-surface);
+  background: var(--surface);
   box-shadow: none;
 }
 
 .match-card {
   padding: 1rem 1.25rem;
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--line-strong);
   border-radius: 0;
-  background: var(--color-surface);
+  background: var(--surface);
 }
 
 .match-feed .match-card > article {
@@ -370,7 +384,7 @@ img {
 
 .match-heading span,
 .match-meta {
-  color: var(--color-muted);
+  color: var(--fg-2);
   font-size: 10px;
   letter-spacing: 0.09em;
   text-transform: uppercase;
@@ -417,11 +431,11 @@ img {
 }
 
 .teams .winner {
-  color: var(--color-winner);
+  color: var(--accent-a);
 }
 
 .teams small {
-  color: var(--color-muted);
+  color: var(--fg-2);
   font-size: 10px;
   font-weight: 800;
   letter-spacing: 0.09em;
@@ -429,7 +443,7 @@ img {
 }
 
 .teams .winner-label {
-  color: var(--color-winner);
+  color: var(--accent-a);
 }
 
 .match-meta {
@@ -453,7 +467,7 @@ img {
 }
 
 .historical-route[data-route-state="error"] {
-  color: var(--color-error);
+  color: var(--accent-b);
 }
 
 .historical-summary {
@@ -472,7 +486,7 @@ img {
 
 .detail-section > h2 {
   margin: 0 0 0.875rem;
-  color: var(--color-muted);
+  color: var(--fg-2);
   font-size: 10px;
   letter-spacing: 0.09em;
   text-transform: uppercase;
@@ -487,20 +501,20 @@ img {
 .advantage-graph svg {
   display: block;
   max-width: 100%;
-  color: var(--color-text);
-  background: var(--color-surface);
+  color: var(--fg);
+  background: var(--surface);
 }
 
 .advantage-graph figcaption {
   margin-top: 0.75rem;
-  color: var(--color-muted);
+  color: var(--fg-2);
   font-size: 0.875rem;
 }
 
 .draft-order {
   margin: 0;
   padding: 0;
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--line-strong);
   counter-reset: draft-order;
   list-style: none;
 }
@@ -512,7 +526,7 @@ img {
   gap: 0.75rem;
   min-height: 3rem;
   padding: 0.55rem 0.75rem;
-  border-bottom: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--line);
   counter-increment: draft-order;
   font-size: 13px;
 }
@@ -522,7 +536,7 @@ img {
 }
 
 .draft-order li::before {
-  color: var(--color-muted);
+  color: var(--fg-2);
   content: counter(draft-order, decimal-leading-zero);
   font-size: 10px;
   font-weight: 700;
@@ -533,7 +547,7 @@ img {
 .boxscore th[scope="row"] img {
   width: 26px;
   height: 26px;
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--line-strong);
   object-fit: cover;
 }
 
@@ -543,23 +557,23 @@ img {
 
 .boxscore {
   min-width: 0;
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--line-strong);
 }
 
 .boxscore h3 {
   margin: 0;
   padding: 0.875rem 1rem;
-  border-bottom: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--line);
   font-size: 13px;
   letter-spacing: -0.01em;
 }
 
-.boxscore-scroll-hint {
+.boxscore .boxscore-scroll-hint {
   display: none;
   margin: 0;
   padding: 0.55rem 1rem;
-  border-bottom: 1px solid var(--color-border);
-  color: var(--color-muted);
+  border-bottom: 1px solid var(--line);
+  color: var(--fg-2);
   font-size: 10px;
   letter-spacing: 0.09em;
   text-transform: uppercase;
@@ -585,13 +599,13 @@ img {
 .boxscore th,
 .boxscore td {
   padding: 0.8rem 1rem;
-  border-bottom: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--line);
   white-space: nowrap;
 }
 
 .boxscore thead {
-  color: var(--color-muted);
-  background: var(--color-surface-raised);
+  color: var(--fg-2);
+  background: var(--surface-2);
   font-size: 10px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -610,7 +624,7 @@ img {
 }
 
 .boxscore tbody tr:hover {
-  background: var(--color-surface-raised);
+  background: var(--surface-2);
 }
 
 .boxscore th[scope="row"] {
@@ -628,7 +642,7 @@ img {
 }
 
 .boxscore th small {
-  color: var(--color-muted);
+  color: var(--fg-2);
   font-size: 11px;
   font-weight: 400;
 }
@@ -639,8 +653,8 @@ img {
 }
 
 .site-footer {
-  border-top: 1px solid var(--color-border);
-  color: var(--color-muted);
+  border-top: 1px solid var(--line-strong);
+  color: var(--fg-2);
   font-size: 0.875rem;
 }
 
@@ -691,7 +705,7 @@ img {
     gap: 0.5rem 0.75rem;
   }
 
-  .boxscore-scroll-hint {
+  .boxscore .boxscore-scroll-hint {
     display: block;
   }
 

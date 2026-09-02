@@ -1176,8 +1176,9 @@ contain an icon reference and resolves each referenced asset against `dist/`. `s
 is reserved for static assets; it contains no `_redirects`, `_routes.json`, or deployment
 runtime configuration.
 
-**Theme system - step 18 complete.** The site keeps the original ten token names and defines
-these two complete sets:
+**Theme system - step 18 complete; palette superseded by step 21 below.** Step 18 originally
+kept the ten token names shown here; this table is historical and no longer describes the
+current emitted CSS:
 
 | Token | Light | Dark |
 |---|---|---|
@@ -1288,9 +1289,9 @@ Dire heading, an `aria-describedby` reference to the visible narrow-screen scrol
 the global focus indicator. Horizontal overflow is therefore contained, keyboard reachable,
 and explicitly labelled rather than silently widening the page.
 
-The graph reads `--color-text`, `--color-surface`, `--color-border`, `--color-accent`, and
-`--color-focus` from the computed theme for its axes, background, zero rule, Gold line, and
-Experience line. A `MutationObserver` re-renders the Plot when `<html data-theme>` changes.
+The graph reads `--fg`, `--surface`, `--line`, `--accent-a`, and `--focus` from the computed
+theme for its axes, background, zero rule, Gold line, and Experience line. A
+`MutationObserver` re-renders the Plot when `<html data-theme>` changes.
 In one headless Chrome session, the light render used border/accent/focus strokes
 `rgb(132, 133, 122)`, `rgb(9, 112, 73)`, and `rgb(31, 95, 191)`; clicking the existing Dark
 button without navigation changed them to `rgb(126, 130, 114)`, `rgb(79, 203, 152)`, and
@@ -1308,6 +1309,66 @@ not conditional dependency delivery.
 The final local build generated 1,590 HTML pages in 39,271.625 ms total at 23.009 ms/page.
 The immediately preceding run on the same machine measured 23.527 ms/page; the 2.2% decrease
 is ordinary run-to-run variation, not a material build-performance change.
+
+**Token migration for the second visual design - step 21 complete.**
+`design/reference-v2.html` is committed as a visual mock only. No component markup, layout,
+or page structure changed in this step; second-design home-feed and match-detail restyling
+remain reserved for steps 22 and 23.
+
+The current fifteen-token system comprises two shared font tokens and thirteen theme tokens:
+
+| Token | Light | Dark |
+|---|---|---|
+| `--sans` | `-apple-system, "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif` | shared |
+| `--mono` | `ui-monospace, SFMono-Regular, Menlo, Consolas, monospace` | shared |
+| `--bg` | `#F6F2EA` | `#0F1114` |
+| `--surface` | `#FFFCF6` | `#171A1E` |
+| `--surface-2` | `#ECE6DB` | `#1E2227` |
+| `--line` | `#DED6C8` | `#2A2F36` |
+| `--line-strong` | `#968B79` | `#5F676F` |
+| `--fg` | `#201E1A` | `#E7EAED` |
+| `--fg-2` | `#544E45` | `#AAB2BA` |
+| `--fg-3` | `#6B6459` | `#8B949D` |
+| `--accent-a` | `#00673F` | `#73CD9F` |
+| `--accent-b` | `#92361F` | `#F59D87` |
+| `--win-bg` | `#00673F` | `#73CD9F` |
+| `--win-fg` | `#FFFCF6` | `#0F1114` |
+| `--focus` | `#00579A` | `#87DCF7` |
+
+The reference expresses several values in `oklch()`. The implementation uses their supplied
+exact hex conversions because the step 16 audit parses hex from emitted CSS. No legacy
+`--color-*` alias or reference remains in `site/src/` or emitted CSS. Light remains on plain
+`:root`: that preserves step 18's established no-JavaScript fallback, while the plain-root
+`prefers-color-scheme: dark` override still honors a dark operating-system preference. The
+explicit light and dark attribute selectors remain after the media rule and therefore win.
+
+The step 16 audit now checks all five text foregrounds against all three surfaces plus the
+win foreground/background pair at 4.5:1, both structural `--line-strong` pairs at 3:1, and
+focus against all three surfaces at 3:1. The tightest light pair is `--line-strong` against
+`--bg` at **3.002:1**; the tightest dark pair is `--line-strong` against `--surface` at
+**3.039:1**. The reference's original line values independently reproduce the stated
+failures: light `#A89C88` against `--surface` is **2.637:1**, and dark `#4A535D` against
+`--surface` is **2.233:1**.
+
+The border rule is now role-specific. `--line-strong` identifies component boundaries,
+controls, and state and must pass 3:1; `--line` is exempt only for internal decorative
+dividers. The emitted-CSS assertion checks every border declaration using `--line`: its
+selector must be a strict descendant of a separately declared ancestor selector whose own
+border uses `--line-strong`. This proves a decorative line is not the sole component
+boundary. Deliberately changing the match-card boundary to `--line` fails this assertion;
+deliberately restoring the reference's light structural line fails both structural contrast
+pairs at 2.419:1 against `--bg` and 2.637:1 against `--surface`.
+
+Headless Chrome was run with script execution disabled before navigation and with light and
+dark colour preferences emulated separately. Both renders retained no `data-theme` attribute
+and resolved all fifteen tokens. Body background/text were `rgb(246, 242, 234)` /
+`rgb(32, 30, 26)` in light and `rgb(15, 17, 20)` / `rgb(231, 234, 237)` in dark.
+
+The final step 21 build generated 1,538 HTML pages in 43,185.008 ms total at 26.271 ms/page.
+The immediately preceding pre-change baseline run by the same agent on this machine measured
+38.671 ms/page across 1,533 pages; the 32.1% decrease is treated as run-to-run variation, not
+as a performance claim. The differing page counts reflect the moving trailing-90-day window
+and seven matches added by two ingest commits fetched before final verification.
 
 ### v1 acceptance criteria
 
@@ -1755,3 +1816,11 @@ These steps continue the canonical numbering in `AGENTS.md`.
     themes and an in-page toggle in a browser; contain the seven-column table at roughly
     380px in a labelled, keyboard-focusable horizontal scroll region; and measure the shared
     recent-page client bundle before and after without removing Observable Plot.
+21. **Token migration for the second visual design.** Commit `design/reference-v2.html` as a
+    visual reference only; replace the original ten colour-token names with the complete
+    fifteen-token font-and-colour system; preserve the step 18 cascade and no-JavaScript
+    behavior; and classify structural and decorative lines without changing component
+    markup, layout, or page structure. Approval gate: no legacy token remains in source or
+    emitted CSS, every text/focus/structural contrast pair passes in both themes, decorative
+    borders are provably inside a separately bounded component, both deliberate audit
+    violations fail, and script-disabled browser renders follow both colour preferences.

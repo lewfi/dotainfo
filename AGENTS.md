@@ -27,6 +27,7 @@ Refer to steps by these numbers only. Do not renumber.
 18. Theme token system and dual light/dark modes
 19. Match summary card and home feed styling
 20. Match detail page styling
+21. Token migration for the second visual design
 
 ## Never
 

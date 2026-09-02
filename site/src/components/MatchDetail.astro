@@ -140,11 +140,11 @@ const boxscores = [
     const styles = getComputedStyle(root);
     const token = (name) => styles.getPropertyValue(name).trim();
     return {
-      text: token('--color-text'),
-      surface: token('--color-surface'),
-      border: token('--color-border'),
-      gold: token('--color-accent'),
-      experience: token('--color-focus'),
+      text: token('--fg'),
+      surface: token('--surface'),
+      border: token('--line'),
+      gold: token('--accent-a'),
+      experience: token('--focus'),
     };
   }
 
