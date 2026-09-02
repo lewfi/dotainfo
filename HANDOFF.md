@@ -1175,6 +1175,43 @@ contain an icon reference and resolves each referenced asset against `dist/`. `s
 is reserved for static assets; it contains no `_redirects`, `_routes.json`, or deployment
 runtime configuration.
 
+**Theme system - step 18 complete.** The site keeps the original ten token names and defines
+these two complete sets on `html[data-theme]`:
+
+| Token | Light | Dark |
+|---|---|---|
+| `--color-bg` | `#EFEDE5` | `#14160F` |
+| `--color-surface` | `#FAF8F2` | `#1C1F16` |
+| `--color-surface-raised` | `#F4F2E9` | `#252921` |
+| `--color-text` | `#16170F` | `#F2F1E8` |
+| `--color-muted` | `#5F6058` | `#A9AB9C` |
+| `--color-accent` | `#097049` | `#4FCB98` |
+| `--color-winner` | `#0A6E4C` | `#7FE0B6` |
+| `--color-border` | `#84857A` | `#7E8272` |
+| `--color-focus` | `#1F5FBF` | `#7DD3FC` |
+| `--color-error` | `#B33325` | `#FF9E90` |
+
+The accessibility audit reads these values from the emitted Astro stylesheet rather than a
+hardcoded palette copy and checks all thirteen step 16 pairs independently in both themes.
+The tightest light pair is border against background at **3.189:1** (3:1 required); the
+tightest dark pair is border against surface at **4.235:1** (3:1 required).
+
+A blocking inline script in `<head>` reads the explicit `dotainfo-theme` local-storage value
+and synchronously sets the effective `data-theme` before the first stylesheet. With no valid
+stored value, it derives the theme from `prefers-color-scheme`; while no explicit choice
+exists, operating-system preference changes update the page. The header exposes native Light
+and Dark buttons whose `aria-pressed` values and visible check mark identify the selection.
+Choosing either persists it, and the shared layout supplies the same behavior to `404.html`
+before its client-rendered historical content runs. The body uses the no-download system
+stack `ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif`, 14px base
+text, and tabular numerals; micro-labels are muted 10px uppercase text at 0.09em spacing.
+
+`design/reference.html` remains a visual mock only. Its live ticker, search, user accounts,
+and team/player pages remain deferred under section 8; its standings, brackets, head-to-head,
+and win-probability features remain unbuilt because the data model does not support them.
+Cards, tables, and the advantage graph also retain their step 17 presentation until the
+separate step 19 component-restyling work.
+
 ### v1 acceptance criteria
 
 - [ ] `npm run build` reports a warning at 10 minutes and fails before Cloudflare's 20-minute cap
@@ -1599,3 +1636,11 @@ These steps continue the canonical numbering in `AGENTS.md`.
     the root directory, build command, output directory, and production project in the
     Cloudflare dashboard afterward. Approval gate: link integrity passes for static and
     payload-resolved routes, and the measured build remains below Cloudflare's 20-minute cap.
+18. **Theme token system and dual light/dark modes.** Define complete light and dark values
+    for the existing ten colour tokens, apply the effective theme before first paint, persist
+    an explicit user choice, and otherwise follow `prefers-color-scheme`. Use the reference's
+    14px system type and 10px uppercase micro-label primitives without restyling cards, tables,
+    or the advantage graph; that component work belongs to step 19. Approval gate: the emitted
+    CSS contains both complete token sets, every step 16 contrast pair passes in both themes,
+    every emitted page runs the blocking theme bootstrap before its first stylesheet, and the
+    keyboard-operable pressed-state control is present on `404.html` as well as static pages.

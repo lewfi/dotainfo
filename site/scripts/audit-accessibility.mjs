@@ -120,12 +120,59 @@ function contrastRatio(foreground, background) {
   return (values[0] + 0.05) / (values[1] + 0.05);
 }
 
-function palette(css) {
+function themePalette(css, theme) {
   const tokens = new Map();
-  for (const match of css.matchAll(/(--color-[\w-]+)\s*:\s*(#[0-9a-f]{6})\s*;/gi)) {
-    tokens.set(match[1], match[2].toLowerCase());
+  const themeSelector = new RegExp(`data-theme\\s*=\\s*['"]?${theme}['"]?`, 'i');
+  for (const rule of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+    if (!themeSelector.test(rule[1])) continue;
+    for (const declaration of rule[2].matchAll(/(--color-[\w-]+)\s*:\s*(#[0-9a-f]{6})\s*;?/gi)) {
+      tokens.set(declaration[1], declaration[2].toLowerCase());
+    }
   }
   return tokens;
+}
+
+async function emittedCss(html, outputRoot) {
+  const chunks = [...html.matchAll(/<style\b[^>]*>([\s\S]*?)<\/style>/gi)]
+    .map((match) => match[1]);
+  const links = [...html.matchAll(/<link\b[^>]*>/gi)]
+    .map((match) => attributes(match[0]))
+    .filter((link) => (link.get('rel') ?? '').toLowerCase().split(/\s+/).includes('stylesheet'));
+  for (const link of links) {
+    const href = link.get('href') ?? '';
+    const pathname = new URL(href, 'https://dotainfo.invalid/').pathname;
+    const file = path.resolve(outputRoot, `.${decodeURIComponent(pathname)}`);
+    assert.ok(
+      file.startsWith(`${outputRoot}${path.sep}`),
+      `emitted stylesheet escaped dist: ${href}`,
+    );
+    chunks.push(await readFile(file, 'utf8'));
+  }
+  assert.ok(chunks.length > 0, 'no emitted CSS found');
+  return chunks.join('\n');
+}
+
+function themeBootstrapAudit(html) {
+  const head = html.match(/<head\b[^>]*>([\s\S]*?)<\/head>/i)?.[1] ?? '';
+  const bootstrap = head.match(/<script\b([^>]*)data-theme-bootstrap([^>]*)>([\s\S]*?)<\/script>/i);
+  const bootstrapTag = bootstrap ? `<script${bootstrap[1]}data-theme-bootstrap${bootstrap[2]}>` : '';
+  const bootstrapAttributes = attributes(bootstrapTag);
+  const bootstrapIndex = bootstrap ? head.indexOf(bootstrap[0]) : -1;
+  const stylesheetIndex = head.search(/<link\b[^>]*\brel=["'][^"']*stylesheet/i);
+  const source = bootstrap?.[3] ?? '';
+  return Object.freeze({
+    blockingInlineScript: bootstrapIndex >= 0
+      && !bootstrapAttributes.has('src')
+      && !bootstrapAttributes.has('async')
+      && !bootstrapAttributes.has('defer')
+      && (bootstrapAttributes.get('type') ?? '').toLowerCase() !== 'module',
+    beforeFirstStylesheet: bootstrapIndex >= 0
+      && stylesheetIndex >= 0
+      && bootstrapIndex < stylesheetIndex,
+    readsPersistentChoice: /localStorage\.getItem\(storageKey\)/.test(source),
+    fallsBackToColorScheme: /prefers-color-scheme:\s*dark/.test(source),
+    setsHtmlThemeSynchronously: /document\.documentElement\.dataset\.theme\s*=\s*theme/.test(source),
+  });
 }
 
 const distArgument = argument('--dist');
@@ -176,19 +223,73 @@ const notFoundAssertions = Object.freeze({
   renderedNotFoundMessage: /The requested page does not exist\./i.test(notFoundHtml),
 });
 
-const css = await readFile(new URL('../src/styles/global.css', import.meta.url), 'utf8');
-const tokens = palette(css);
-const contrasts = CONTRAST_PAIRS.map(([name, foreground, background, minimum]) => {
-  assert.ok(tokens.has(foreground), `missing palette token ${foreground}`);
-  assert.ok(tokens.has(background), `missing palette token ${background}`);
-  const ratio = contrastRatio(tokens.get(foreground), tokens.get(background));
+const themeButtons = [...homeHtml.matchAll(
+  /<button\b[^>]*\bdata-theme-option=["'](light|dark)["'][^>]*>/gi,
+)];
+const themeButtonValues = new Set(themeButtons.map((match) => match[1].toLowerCase()));
+const themeControlScript = homeHtml.match(
+  /<script\b[^>]*data-theme-controls[^>]*>([\s\S]*?)<\/script>/i,
+)?.[1] ?? '';
+const themeControlAssertions = Object.freeze({
+  hasLightAndDarkButtons: themeButtonValues.size === 2
+    && themeButtonValues.has('light')
+    && themeButtonValues.has('dark'),
+  nativeKeyboardButtons: themeButtons.every((match) => {
+    const button = attributes(match[0]);
+    return (button.get('type') ?? '').toLowerCase() === 'button'
+      && !button.has('disabled')
+      && button.get('tabindex') !== '-1';
+  }),
+  selectedStateInMarkup: themeButtons.every(
+    (match) => attributes(match[0]).has('aria-pressed'),
+  ),
+  visibleSelectedIndicator: /theme-option-check/i.test(homeHtml),
+  persistsExplicitChoice: /localStorage\.setItem\(storageKey, theme\)/.test(themeControlScript),
+  followsPreferenceWithoutChoice: /if\s*\(!storedTheme\(\)\)/.test(themeControlScript),
+  availableOn404: /data-theme-option=["']light["']/i.test(notFoundHtml)
+    && /data-theme-option=["']dark["']/i.test(notFoundHtml)
+    && /data-theme-controls/i.test(notFoundHtml),
+});
+
+const themeBootstrapResults = [];
+for (const file of pages) {
+  themeBootstrapResults.push(Object.freeze({
+    path: path.relative(process.cwd(), file).replaceAll('\\', '/'),
+    assertions: themeBootstrapAudit(await readFile(file, 'utf8')),
+  }));
+}
+const themeBootstrapFailures = themeBootstrapResults.filter(
+  (page) => !Object.values(page.assertions).every(Boolean),
+);
+
+const css = await emittedCss(homeHtml, outputRoot);
+const requiredThemeTokens = new Set(
+  CONTRAST_PAIRS.flatMap(([, foreground, background]) => [foreground, background]),
+);
+const themeContrasts = ['light', 'dark'].map((theme) => {
+  const tokens = themePalette(css, theme);
+  for (const token of requiredThemeTokens) {
+    assert.ok(tokens.has(token), `missing ${theme} palette token ${token}`);
+  }
+  const pairs = CONTRAST_PAIRS.map(([name, foreground, background, minimum]) => {
+    const ratio = contrastRatio(tokens.get(foreground), tokens.get(background));
+    return Object.freeze({
+      name,
+      foreground: tokens.get(foreground),
+      background: tokens.get(background),
+      ratio: Number(ratio.toFixed(3)),
+      minimum,
+      pass: ratio >= minimum,
+    });
+  });
+  const tightest = pairs.reduce((current, entry) => (
+    entry.ratio < current.ratio ? entry : current
+  ));
   return Object.freeze({
-    name,
-    foreground: tokens.get(foreground),
-    background: tokens.get(background),
-    ratio: Number(ratio.toFixed(3)),
-    minimum,
-    pass: ratio >= minimum,
+    theme,
+    tokens: Object.fromEntries(tokens),
+    pairs,
+    tightest,
   });
 });
 
@@ -199,8 +300,12 @@ const assertions = Object.freeze({
     (page) => page.assertions.internalPageLinksUseTrailingSlash,
   ),
   tierControlIsKeyboardAndAtAccessible: Object.values(tierAssertions).every(Boolean),
+  themeControlIsKeyboardAndAccessible: Object.values(themeControlAssertions).every(Boolean),
+  themeIsAppliedBeforeFirstPaint: themeBootstrapFailures.length === 0,
   notFoundIsRendered: Object.values(notFoundAssertions).every(Boolean),
-  everyContrastPairPasses: contrasts.every((entry) => entry.pass),
+  everyContrastPairPasses: themeContrasts.every(
+    ({ pairs }) => pairs.every((entry) => entry.pass),
+  ),
 });
 
 console.log(`STEP16_HTML=${JSON.stringify({
@@ -210,7 +315,12 @@ console.log(`STEP16_HTML=${JSON.stringify({
 })}`);
 console.log(`STEP16_TIER_CONTROL=${JSON.stringify(tierAssertions)}`);
 console.log(`STEP16_NOT_FOUND=${JSON.stringify(notFoundAssertions)}`);
-console.log(`STEP16_CONTRAST=${JSON.stringify(contrasts)}`);
+console.log(`STEP18_THEME_CONTROL=${JSON.stringify(themeControlAssertions)}`);
+console.log(`STEP18_THEME_BOOTSTRAP=${JSON.stringify({
+  pages: themeBootstrapResults.length,
+  failures: themeBootstrapFailures,
+})}`);
+console.log(`STEP18_CONTRAST=${JSON.stringify(themeContrasts)}`);
 console.log(`STEP16_ASSERTIONS=${JSON.stringify(assertions)}`);
 assert.ok(Object.values(assertions).every(Boolean), 'Step 16 accessibility assertions failed');
 console.log('STEP16_ACCESSIBILITY_STATUS=PASS');

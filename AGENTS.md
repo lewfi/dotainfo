@@ -24,6 +24,7 @@ Refer to steps by these numbers only. Do not renumber.
 15. Historical summary artifacts and catch-all route
 16. Accessibility, responsive styling, and build profiling
 17. Cloudflare deployment
+18. Theme token system and dual light/dark modes
 
 ## Never
 

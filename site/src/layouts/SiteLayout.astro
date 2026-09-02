@@ -16,9 +16,28 @@ const {
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <meta name="theme-color" content="#EFEDE5" data-theme-color />
+    <script is:inline data-theme-bootstrap>
+      (() => {
+        const storageKey = 'dotainfo-theme';
+        let storedTheme = null;
+        try {
+          const candidate = window.localStorage.getItem(storageKey);
+          if (candidate === 'light' || candidate === 'dark') storedTheme = candidate;
+        } catch {
+          // Storage can be unavailable in privacy-restricted browsing contexts.
+        }
+        const theme = storedTheme
+          ?? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+        document.documentElement.dataset.theme = theme;
+        document.querySelector('[data-theme-color]')?.setAttribute(
+          'content',
+          theme === 'dark' ? '#14160F' : '#EFEDE5',
+        );
+      })();
+    </script>
     <meta name="description" content={description} />
     <meta name="viewport" content="width=device-width" />
-    <meta name="theme-color" content="#11151c" />
     <meta name="generator" content={Astro.generator} />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <title>{title}</title>
@@ -29,7 +48,65 @@ const {
       <header class="site-header">
         <nav aria-label="Primary navigation">
           <a class="site-name" href="/">Dota 2 Pro Stats</a>
+          <div class="theme-control" role="group" aria-label="Theme">
+            <span class="theme-control-label">Theme</span>
+            <button
+              class="theme-option"
+              type="button"
+              data-theme-option="light"
+              aria-pressed="false"
+            ><span class="theme-option-check" aria-hidden="true">&#10003;</span> Light</button>
+            <button
+              class="theme-option"
+              type="button"
+              data-theme-option="dark"
+              aria-pressed="false"
+            ><span class="theme-option-check" aria-hidden="true">&#10003;</span> Dark</button>
+          </div>
         </nav>
+        <script is:inline data-theme-controls>
+          (() => {
+            const storageKey = 'dotainfo-theme';
+            const root = document.documentElement;
+            const media = window.matchMedia('(prefers-color-scheme: dark)');
+            const options = document.querySelectorAll('[data-theme-option]');
+
+            function storedTheme() {
+              try {
+                const candidate = window.localStorage.getItem(storageKey);
+                return candidate === 'light' || candidate === 'dark' ? candidate : null;
+              } catch {
+                return null;
+              }
+            }
+
+            function applyTheme(theme, persist = false) {
+              root.dataset.theme = theme;
+              document.querySelector('[data-theme-color]')?.setAttribute(
+                'content',
+                theme === 'dark' ? '#14160F' : '#EFEDE5',
+              );
+              for (const option of options) {
+                option.setAttribute('aria-pressed', String(option.dataset.themeOption === theme));
+              }
+              if (persist) {
+                try {
+                  window.localStorage.setItem(storageKey, theme);
+                } catch {
+                  // The selected theme still applies for the current page.
+                }
+              }
+            }
+
+            for (const option of options) {
+              option.addEventListener('click', () => applyTheme(option.dataset.themeOption, true));
+            }
+            media.addEventListener('change', (event) => {
+              if (!storedTheme()) applyTheme(event.matches ? 'dark' : 'light');
+            });
+            applyTheme(root.dataset.theme);
+          })();
+        </script>
       </header>
       <main id="main-content" tabindex="-1">
         <slot />
