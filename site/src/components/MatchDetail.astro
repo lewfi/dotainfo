@@ -43,10 +43,15 @@ const boxscores = [
       <figure
         class="advantage-graph"
         data-advantage-graph
+        role="img"
+        aria-labelledby="advantage-title"
+        aria-describedby="advantage-description"
         data-gold-values={JSON.stringify(model.advantage.gold)}
         data-xp-values={model.advantage.xp ? JSON.stringify(model.advantage.xp) : undefined}
       >
-        <figcaption>Gold and experience advantage by minute; negative values favor Dire.</figcaption>
+        <figcaption id="advantage-description">
+          Gold and experience advantage by minute; negative values favor Dire.
+        </figcaption>
       </figure>
     </section>
   )}
@@ -135,6 +140,8 @@ const boxscores = [
         Plot.lineY(series, { x: 'minute', y: 'value', stroke: 'type' }),
       ],
     });
+    plot.setAttribute('aria-hidden', 'true');
+    plot.setAttribute('focusable', 'false');
     figure.insertBefore(plot, figure.firstChild);
   }
 </script>

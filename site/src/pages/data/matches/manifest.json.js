@@ -1,7 +1,7 @@
-import { historicalManifest, serializeArtifact } from '../../../data/historical-artifacts.mjs';
+import { historicalManifestArtifact } from '../../../data/historical-artifacts.mjs';
 
 export async function GET() {
-  return new Response(serializeArtifact(await historicalManifest()), {
+  return new Response(await historicalManifestArtifact(), {
     headers: { 'Content-Type': 'application/json; charset=utf-8' },
   });
 }

@@ -15,9 +15,10 @@ const { reader, references } = await recentBuildContext();
 const detail = await reader.detail(matchId);
 if (!detail) throw new Error(`recent match ${matchId} was not found during rendering`);
 const model = createMatchDetailModel(detail, references);
-const title = `${model.summary.teams.radiant.name.display} vs ${model.summary.teams.dire.name.display}`;
+const matchup = `${model.summary.teams.radiant.name.display} vs ${model.summary.teams.dire.name.display}`;
+const title = `${matchup} — match ${matchId}`;
 ---
 
-<SiteLayout title={title} description={`${title} — full match details and boxscores.`}>
+<SiteLayout title={title} description={`${matchup}, match ${matchId}: full details and boxscores.`}>
   <MatchDetail model={model} />
 </SiteLayout>

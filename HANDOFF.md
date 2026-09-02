@@ -1059,8 +1059,10 @@ pre-render all roughly 147,495-and-growing match pages. Pre-render **only matche
 last 90 days**. Do not size the 90-day pre-render window from the ~71/day long-run average.
 The trailing-90-day match count is volatile in both directions: 2026-01 through 2026-03
 totalled 7,294 matches, above the original ~6,400 estimate, while 2026-06 through 2026-08
-totalled 2,169. Plan for a 2,000–7,500 page range, and count the real window at build time
-rather than assuming a figure. Older matches resolve through a catch-all route that first
+totalled 2,169. The peak trailing-90-day count in committed history is 8,673, ending at
+2025-10-24T17:41:06Z; use that peak for build projections rather than calibrating against the
+unusually quiet current window. Plan for a 2,000–8,700 page range, and count the real window
+at build time rather than assuming a figure. Older matches resolve through a catch-all route that first
 uses the compact month/minimum-ID/maximum-ID range manifest and then reads the candidate
 month's summary JSON client-side. The payload is the match row excluding
 `radiant_gold_adv` and `radiant_xp_adv`; its match IDs provide the per-month existence check.
@@ -1492,6 +1494,8 @@ These steps continue the canonical numbering in `AGENTS.md`.
     in step 12 so the split does not duplicate presentation logic.
 16. **Accessibility, responsive styling, and build profiling.** Finish the plain-CSS visual
     system, keyboard/focus behavior, metadata, error states, and reproducible timing output.
+    Profile the measured build against the committed-history peak of 8,673 trailing-90-day
+    matches, ending 2025-10-24T17:41:06Z, as well as against the current build window.
     Approval gate: accessibility checks pass, representative narrow/wide renders are reviewed,
     and a clean local production build completes under ten minutes.
 17. **Cloudflare deployment.** Add only the deployment configuration needed for the approved

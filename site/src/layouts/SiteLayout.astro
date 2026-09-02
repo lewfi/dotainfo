@@ -18,15 +18,19 @@ const {
     <meta charset="UTF-8" />
     <meta name="description" content={description} />
     <meta name="viewport" content="width=device-width" />
+    <meta name="theme-color" content="#11151c" />
     <meta name="generator" content={Astro.generator} />
     <title>{title}</title>
   </head>
   <body>
+    <a class="skip-link" href="#main-content">Skip to main content</a>
     <div class="site-shell">
       <header class="site-header">
-        <a class="site-name" href="/">Dota 2 Pro Stats</a>
+        <nav aria-label="Primary navigation">
+          <a class="site-name" href="/">Dota 2 Pro Stats</a>
+        </nav>
       </header>
-      <main>
+      <main id="main-content" tabindex="-1">
         <slot />
       </main>
       <footer class="site-footer">

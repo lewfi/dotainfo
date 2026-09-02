@@ -30,7 +30,10 @@ function isoFromEpoch(epoch) {
 }
 ---
 
-<SiteLayout title="Recent Dota 2 matches">
+<SiteLayout
+  title="Recent Dota 2 matches"
+  description="The newest 100 professional Dota 2 match results, filterable by league tier."
+>
   <section class="home-intro" aria-labelledby="page-title">
     <p class="eyebrow">Dota 2 professional matches</p>
     <h1 id="page-title">Recent match results</h1>
@@ -40,7 +43,13 @@ function isoFromEpoch(epoch) {
   <section class="tier-control" aria-labelledby="tier-control-title">
     <h2 id="tier-control-title">League tiers</h2>
     <label for="home-view-select">Show</label>
-    <select id="home-view-select" data-home-view-select>
+    <select
+      id="home-view-select"
+      data-home-view-select
+      data-current-view={home.views[0].id}
+      aria-describedby="tier-filter-status tier-filter-range"
+      aria-controls={home.views.map((view) => `home-view-${view.id}`).join(' ')}
+    >
       {home.views.map((view, index) => (
         <option
           value={view.id}
@@ -53,9 +62,10 @@ function isoFromEpoch(epoch) {
         </option>
       ))}
     </select>
-    <p class="hidden-count" aria-live="polite">
+    <p id="tier-filter-status" class="hidden-count" role="status" aria-live="polite">
+      Current view: <strong data-current-view-output>{home.views[0].label}</strong>.
       <strong data-hidden-count-output>{home.views[0].hiddenCount}</strong> matches hidden.
-      <span data-hidden-range>
+      <span id="tier-filter-range" data-hidden-range>
         Counted from {isoFromEpoch(home.views[0].range.startEpoch)} inclusive to
         {' '}{isoFromEpoch(home.views[0].range.endEpoch)} exclusive.
       </span>
@@ -68,6 +78,7 @@ function isoFromEpoch(epoch) {
     const select = document.querySelector('[data-home-view-select]');
     const hiddenCount = document.querySelector('[data-hidden-count-output]');
     const hiddenRange = document.querySelector('[data-hidden-range]');
+    const currentView = document.querySelector('[data-current-view-output]');
 
     function selectHomeView() {
       const option = select?.selectedOptions[0];
@@ -75,6 +86,8 @@ function isoFromEpoch(epoch) {
       for (const view of document.querySelectorAll('[data-home-view]')) {
         view.hidden = view.dataset.homeView !== option.value;
       }
+      select.dataset.currentView = option.value;
+      currentView.textContent = option.textContent.trim();
       hiddenCount.textContent = option.dataset.hiddenCount;
       hiddenRange.textContent = `Counted from ${option.dataset.rangeStart} inclusive to ${option.dataset.rangeEnd} exclusive.`;
     }

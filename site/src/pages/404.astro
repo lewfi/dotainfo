@@ -10,11 +10,17 @@ const serializedReferences = JSON.stringify(references).replaceAll('<', '\\u003c
   title="Match lookup — Dota 2 Pro Stats"
   description="Historical professional Dota 2 match summary lookup."
 >
-  <article class="historical-route" data-historical-route data-route-state="loading">
-    <p class="eyebrow">Historical match</p>
-    <h1 data-historical-title>Loading match…</h1>
+  <article
+    class="historical-route"
+    data-historical-route
+    data-route-state="not-found"
+    aria-live="polite"
+    aria-busy="false"
+  >
+    <p class="eyebrow">Match archive</p>
+    <h1 data-historical-title>Page not found</h1>
     <div data-historical-content>
-      <p>Checking the committed match archive.</p>
+      <p>The requested page does not exist.</p>
     </div>
   </article>
   <script
@@ -39,6 +45,7 @@ const serializedReferences = JSON.stringify(references).replaceAll('<', '\\u003c
 
   function setNotFound(message) {
     route.dataset.routeState = 'not-found';
+    route.setAttribute('aria-busy', 'false');
     title.textContent = 'Match not found';
     content.replaceChildren(Object.assign(document.createElement('p'), { textContent: message }));
   }
@@ -46,6 +53,12 @@ const serializedReferences = JSON.stringify(references).replaceAll('<', '\\u003c
   if (!matchId) {
     setNotFound('The requested page does not exist.');
   } else {
+    route.dataset.routeState = 'loading';
+    route.setAttribute('aria-busy', 'true');
+    title.textContent = 'Loading match…';
+    content.replaceChildren(Object.assign(document.createElement('p'), {
+      textContent: 'Checking the committed match archive.',
+    }));
     try {
       const manifestResponse = await fetch('/data/matches/manifest.json');
       if (!manifestResponse.ok) throw new Error('Unable to load the historical manifest.');
@@ -62,6 +75,7 @@ const serializedReferences = JSON.stringify(references).replaceAll('<', '\\u003c
       if (resolved.status === 'not-found') {
         const view = historicalRouteView(matchId, resolved, new ReferenceResolver());
         route.dataset.routeState = view.status;
+        route.setAttribute('aria-busy', 'false');
         title.textContent = view.title;
         content.innerHTML = view.markup;
       } else {
@@ -74,11 +88,13 @@ const serializedReferences = JSON.stringify(references).replaceAll('<', '\\u003c
           new ReferenceResolver(referenceData),
         );
         route.dataset.routeState = view.status;
+        route.setAttribute('aria-busy', 'false');
         title.textContent = view.title;
         content.innerHTML = view.markup;
       }
     } catch (error) {
       route.dataset.routeState = 'error';
+      route.setAttribute('aria-busy', 'false');
       title.textContent = 'Match unavailable';
       content.replaceChildren(Object.assign(document.createElement('p'), {
         textContent: 'The historical match archive could not be loaded.',

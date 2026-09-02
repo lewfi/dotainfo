@@ -1,4 +1,6 @@
 import { buildDataPaths } from '../build-context.mjs';
+import { readFile } from 'node:fs/promises';
+import path from 'node:path';
 import { createCatalog, regularShards } from './catalog.mjs';
 import { openDuckDB, queryRows, sourceUnionSql } from './duckdb.mjs';
 import { loadReferenceRows } from './references.mjs';
@@ -15,6 +17,12 @@ let referenceRowsPromise;
 
 export function serializeArtifact(value) {
   return `${JSON.stringify(value)}\n`;
+}
+
+async function pregeneratedArtifact(filename) {
+  const root = process.env.DOTAINFO_PREGENERATED_ARTIFACT_ROOT;
+  if (!root) return null;
+  return readFile(path.join(path.resolve(root), filename), 'utf8');
 }
 
 export async function historicalMatchShards() {
@@ -52,6 +60,11 @@ export async function historicalMonthPayload(month) {
   return payloadPromises.get(month);
 }
 
+export async function historicalMonthArtifact(month) {
+  return await pregeneratedArtifact(`${month}.json`)
+    ?? serializeArtifact(await historicalMonthPayload(month));
+}
+
 export async function historicalManifest() {
   if (!manifestPromise) {
     manifestPromise = (async () => {
@@ -70,6 +83,11 @@ export async function historicalManifest() {
     })();
   }
   return manifestPromise;
+}
+
+export async function historicalManifestArtifact() {
+  return await pregeneratedArtifact('manifest.json')
+    ?? serializeArtifact(await historicalManifest());
 }
 
 export async function historicalSummaryReferenceRows() {

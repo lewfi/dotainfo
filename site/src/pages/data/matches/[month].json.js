@@ -1,7 +1,6 @@
 import {
   historicalMatchShards,
-  historicalMonthPayload,
-  serializeArtifact,
+  historicalMonthArtifact,
 } from '../../../data/historical-artifacts.mjs';
 
 export async function getStaticPaths() {
@@ -13,7 +12,7 @@ export async function getStaticPaths() {
 }
 
 export async function GET({ props }) {
-  return new Response(serializeArtifact(await historicalMonthPayload(props.month)), {
+  return new Response(await historicalMonthArtifact(props.month), {
     headers: { 'Content-Type': 'application/json; charset=utf-8' },
   });
 }

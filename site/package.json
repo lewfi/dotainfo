@@ -5,14 +5,16 @@
   "type": "module",
   "scripts": {
     "dev": "node scripts/run-astro.mjs dev",
-    "build": "node scripts/run-astro.mjs build",
+    "build": "node scripts/profile-build.mjs",
     "preview": "node scripts/run-astro.mjs preview",
+    "serve": "node scripts/run-astro.mjs preview --host 127.0.0.1 --port 4321",
     "test": "node --test",
     "audit:data": "node scripts/audit-data.mjs",
     "audit:references": "node scripts/audit-references.mjs",
     "audit:home": "node scripts/audit-home.mjs",
     "audit:recent": "node scripts/audit-recent.mjs",
-    "audit:historical": "node scripts/audit-historical.mjs"
+    "audit:historical": "node scripts/audit-historical.mjs",
+    "audit:a11y": "node scripts/audit-accessibility.mjs"
   },
   "engines": {
     "node": ">=22.12.0 <23"
