@@ -1076,6 +1076,30 @@ exceed 25 MiB, and three more are within 1% below the limit, making the design b
 for current data and fragile as shards grow. IDs-only JSON is also rejected because it would
 reduce “reachable” to an unavailable notice rather than a meaningful destination.
 
+**Step 17 preparation decisions.** The Windows-generated npm v3 lockfile omitted the
+top-level optional peer records for `@emnapi/core@1.11.3` and
+`@emnapi/runtime@1.11.3`. Linux `npm ci` therefore reported both packages as missing even
+though a Windows install passed. Keep those exact package records in `site/package-lock.json`;
+regenerating the lockfile on Windows reproduces the defect. Cloudflare's configured root
+directory is `site/`, so `.node-version` also lives in `site/`, not at the repository root,
+where Cloudflare would not read it. The site uses Astro `trailingSlash: 'always'` because
+match pages emit as `matches/{id}/index.html`; every internal page link follows the same
+slash-terminated canonical form. Home match cards include a discernible
+`View match {id} details` link to `/matches/{id}/`.
+
+The historical route embeds only team and league rows whose IDs occur in the regular
+committed match shards, projecting teams to `team_id`, `name`, and `tag` and leagues to
+`leagueid`, `name`, and `tier`. Historical summary markup renders neither team logos nor
+league banners, so `logo_url` and `banner` are omitted without changing the displayed
+summary. This reduced `dist/404.html` from 4,109,130 bytes to 557,384 bytes; the inline
+reference JSON itself fell from 4,106,939 bytes to 555,193 bytes.
+
+One reachability gap remains recorded, not fixed in this preparation step. Historical
+monthly payloads and the range manifest are built from `regularShards()` and therefore
+exclude `late.ndjson`. Once late arrivals leave the trailing 90-day pre-render window, they
+become unreachable through the historical route. This first affects the roughly 320 planned
+late rows for 2026-08, including 135 TI 2026 premium matches, around 2026-11-29.
+
 **Deploy:** Cloudflare Pages, connected to the repo, building on push to `main`. The ingest
 job's commits trigger builds automatically.
 

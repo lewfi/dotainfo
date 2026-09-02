@@ -230,6 +230,11 @@ img {
   font-size: 0.875rem;
 }
 
+.match-link {
+  margin-bottom: 0;
+  font-weight: 700;
+}
+
 .teams {
   margin-block: 1rem;
 }

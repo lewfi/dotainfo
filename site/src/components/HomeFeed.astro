@@ -27,6 +27,9 @@ const { view, active = false } = Astro.props;
             headingId={`match-${view.id}-${match.matchId}`}
             headingLevel="h3"
           />
+          <p class="match-link">
+            <a href={`/matches/${match.matchId}/`}>View match {match.matchId} details</a>
+          </p>
         </article>
       </li>
     ))}

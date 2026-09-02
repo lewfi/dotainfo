@@ -78,6 +78,9 @@ function pageAudit(file, html) {
     const text = decodeText(match[2]) || attrs.get('aria-label')?.trim() || '';
     return text.length === 0 || /^click here$/i.test(text);
   });
+  const internalPageLinks = anchors
+    .map((match) => attributes(`<a ${match[1]}>`).get('href') ?? '')
+    .filter((href) => href.startsWith('/') && !href.startsWith('/data/'));
 
   return {
     relative,
@@ -91,6 +94,7 @@ function pageAudit(file, html) {
       noSkippedHeadingLevels: !skippedHeading,
       everyImageHasAlt: images.every((image) => image.has('alt')),
       everyLinkHasDiscernibleText: badLinks.length === 0,
+      internalPageLinksUseTrailingSlash: internalPageLinks.every((href) => href.endsWith('/')),
       mainLandmark: /<main\b[^>]*>/i.test(html),
       navigationLandmark: /<nav\b[^>]*>/i.test(html),
     },
@@ -146,6 +150,10 @@ const selectTag = homeHtml.match(/<select\b[^>]*data-home-view-select[^>]*>/i)?.
 const select = attributes(selectTag);
 const describedBy = (select.get('aria-describedby') ?? '').split(/\s+/).filter(Boolean);
 const controlled = (select.get('aria-controls') ?? '').split(/\s+/).filter(Boolean);
+const homeMatchCards = [...homeHtml.matchAll(/<li\b[^>]*>/gi)]
+  .filter((match) => (attributes(match[0]).get('class') ?? '').split(/\s+/).includes('match-card'));
+const homeMatchLinks = [...homeHtml.matchAll(/<a\b[^>]*>/gi)]
+  .filter((match) => /^\/matches\/\d+\/$/.test(attributes(match[0]).get('href') ?? ''));
 const tierAssertions = Object.freeze({
   nativeKeyboardControl: selectTag.startsWith('<select')
     && !select.has('disabled')
@@ -157,6 +165,8 @@ const tierAssertions = Object.freeze({
     && /role=["']status["']/i.test(homeHtml),
   controlsReferenceViews: controlled.length > 0 && controlled.every((id) => idExists(homeHtml, id)),
   stateNotColorOnly: /Current view:/i.test(homeHtml) && /matches hidden/i.test(homeHtml),
+  everyMatchCardLinksToItsCanonicalRoute: homeMatchCards.length > 0
+    && homeMatchLinks.length === homeMatchCards.length,
 });
 
 const notFoundHtml = await readFile(path.join(outputRoot, '404.html'), 'utf8');
@@ -185,6 +195,9 @@ const contrasts = CONTRAST_PAIRS.map(([name, foreground, background, minimum]) =
 const assertions = Object.freeze({
   everyPagePassesStructure: pageFailures.length === 0,
   titlesAreUnique: duplicateTitles.length === 0,
+  everyInternalPageLinkUsesTrailingSlash: pageResults.every(
+    (page) => page.assertions.internalPageLinksUseTrailingSlash,
+  ),
   tierControlIsKeyboardAndAtAccessible: Object.values(tierAssertions).every(Boolean),
   notFoundIsRendered: Object.values(notFoundAssertions).every(Boolean),
   everyContrastPairPasses: contrasts.every((entry) => entry.pass),

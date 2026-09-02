@@ -15,6 +15,12 @@ let shardsPromise;
 let manifestPromise;
 let referenceRowsPromise;
 
+const HISTORICAL_REFERENCE_MATCH_COLUMNS = Object.freeze([
+  'radiant_team_id',
+  'dire_team_id',
+  'leagueid',
+]);
+
 export function serializeArtifact(value) {
   return `${JSON.stringify(value)}\n`;
 }
@@ -97,10 +103,44 @@ export async function historicalSummaryReferenceRows() {
         return Object.freeze({ teams: [], leagues: [] });
       }
       const { referenceRoot } = buildDataPaths();
-      const rows = await loadReferenceRows({ referenceRoot, kinds: ['teams', 'leagues'] });
+      const database = await openDuckDB();
+      let referencedIds;
+      try {
+        const source = sourceUnionSql(
+          await historicalMatchShards(),
+          'matches',
+          HISTORICAL_REFERENCE_MATCH_COLUMNS,
+        );
+        referencedIds = await queryRows(
+          database.connection,
+          'WITH match_references AS (' + source + ') '
+            + "SELECT DISTINCT 'team' AS kind, radiant_team_id AS id FROM match_references "
+            + 'WHERE radiant_team_id IS NOT NULL '
+            + "UNION SELECT DISTINCT 'team' AS kind, dire_team_id AS id FROM match_references "
+            + 'WHERE dire_team_id IS NOT NULL '
+            + "UNION SELECT DISTINCT 'league' AS kind, leagueid AS id FROM match_references "
+            + 'WHERE leagueid IS NOT NULL',
+        );
+      } finally {
+        database.close();
+      }
+      const teamIds = new Set(
+        referencedIds.filter((row) => row.kind === 'team').map((row) => row.id),
+      );
+      const leagueIds = new Set(
+        referencedIds.filter((row) => row.kind === 'league').map((row) => row.id),
+      );
+      const rows = await loadReferenceRows({
+        referenceRoot,
+        kinds: ['teams', 'leagues'],
+        columns: {
+          teams: ['team_id', 'name', 'tag'],
+          leagues: ['leagueid', 'name', 'tier'],
+        },
+      });
       return Object.freeze({
-        teams: Object.freeze(rows.teams),
-        leagues: Object.freeze(rows.leagues),
+        teams: Object.freeze(rows.teams.filter((row) => teamIds.has(row.team_id))),
+        leagues: Object.freeze(rows.leagues.filter((row) => leagueIds.has(row.leagueid))),
       });
     })();
   }

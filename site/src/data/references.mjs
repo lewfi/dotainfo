@@ -59,6 +59,7 @@ async function readReference(connection, referenceRoot, definition) {
 export async function loadReferenceRows({
   referenceRoot = DEFAULT_REFERENCE_ROOT,
   kinds = Object.keys(REFERENCE_FILES),
+  columns = {},
 } = {}) {
   const resolvedRoot = path.resolve(referenceRoot);
   const database = await openDuckDB();
@@ -67,7 +68,18 @@ export async function loadReferenceRows({
     for (const kind of kinds) {
       const definition = REFERENCE_FILES[kind];
       if (!definition) throw new TypeError(`unknown reference kind: ${kind}`);
-      rows[kind] = await readReference(database.connection, resolvedRoot, definition);
+      const selectedColumns = columns[kind] ?? definition.columns;
+      if (
+        !Array.isArray(selectedColumns)
+        || selectedColumns.length === 0
+        || selectedColumns.some((column) => !definition.columns.includes(column))
+      ) {
+        throw new TypeError(`invalid ${kind} reference projection`);
+      }
+      rows[kind] = await readReference(database.connection, resolvedRoot, {
+        ...definition,
+        columns: selectedColumns,
+      });
     }
     return rows;
   } finally {

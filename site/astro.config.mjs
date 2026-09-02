@@ -5,5 +5,6 @@ const fixtureOutDir = process.env.DOTAINFO_FIXTURE_OUT_DIR;
 
 export default defineConfig({
   output: 'static',
+  trailingSlash: 'always',
   ...(fixtureOutDir ? { outDir: path.resolve(fixtureOutDir) } : {}),
 });
