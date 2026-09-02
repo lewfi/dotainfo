@@ -204,7 +204,7 @@ repo/
     fetch.py          # incremental: new matches since cursor
     backfill.py       # one-time historical load, run locally, NOT in CI
     compact.py        # grace-period month-close ndjson -> parquet
-    reference.py      # weekly refresh of the four reference datasets
+    reference.py      # weekly refresh of the five reference datasets
     slim.py           # shared field-mapping logic
     schema.py         # pyarrow schemas, single source of truth
     .backfill-checkpoint.json  # local-only resumable backfill state, gitignored
@@ -217,7 +217,7 @@ repo/
     players/          # YYYY-MM.ndjson | .parquet | late.ndjson (normally 10 rows/match)
     draft/            # YYYY-MM.ndjson | .parquet | late.ndjson (variable, including zero)
     reference/
-      teams.parquet  players.parquet  leagues.parquet  heroes.parquet
+      teams.parquet  players.parquet  leagues.parquet  heroes.parquet  items.parquet
   site/               # Astro
   .github/workflows/
     ingest.yml
@@ -559,6 +559,9 @@ as a PostgreSQL-derived assertion that REST neither confirms nor contradicts.
 - `players.parquet` — `account_id, name, country_code, fantasy_role, team_id, team_name, team_tag, is_pro` from REST `/proPlayers`
 - `leagues.parquet` — `leagueid bigint, name, tier, banner` from `/leagues`
 - `heroes.parquet` — `id, name, localized_name, primary_attr, attack_type, roles` from `/heroes`
+- `items.parquet` — `id, name, localized_name, icon_path` from `/constants/items`; `name`
+  is the endpoint object's machine-name key, `localized_name` is `dname`, and `icon_path` is
+  `img`
 
 The 2026-08-30 REST contract capture established:
 
@@ -710,11 +713,13 @@ actual null round-trip case even while the growing real shard continues to have 
 
 ### `ingest/reference.py`
 
-Refreshes all four reference Parquet files weekly using the exact schemas defined in §5 and
+Refreshes all five reference Parquet files weekly using the exact schemas defined in §5 and
 observing the REST rate limit. `/teams` is paged forward until a page contains fewer than
 1,000 objects, then deduplicated by `team_id` with the first occurrence winning. One call
-each to `/leagues`, `/heroes`, and `/proPlayers` makes 26 calls in the observed steady state:
-23 team pages plus three other endpoints.
+each to `/leagues`, `/heroes`, `/constants/items`, and `/proPlayers` makes 27 calls in the
+observed steady state: 23 team pages plus four other endpoints. Unlike the array-shaped hero
+response, `/constants/items` is an object keyed by machine name; the normalizer retains that
+key and maps each value's `id`, `dname`, and `img` into the item schema.
 
 Because the `/teams` walk is deterministically lossy, each refresh also collects distinct
 non-null team IDs from every local match NDJSON, Parquet, and late-arrival shard. It subtracts
@@ -723,7 +728,7 @@ then requests the remaining IDs in ascending order from `/teams/{team_id}`. The 
 Parquet is the only supplemental cache; there is no separate state file. At most 600 IDs are
 attempted per refresh, with the remainder reported as deferred to the next week. A 404 or
 other non-200 response is counted and reported but does not abort the run. A refresh with a
-large supplemental backlog can therefore make up to 626 REST calls.
+large supplemental backlog can therefore make up to 627 REST calls.
 
 Supplemental rows are merged into `teams.parquet` with ordinary team rows. A supplementally
 fetched team that remains absent from later page walks is not refreshed again, so its name,
@@ -731,7 +736,7 @@ tag, and logo can become stale indefinitely. This is intentional: the stored sch
 rating, and the affected teams are overwhelmingly single-match teams.
 
 Every output is sorted deterministically before writing: teams by `team_id`, leagues by
-`leagueid`, heroes by `id`, and players by `account_id`. `/teams` is rating-ordered and its
+`leagueid`, heroes and items by `id`, and players by `account_id`. `/teams` is rating-ordered and its
 order changes as ratings change; stable sorting prevents an unchanged weekly refresh from
 producing a meaningless Parquet diff, commit, and Cloudflare build. `--dry-run` performs all
 API and local reads, prints paging, deduplication, supplemental, and per-file row counts, and
@@ -767,6 +772,9 @@ writes nothing.
 - Run weekly plus `workflow_dispatch`
 - `permissions: contents: write`
 - Commit with the `github-actions[bot]` identity only when reference data changed
+- The `set -euo pipefail` snapshot array explicitly lists all five generated files, including
+  `data/reference/items.parquet`, so the new file is copied out before the reset and restored
+  on every bounded push attempt rather than breaking at a missing fifth-file assumption.
 
 This workflow is the pattern for `ingest.yml` in step 7: use `setup-python` with the pinned
 Python version, install from `requirements.txt`, and generate the data before synchronizing
@@ -1143,11 +1151,13 @@ Cloudflare correctly read `site/.node-version`: the production log reported
 `Installing nodejs 22.20.0`. Cloudflare also warns that Node 22.20.0 is in LTS maintenance
 and nearing end of life; changing the pinned runtime remains a separate toolchain decision.
 
-Known v1 limitation: player items render as raw integer item IDs because
-`data/reference/` has no item reference source. Adding `/constants/items` to
-`reference.py`, following the heroes reference pattern, is the natural fix. It would change
-the reference-data contract and therefore requires explicit spec approval; do not infer it
-as ordinary presentation work.
+The approved item-reference change removes the earlier v1 limitation where player items
+rendered as raw integer IDs. `reference.py` now fetches `/constants/items`, and recent-page
+scoreboards resolve item IDs at build time through `items.parquet`. A localized `dname` wins;
+when that is absent, the endpoint's machine-name key becomes a readable fallback. An ID not
+present in the reference renders the explicit `Item name unavailable` state, never its bare
+integer and never a blank. This changes names only; scoreboard layout remains reserved for
+step 23.
 
 The historical route embeds only team and league rows whose IDs occur in the regular
 committed match shards, projecting teams to `team_id`, `name`, and `tag` and leagues to
@@ -1412,8 +1422,11 @@ The emitted CSS keeps every decorative home divider inside `.home-view`, whose o
 uses `--line-strong`; selectors for day headings, league headings, and rows literally begin
 with `.home-view ` before using `--line`, satisfying the step 21 syntactic and semantic gate.
 No new colour was introduced. Headless Chrome's device emulation measured both
-`clientWidth` and `scrollWidth` as 380px at the reference width, and as 320px at the smaller
-check, with no document-level horizontal overflow in either case. Separate script-disabled
+`clientWidth` and `scrollWidth` as equal at every swept viewport: 320, 360, 380, 480, 600,
+672, 700, 760, 900, 1200, and 1440px. The home view is now an inline-size container: rows
+use their stacked form while the component is narrower than 45rem and the five-column form
+only when the component itself can contain its 44.7rem minimum, instead of switching on the
+old 42rem viewport breakpoint. Separate script-disabled
 380px screenshots sampled the body background as `rgb(246, 242, 234)` for a light preference
 and `rgb(15, 17, 20)` for dark; the static Top tier + Pro view remained the sole visible view.
 Every tier option carries its range-scoped hidden count and the half-open endpoints used to
@@ -1421,16 +1434,23 @@ compute it; selection updates all three values. At the final build clock, the de
 `0 matches hidden` over `[2026-08-29T21:51:05Z, 2026-09-02T21:03:31Z)`, matching the direct
 offline query exactly.
 
+The post-deployment patch fix adds `patch` to `HOME_COLUMNS`. It was the only field consumed
+by `createMatchSummary` and `HomeMatchRow` that the home query omitted: every other rendered
+match field was already projected. Before the fix all 500 emitted placements said `Patch
+unavailable`, even though all 359 hot NDJSON rows and every row in the 1,113-row 2026-06 and
+435-row 2026-07 shards carry `7.41`. The verified artifact has zero unavailable patch labels;
+real match `8979484553` renders `patch 7.41`.
+
 Against the existing step 21 artifact on this checkout, `dist/index.html` grew from 476,615
-to 852,224 raw bytes: +375,609 bytes / **78.808%**, above the 25% reporting threshold; gzip
-reduces the current artifact to 58,163 bytes. The cost is
+to 848,724 raw bytes: +372,109 bytes / **78.073%**, above the 25% reporting threshold; gzip
+reduces the current artifact to 57,432 bytes. The cost is
 the required repeated identity markup—up to two remote logo records or accessible monogram
 slots per row—plus day/league heading structure and whole-row accessible labels. It is not
 additional match fields: restoring the approved combined default adds a repeated 100-card
 view to the five step 22 category views, for 500 placements. Reusing score/time nodes across
 desktop and mobile and storing the failure monogram on the fixed slot limits that repetition
-without weakening the degraded states. The final verified build produced 1,537 HTML pages
-in 45,436.462 ms total; both build
+without weakening the degraded states. The final verified build produced 1,534 HTML pages
+in 40,357.173 ms total; both build
 assertions passed. No ms/page comparison is made because the measured machine variance is
 not useful for this step.
 
@@ -1583,6 +1603,13 @@ All 964 distinct non-null league IDs used by matches occur among the 10,127 IDs 
 occur among the 127 IDs in `heroes.parquet`; there is no draft-hero gap. Match rows already
 carry denormalized league names, while draft rows do not carry hero names, so a future hero
 gap would directly affect draft rendering whereas the measured league set is doubly covered.
+
+The committed player shards use 423 distinct positive item IDs across the six inventory
+slots and neutral slot. `items.parquet` has 501 rows and resolves 416 used IDs, or **98.345%**.
+The seven unresolved IDs are `80`, `136`, `159`, `597`, `930`, `1164`, and `1807`; each maps
+to the explicit `Item name unavailable` state. Real match `8979484553`, player slot 0, renders
+Blink Dagger, Aether Lens, Power Treads, Meteor Hammer, Force Staff, Refresher Orb, and Jidi
+Pollen Bag, demonstrating build-time name resolution without scoreboard restyling.
 
 ### Build-time read cost
 

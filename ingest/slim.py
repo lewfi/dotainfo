@@ -9,6 +9,7 @@ from typing import Any, TypeAlias
 from .schema import (
     DRAFT_SCHEMA,
     HERO_SCHEMA,
+    ITEM_SCHEMA,
     LEAGUE_SCHEMA,
     MATCH_SCHEMA,
     PLAYER_SCHEMA,
@@ -171,10 +172,22 @@ def slim_hero(payload: JsonObject) -> Row:
     return _project(payload, HERO_SCHEMA.names)
 
 
+def slim_item(name: str, payload: JsonObject) -> Row:
+    """Create one `/constants/items` reference row from its object-map entry."""
+    source = {
+        "id": payload.get("id"),
+        "name": name,
+        "localized_name": payload.get("dname"),
+        "icon_path": payload.get("img"),
+    }
+    return _project(source, ITEM_SCHEMA.names)
+
+
 __all__ = [
     "shard_month",
     "slim_draft",
     "slim_hero",
+    "slim_item",
     "slim_league",
     "slim_match",
     "slim_match_response",

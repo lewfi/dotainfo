@@ -43,11 +43,13 @@ async function referenceFixtureRoot(t) {
   return root;
 }
 
-test('reference Parquet loads all four indexes without filtering nullable is_pro rows', async (t) => {
+test('reference Parquet loads all five indexes without filtering nullable is_pro rows', async (t) => {
   const referenceRoot = await referenceFixtureRoot(t);
   const references = await loadReferences({ referenceRoot });
 
-  assert.deepEqual(references.counts, { teams: 3, leagues: 2, players: 2, heroes: 2 });
+  assert.deepEqual(references.counts, {
+    teams: 3, leagues: 2, players: 2, heroes: 2, items: 2,
+  });
   const player = references.resolvePlayer(100);
   assert.equal(player.referenceFound, true);
   assert.equal(player.name.display, 'Alice');
@@ -124,6 +126,10 @@ test('league, player, and hero resolution preserve open and undocumented values'
         roles: ['Carry'],
       },
     ],
+    items: [
+      { id: 1, name: 'blink', localized_name: 'Blink Dagger', icon_path: '/items/blink.png' },
+      { id: 907, name: 'recipe_wraith_pact', localized_name: null, icon_path: '/items/recipe.png' },
+    ],
   });
 
   const league = references.resolveLeague({
@@ -159,6 +165,10 @@ test('league, player, and hero resolution preserve open and undocumented values'
     'https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/',
   );
   assert.deepEqual(references.resolveHero(999).icon, { status: 'missing', url: null });
+  assert.equal(references.resolveItem(1).name.display, 'Blink Dagger');
+  assert.equal(references.resolveItem(907).name.display, 'Recipe wraith pact');
+  assert.equal(references.resolveItem(999).name.display, 'Item name unavailable');
+  assert.equal(references.resolveItem(999).name.status, 'missing');
 });
 
 test('one shared summary definition covers teams, result, score, league, duration, patch, and date', () => {

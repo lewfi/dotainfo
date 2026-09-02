@@ -17,6 +17,7 @@ import pyarrow.parquet as pq
 from ingest import reference
 from ingest.schema import (
     HERO_SCHEMA,
+    ITEM_SCHEMA,
     LEAGUE_SCHEMA,
     MATCH_SCHEMA,
     REFERENCE_PLAYER_SCHEMA,
@@ -35,12 +36,14 @@ class FakeApiClient:
         supplemental=None,
         leagues=None,
         heroes=None,
+        items=None,
         players=None,
     ):
         self.team_pages = team_pages
         self.supplemental = supplemental or {}
         self.leagues = leagues or []
         self.heroes = heroes or []
+        self.items = items or {}
         self.players = players or []
         self.calls = []
 
@@ -61,6 +64,8 @@ class FakeApiClient:
             return copy.deepcopy(self.leagues)
         if path == "/heroes":
             return copy.deepcopy(self.heroes)
+        if path == "/constants/items":
+            return copy.deepcopy(self.items)
         if path == "/proPlayers":
             return copy.deepcopy(self.players)
         raise AssertionError(f"unexpected API path: {path}")
@@ -87,6 +92,9 @@ class ReferenceTests(unittest.TestCase):
         cls.heroes = json.loads(
             (FIXTURE_DIR / "heroes.json").read_text(encoding="utf-8")
         )[:4]
+        cls.items = json.loads(
+            (FIXTURE_DIR / "items_subset.json").read_text(encoding="utf-8")
+        )
         cls.players = json.loads(
             (FIXTURE_DIR / "pro_players_subset.json").read_text(encoding="utf-8")
         )
@@ -104,6 +112,7 @@ class ReferenceTests(unittest.TestCase):
             team_pages,
             leagues=kwargs.pop("leagues", self.leagues),
             heroes=kwargs.pop("heroes", self.heroes),
+            items=kwargs.pop("items", self.items),
             players=kwargs.pop("players", self.players),
             **kwargs,
         )
@@ -283,6 +292,7 @@ class ReferenceTests(unittest.TestCase):
             "teams.parquet": ("team_id", TEAM_SCHEMA),
             "leagues.parquet": ("leagueid", LEAGUE_SCHEMA),
             "heroes.parquet": ("id", HERO_SCHEMA),
+            "items.parquet": ("id", ITEM_SCHEMA),
             "players.parquet": ("account_id", REFERENCE_PLAYER_SCHEMA),
         }
         for filename, (key, schema) in expectations.items():
@@ -308,6 +318,7 @@ class ReferenceTests(unittest.TestCase):
         self.assertEqual(before, self.snapshot())
         self.assertIn("DRY RUN: zero filesystem writes performed", output)
         self.assertIn(("/proPlayers", None), client.calls)
+        self.assertIn(("/constants/items", None), client.calls)
 
     def test_local_team_ids_cover_ndjson_late_and_parquet(self):
         self.write_local_ndjson(

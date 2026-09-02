@@ -40,6 +40,10 @@ const REFERENCE_FILES = Object.freeze({
       'roles',
     ]),
   }),
+  items: Object.freeze({
+    filename: 'items.parquet',
+    columns: Object.freeze(['id', 'name', 'localized_name', 'icon_path']),
+  }),
 });
 
 function sqlString(value) {

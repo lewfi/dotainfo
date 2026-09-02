@@ -119,7 +119,14 @@ const boxscores = [
                   <td>{stat(player.lastHits)} / {stat(player.denies)}</td>
                   <td>{stat(player.goldPerMinute)} / {stat(player.xpPerMinute)}</td>
                   <td>{stat(player.netWorth)}</td>
-                  <td>{player.items.length > 0 ? player.items.join(', ') : '—'}</td>
+                  <td>
+                    {player.items.length > 0 ? player.items.map((item, index) => (
+                      <>
+                        <span data-item-state={item.name.status}>{item.name.display}</span>
+                        {index < player.items.length - 1 && ', '}
+                      </>
+                    )) : '—'}
+                  </td>
                 </tr>
               ))}
             </tbody>

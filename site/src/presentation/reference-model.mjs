@@ -6,6 +6,7 @@ const MISSING_LABELS = Object.freeze({
   league: 'League name unavailable',
   player: 'Player name unavailable',
   hero: 'Hero name unavailable',
+  item: 'Item name unavailable',
   tier: 'Tier unavailable',
 });
 
@@ -67,6 +68,13 @@ function heroIcon(machineName) {
   return Object.freeze({ status: 'available', url: `${HERO_ICON_BASE_URL}${slug}.png` });
 }
 
+function itemMachineDisplay(value) {
+  const cleaned = cleanText(value);
+  if (!cleaned) return null;
+  const words = cleaned.replaceAll('_', ' ');
+  return `${words[0].toUpperCase()}${words.slice(1)}`;
+}
+
 function indexRows(rows, key) {
   const index = new Map();
   for (const row of rows) {
@@ -85,16 +93,20 @@ export class ReferenceResolver {
 
   #heroes;
 
-  constructor({ teams = [], leagues = [], players = [], heroes = [] } = {}) {
+  #items;
+
+  constructor({ teams = [], leagues = [], players = [], heroes = [], items = [] } = {}) {
     this.#teams = indexRows(teams, 'team_id');
     this.#leagues = indexRows(leagues, 'leagueid');
     this.#players = indexRows(players, 'account_id');
     this.#heroes = indexRows(heroes, 'id');
+    this.#items = indexRows(items, 'id');
     this.counts = Object.freeze({
       teams: this.#teams.size,
       leagues: this.#leagues.size,
       players: this.#players.size,
       heroes: this.#heroes.size,
+      items: this.#items.size,
     });
   }
 
@@ -104,6 +116,7 @@ export class ReferenceResolver {
       leagues: this.#leagues,
       players: this.#players,
       heroes: this.#heroes,
+      items: this.#items,
     };
     const index = indexes[kind];
     if (!index) throw new TypeError(`unknown reference kind: ${kind}`);
@@ -191,6 +204,23 @@ export class ReferenceResolver {
       attackType: cleanText(reference?.attack_type),
       roles: Object.freeze(Array.isArray(reference?.roles) ? [...reference.roles] : []),
       icon: heroIcon(reference?.name),
+    });
+  }
+
+  resolveItem(itemId) {
+    const id = normalizeId(itemId);
+    const reference = id === null ? null : this.#items.get(id) ?? null;
+    return Object.freeze({
+      itemId: id,
+      referenceFound: reference !== null,
+      name: resolveName(
+        [
+          [reference?.localized_name, 'reference-localized'],
+          [itemMachineDisplay(reference?.name), 'reference-machine'],
+        ],
+        MISSING_LABELS.item,
+      ),
+      iconPath: cleanText(reference?.icon_path),
     });
   }
 }

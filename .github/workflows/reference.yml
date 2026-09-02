@@ -42,6 +42,7 @@ jobs:
             data/reference/players.parquet
             data/reference/leagues.parquet
             data/reference/heroes.parquet
+            data/reference/items.parquet
           )
           snapshot_dir="$(mktemp -d)"
           trap 'rm -rf "$snapshot_dir"' EXIT

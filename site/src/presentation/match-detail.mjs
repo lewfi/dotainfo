@@ -28,7 +28,7 @@ function playerModel(row, references) {
     items: Object.freeze(
       ITEM_COLUMNS.map((column) => row[column]).filter(
         (itemId) => Number.isSafeInteger(itemId) && itemId > 0,
-      ),
+      ).map((itemId) => references.resolveItem(itemId)),
     ),
   });
 }
@@ -58,7 +58,11 @@ export function createMatchDetailModel(detail, references) {
   if (!detail?.match || !Array.isArray(detail.players) || !Array.isArray(detail.draft)) {
     throw new TypeError('match detail model requires match, players, and draft rows');
   }
-  if (!references || typeof references.resolveHero !== 'function') {
+  if (
+    !references
+    || typeof references.resolveHero !== 'function'
+    || typeof references.resolveItem !== 'function'
+  ) {
     throw new TypeError('match detail model requires a reference resolver');
   }
 

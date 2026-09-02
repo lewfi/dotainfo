@@ -18,6 +18,7 @@ const CHROME_PATHS = [
   'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
   'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe',
 ];
+const VIEWPORT_WIDTHS = Object.freeze([320, 360, 380, 480, 600, 672, 700, 760, 900, 1200, 1440]);
 
 function argument(name) {
   const index = process.argv.indexOf(name);
@@ -209,7 +210,19 @@ async function cdpViewports(chrome, scratch, url, widths) {
         await client.send('Page.navigate', { url });
         await loaded;
         const evaluated = await client.send('Runtime.evaluate', {
-          expression: `({ viewportWidth: innerWidth, clientWidth: document.documentElement.clientWidth, scrollWidth: document.documentElement.scrollWidth, horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth })`,
+          expression: `(() => {
+            const row = document.querySelector('.match-row');
+            const view = document.querySelector('.home-view:not([hidden])');
+            const style = row ? getComputedStyle(row) : null;
+            return {
+              viewportWidth: innerWidth,
+              clientWidth: document.documentElement.clientWidth,
+              scrollWidth: document.documentElement.scrollWidth,
+              horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth,
+              homeViewWidth: view?.getBoundingClientRect().width ?? null,
+              rowLayout: style?.gridTemplateAreas === 'none' ? 'columns' : 'stacked',
+            };
+          })()`,
           returnByValue: true,
         });
         results.push(Object.freeze({ requestedWidth: width, ...evaluated.result.value }));
@@ -266,7 +279,7 @@ const { port } = server.address();
 
 try {
   const url = `http://127.0.0.1:${port}/`;
-  const viewports = await cdpViewports(chrome, scratch, url, [380, 320]);
+  const viewports = await cdpViewports(chrome, scratch, url, VIEWPORT_WIDTHS);
   const noJavaScript = [];
   for (const preference of ['light', 'dark']) {
     noJavaScript.push(await noJavaScriptResult(chrome, scratch, url, preference));
@@ -277,12 +290,13 @@ try {
   )].filter((match) => !/\shidden(?:\s|>|=)/.test(match[0])).map((match) => match[1]);
 
   const assertions = Object.freeze({
-    noHorizontalOverflowAt380: viewports[0].clientWidth === 380
-      && viewports[0].scrollWidth === 380
-      && !viewports[0].horizontalOverflow,
-    noHorizontalOverflowAt320: viewports[1].clientWidth === 320
-      && viewports[1].scrollWidth === 320
-      && !viewports[1].horizontalOverflow,
+    everyRequestedWidthWasMeasured: viewports.length === VIEWPORT_WIDTHS.length
+      && viewports.every((viewport, index) => viewport.requestedWidth === VIEWPORT_WIDTHS[index]),
+    noHorizontalOverflowAcrossSweep: viewports.every((viewport) => (
+      viewport.clientWidth === viewport.requestedWidth
+      && viewport.scrollWidth === viewport.clientWidth
+      && !viewport.horizontalOverflow
+    )),
     noJavaScriptLeavesDefaultViewVisible: visibleWithoutJavaScript.length === 1
       && visibleWithoutJavaScript[0] === 'default',
     noJavaScriptHonorsBothPreferences: noJavaScript[0].backgroundPixel === 'rgb(246, 242, 234)'

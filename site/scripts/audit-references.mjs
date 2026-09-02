@@ -4,6 +4,10 @@ import { createCatalog, readableShards } from '../src/data/catalog.mjs';
 import { openDuckDB, queryRows, sourceUnionSql } from '../src/data/duckdb.mjs';
 import { loadReferences } from '../src/data/references.mjs';
 
+const ITEM_COLUMNS = Object.freeze([
+  'item_0', 'item_1', 'item_2', 'item_3', 'item_4', 'item_5', 'item_neutral',
+]);
+
 function usableText(value) {
   return typeof value === 'string' && value.trim().length > 0;
 }
@@ -44,10 +48,12 @@ const catalog = await createCatalog();
 const references = await loadReferences();
 const matchShards = readableShards(catalog, 'matches');
 const draftShards = readableShards(catalog, 'draft');
+const playerShards = readableShards(catalog, 'players');
 const database = await openDuckDB();
 
 let matches;
 let draftHeroes;
+let playerItemIds;
 try {
   matches = await queryRows(
     database.connection,
@@ -66,6 +72,14 @@ try {
     database.connection,
     `SELECT DISTINCT hero_id FROM (\n${sourceUnionSql(draftShards, 'draft', ['hero_id'])}\n) `
       + 'AS draft_rows ORDER BY hero_id',
+  );
+  const playerUnion = sourceUnionSql(playerShards, 'players', ITEM_COLUMNS);
+  playerItemIds = await queryRows(
+    database.connection,
+    `SELECT DISTINCT item_id FROM (`
+      + `SELECT UNNEST([${ITEM_COLUMNS.join(', ')}]) AS item_id `
+      + `FROM (\n${playerUnion}\n) AS player_rows`
+      + `) AS item_rows WHERE item_id IS NOT NULL AND item_id > 0 ORDER BY item_id`,
   );
 } finally {
   database.close();
@@ -95,6 +109,9 @@ let resolvedMissingTeamNameAppearances = 0;
 let invalidTeamDisplayStates = 0;
 let invalidTeamLogoStates = 0;
 let invalidResolvedDisplayNames = 0;
+let invalidItemDisplayStates = 0;
+let resolvedItemIds = 0;
+const missingItemIds = [];
 
 for (const match of matches) {
   if (match.radiant_team_id === null || match.dire_team_id === null) {
@@ -167,6 +184,22 @@ for (const playerId of references.ids('players')) {
   }
 }
 
+for (const { item_id: itemId } of playerItemIds) {
+  const item = references.resolveItem(itemId);
+  if (item.name.status === 'available') {
+    resolvedItemIds += 1;
+  } else {
+    missingItemIds.push(itemId);
+  }
+  if (
+    !validDisplayName(item.name)
+    || item.name.display === String(itemId)
+    || (item.name.status === 'missing' && item.name.display !== 'Item name unavailable')
+  ) {
+    invalidItemDisplayStates += 1;
+  }
+}
+
 const observed = Object.freeze({
   matchShards: matchShards.length,
   draftShards: draftShards.length,
@@ -188,6 +221,13 @@ const observed = Object.freeze({
   missingLeagueIds: [...missingLeagueIds].sort((left, right) => left - right),
   draftHeroIds: draftHeroes.length,
   missingDraftHeroIds: [...missingDraftHeroIds].sort((left, right) => left - right),
+  playerShards: playerShards.length,
+  distinctPlayerItemIds: playerItemIds.length,
+  resolvedPlayerItemIds: resolvedItemIds,
+  itemResolutionRatePercent: playerItemIds.length === 0
+    ? 100
+    : Number(((resolvedItemIds / playerItemIds.length) * 100).toFixed(3)),
+  missingPlayerItemIds: missingItemIds,
   referenceRows: references.counts,
 });
 const assertions = Object.freeze({
@@ -196,6 +236,7 @@ const assertions = Object.freeze({
   everyLeagueResolves: missingLeagueIds.size === 0,
   everyDraftHeroResolves: missingDraftHeroIds.size === 0,
   everyResolvedDisplayNameIsTrimmedAndNonEmpty: invalidResolvedDisplayNames === 0,
+  everyUsedItemHasNameOrExplicitUnavailableState: invalidItemDisplayStates === 0,
 });
 
 console.log(`STEP12_OBSERVED=${JSON.stringify(observed)}`);

@@ -47,6 +47,9 @@ test('normal and edge-case fixtures produce complete detail models without ten-p
   assert.equal(models.normal.boxscores.dire.length, 1);
   assert.equal(models.normal.boxscores.radiant[0].level, 25);
   assert.equal(models.normal.boxscores.dire[0].level, 19);
+  assert.equal(models.normal.boxscores.radiant[0].items[0].name.display, 'Blink Dagger');
+  assert.equal(models.normal.boxscores.radiant[0].items.at(-1).name.display, 'Item name unavailable');
+  assert.equal(models.normal.boxscores.dire[0].items.at(-1).name.status, 'missing');
   assert.equal(models.normal.draft.length, 2);
   assert.ok(models.normal.advantage);
   assert.equal(models['no-draft'].draft.length, 0);
@@ -86,6 +89,9 @@ test('Astro renders all Step 14 fixtures with defined team displays and conditio
   assert.match(pages.normal, /data-advantage-graph/);
   assert.match(pages.normal, /<th scope="col">Lvl<\/th>/);
   assert.match(pages.normal, /<td>25<\/td>/);
+  assert.match(pages.normal, /data-item-state="available">Blink Dagger<\/span>/);
+  assert.match(pages.normal, /data-item-state="missing">Item name unavailable<\/span>/);
+  assert.doesNotMatch(pages.normal, /<td>1, 2, 3, 11<\/td>/);
   assert.match(pages.normal, /role="region" tabindex="0" aria-labelledby="boxscore-radiant"/);
   assert.match(pages['no-draft'], /data-draft-state="unavailable"/);
   assert.match(pages['no-draft'], /Draft data is not available for this match/);

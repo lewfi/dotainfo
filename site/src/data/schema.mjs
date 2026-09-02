@@ -97,4 +97,5 @@ export const HOME_COLUMNS = Object.freeze([
   'radiant_win',
   'radiant_score',
   'dire_score',
+  'patch',
 ]);

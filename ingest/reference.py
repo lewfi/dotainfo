@@ -18,11 +18,12 @@ import pyarrow.parquet as pq
 from ingest.fetch import ApiClient, RateLimitError
 from ingest.schema import (
     HERO_SCHEMA,
+    ITEM_SCHEMA,
     LEAGUE_SCHEMA,
     REFERENCE_PLAYER_SCHEMA,
     TEAM_SCHEMA,
 )
-from ingest.slim import slim_hero, slim_league, slim_reference_player, slim_team
+from ingest.slim import slim_hero, slim_item, slim_league, slim_reference_player, slim_team
 
 
 TEAM_PAGE_SIZE = 1_000
@@ -54,6 +55,7 @@ class ReferenceSummary:
     teams_rows: int = 0
     leagues_rows: int = 0
     heroes_rows: int = 0
+    items_rows: int = 0
     players_rows: int = 0
 
 
@@ -182,6 +184,27 @@ def _fetch_rows(client: ApiClient, path: str, slimmer: Slimmer) -> list[JsonObje
     return [slimmer(source) for source in _objects(client.get_json(path), path)]
 
 
+def fetch_items(client: ApiClient) -> list[JsonObject]:
+    """Fetch the object-keyed item constants and normalize them to ID-keyed rows."""
+    path = "/constants/items"
+    payload = client.get_json(path)
+    if not isinstance(payload, Mapping):
+        raise TypeError(f"{path} must return a JSON object keyed by item name")
+
+    rows: list[JsonObject] = []
+    seen_ids: set[int] = set()
+    for name, source in payload.items():
+        if not isinstance(name, str) or not isinstance(source, Mapping):
+            raise TypeError(f"{path} entries must map string names to objects")
+        row = slim_item(name, dict(source))
+        item_id = _required_int(row, "id", path)
+        if item_id in seen_ids:
+            raise ValueError(f"{path} returned duplicate item id {item_id}")
+        seen_ids.add(item_id)
+        rows.append(row)
+    return rows
+
+
 def _sort_rows(rows: list[JsonObject], key: str) -> list[JsonObject]:
     return sorted(rows, key=lambda row: (row.get(key) is None, row.get(key)))
 
@@ -229,6 +252,7 @@ def _print_summary(summary: ReferenceSummary, dry_run: bool) -> None:
     print(f"teams.parquet_rows={summary.teams_rows}")
     print(f"leagues.parquet_rows={summary.leagues_rows}")
     print(f"heroes.parquet_rows={summary.heroes_rows}")
+    print(f"items.parquet_rows={summary.items_rows}")
     print(f"players.parquet_rows={summary.players_rows}")
     if dry_run:
         print("DRY RUN: zero filesystem writes performed")
@@ -240,11 +264,12 @@ def run(
     client: ApiClient | None = None,
     data_dir: Path = DATA_DIR,
 ) -> ReferenceSummary:
-    """Fetch, normalize, and optionally write all four reference datasets."""
+    """Fetch, normalize, and optionally write all five reference datasets."""
     api = client or ApiClient()
     walked_teams, summary = walk_teams(api)
     leagues = _fetch_rows(api, "/leagues", slim_league)
     heroes = _fetch_rows(api, "/heroes", slim_hero)
+    items = fetch_items(api)
     players = _fetch_rows(api, "/proPlayers", slim_reference_player)
 
     reference_dir = data_dir / "reference"
@@ -307,17 +332,20 @@ def run(
     team_rows = _sort_rows(list(combined_teams.values()), "team_id")
     league_rows = _sort_rows(leagues, "leagueid")
     hero_rows = _sort_rows(heroes, "id")
+    item_rows = _sort_rows(items, "id")
     player_rows = _sort_rows(players, "account_id")
     tables = {
         "teams.parquet": _table(team_rows, TEAM_SCHEMA),
         "leagues.parquet": _table(league_rows, LEAGUE_SCHEMA),
         "heroes.parquet": _table(hero_rows, HERO_SCHEMA),
+        "items.parquet": _table(item_rows, ITEM_SCHEMA),
         "players.parquet": _table(player_rows, REFERENCE_PLAYER_SCHEMA),
     }
 
     summary.teams_rows = len(team_rows)
     summary.leagues_rows = len(league_rows)
     summary.heroes_rows = len(hero_rows)
+    summary.items_rows = len(item_rows)
     summary.players_rows = len(player_rows)
     _print_summary(summary, args.dry_run)
 
@@ -344,6 +372,7 @@ def main(argv: list[str] | None = None) -> int:
 
 __all__ = [
     "DATA_DIR",
+    "fetch_items",
     "LocalMatchInventory",
     "MAX_TEAM_PAGES",
     "ReferenceSummary",

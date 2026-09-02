@@ -142,6 +142,15 @@ HERO_SCHEMA = pa.schema(
     ]
 )
 
+ITEM_SCHEMA = pa.schema(
+    [
+        pa.field("id", pa.int32()),
+        pa.field("name", pa.string()),
+        pa.field("localized_name", pa.string()),
+        pa.field("icon_path", pa.string()),
+    ]
+)
+
 
 SCHEMAS: dict[str, pa.Schema] = {
     "matches": MATCH_SCHEMA,
@@ -151,6 +160,7 @@ SCHEMAS: dict[str, pa.Schema] = {
     "reference_players": REFERENCE_PLAYER_SCHEMA,
     "reference_leagues": LEAGUE_SCHEMA,
     "reference_heroes": HERO_SCHEMA,
+    "reference_items": ITEM_SCHEMA,
 }
 
 
@@ -162,6 +172,7 @@ def get_schema(name: str) -> pa.Schema:
 __all__ = [
     "DRAFT_SCHEMA",
     "HERO_SCHEMA",
+    "ITEM_SCHEMA",
     "LEAGUE_SCHEMA",
     "MATCH_SCHEMA",
     "PLAYER_SCHEMA",

@@ -151,6 +151,10 @@ test('home views match an offline query by ordering and range-scoped tier counts
   assert.equal(defaultView.label, 'Top tier + Pro');
   assert.deepEqual(defaultView.selectedTiers, ['premium', 'professional']);
   assert.equal(defaultView.hiddenCount, 2);
+  assert.equal(
+    defaultView.matches.find((match) => match.matchId === 3002).patch.display,
+    '7.41',
+  );
   const other = home.views.find((view) => view.id === 'other');
   assert.deepEqual(other.selectedTiers, ['excluded', 'future-tier']);
   assert.ok(other.matches.some((match) => match.league.tier.value === 'future-tier'));

@@ -326,6 +326,7 @@ img {
 }
 
 .home-view {
+  container-type: inline-size;
   margin-block: 1rem 2rem;
   border: 1px solid var(--line-strong);
   background: var(--surface);
@@ -929,6 +930,93 @@ img {
   font-size: 0.875rem;
 }
 
+@container (max-width: 44.99rem) {
+  .match-row {
+    position: relative;
+    display: grid;
+    grid-template-areas:
+      'radiant radiant'
+      'dire dire'
+      'time meta';
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 0.45rem;
+    padding: 0.7rem 0.75rem;
+  }
+
+  .match-time {
+    grid-area: time;
+    align-self: center;
+  }
+
+  .home-team--radiant {
+    grid-area: radiant;
+  }
+
+  .home-team--dire {
+    grid-area: dire;
+  }
+
+  .home-team,
+  .home-team--radiant {
+    justify-content: flex-start;
+    padding-right: 3.5rem;
+  }
+
+  .home-team--radiant .team-mark {
+    order: 0;
+  }
+
+  .home-team--radiant .team-copy {
+    align-items: flex-start;
+    text-align: left;
+  }
+
+  .team-mark {
+    width: 24px;
+    height: 24px;
+    flex-basis: 24px;
+  }
+
+  .team-name,
+  .team-tag,
+  .team-state {
+    max-width: calc(100cqi - 7.5rem);
+  }
+
+  .home-score {
+    position: absolute;
+    z-index: 1;
+    inset: 0.75rem 0.9rem auto auto;
+    display: flex;
+    height: 3.85rem;
+    flex-direction: column;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0;
+  }
+
+  .home-score .score-separator {
+    display: none;
+  }
+
+  .home-score .no-result {
+    justify-content: center;
+  }
+
+  .home-match-meta {
+    grid-area: meta;
+    justify-content: flex-start;
+    padding-left: 0.5rem;
+    color: var(--fg-3);
+    font-size: 10px;
+    white-space: normal;
+  }
+
+  .home-match-meta .row-arrow {
+    margin-left: auto;
+  }
+}
+
 @media (max-width: 42rem) {
   .site-shell {
     width: min(100% - 1rem, 72rem);
@@ -992,91 +1080,6 @@ img {
     margin-left: 0;
     overflow-wrap: anywhere;
     white-space: normal;
-  }
-
-  .match-row {
-    position: relative;
-    display: grid;
-    grid-template-areas:
-      'radiant radiant'
-      'dire dire'
-      'time meta';
-    grid-template-columns: auto minmax(0, 1fr);
-    gap: 0.45rem;
-    padding: 0.7rem 0.75rem;
-  }
-
-  .match-time {
-    grid-area: time;
-    align-self: center;
-  }
-
-  .home-team--radiant {
-    grid-area: radiant;
-  }
-
-  .home-team--dire {
-    grid-area: dire;
-  }
-
-  .home-team,
-  .home-team--radiant {
-    justify-content: flex-start;
-    padding-right: 3.5rem;
-  }
-
-  .home-team--radiant .team-mark {
-    order: 0;
-  }
-
-  .home-team--radiant .team-copy {
-    align-items: flex-start;
-    text-align: left;
-  }
-
-  .team-mark {
-    width: 24px;
-    height: 24px;
-    flex-basis: 24px;
-  }
-
-  .team-name,
-  .team-tag,
-  .team-state {
-    max-width: calc(100vw - 7.5rem);
-  }
-
-  .home-score {
-    position: absolute;
-    z-index: 1;
-    inset: 0.75rem 0.9rem auto auto;
-    display: flex;
-    height: 3.85rem;
-    flex-direction: column;
-    align-items: center;
-    justify-content: space-between;
-    gap: 0;
-  }
-
-  .home-score .score-separator {
-    display: none;
-  }
-
-  .home-score .no-result {
-    justify-content: center;
-  }
-
-  .home-match-meta {
-    grid-area: meta;
-    justify-content: flex-start;
-    padding-left: 0.5rem;
-    color: var(--fg-3);
-    font-size: 10px;
-    white-space: normal;
-  }
-
-  .home-match-meta .row-arrow {
-    margin-left: auto;
   }
 
   .detail-section {

@@ -149,5 +149,11 @@ export function fixtureReferences() {
       { id: 1, name: 'npc_dota_hero_antimage', localized_name: 'Anti-Mage', roles: ['Carry'] },
       { id: 2, name: 'npc_dota_hero_axe', localized_name: 'Axe', roles: ['Initiator'] },
     ],
+    items: [
+      { id: 1, name: 'blink', localized_name: 'Blink Dagger', icon_path: '/items/blink.png' },
+      { id: 2, name: 'blades_of_attack', localized_name: 'Blades of Attack', icon_path: '/items/blades.png' },
+      { id: 3, name: 'broadsword', localized_name: 'Broadsword', icon_path: '/items/broadsword.png' },
+      { id: 4, name: 'chainmail', localized_name: 'Chainmail', icon_path: '/items/chainmail.png' },
+    ],
   });
 }
