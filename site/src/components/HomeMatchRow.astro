@@ -1,0 +1,71 @@
+---
+import HomeTeam from './HomeTeam.astro';
+
+const { match } = Astro.props;
+const duration = match.duration.status === 'available'
+  ? `${Math.floor(match.duration.value / 60)}:${String(match.duration.value % 60).padStart(2, '0')}`
+  : 'Duration unavailable';
+const time = match.date.status === 'available'
+  ? new Intl.DateTimeFormat('en-US', {
+      hour: '2-digit',
+      hour12: false,
+      minute: '2-digit',
+      timeZone: 'UTC',
+    }).format(new Date(match.date.isoUtc))
+  : 'Time unavailable';
+const score = match.score.status === 'available'
+  ? `${match.score.radiant} to ${match.score.dire}`
+  : 'no result';
+const accessibleName = `${match.teams.radiant.name.display} ${score} ${match.teams.dire.name.display}, ${match.league.name.display}, ${duration}, view match details`;
+---
+
+<a
+  class="match-row"
+  href={`/matches/${match.matchId}/`}
+  aria-label={accessibleName}
+  data-score-state={match.score.status}
+  data-result-state={match.result.status}
+>
+  {match.date.status === 'available' ? (
+    <time class="match-time" datetime={match.date.isoUtc}>{time}</time>
+  ) : (
+    <span class="match-time">{time}</span>
+  )}
+
+  <HomeTeam
+    team={match.teams.radiant}
+    side="radiant"
+    winner={match.result.winner === 'radiant'}
+  />
+
+  <span class="home-score" aria-hidden="true">
+    {match.score.status === 'available' ? (
+      <>
+        <span class:list={{ 'score-winner': match.result.winner === 'radiant' }}>
+          {match.result.winner === 'radiant' && <small>W</small>}
+          <strong>{match.score.radiant}</strong>
+        </span>
+        <span class="score-separator">–</span>
+        <span class:list={{ 'score-winner': match.result.winner === 'dire' }}>
+          <strong>{match.score.dire}</strong>
+          {match.result.winner === 'dire' && <small>W</small>}
+        </span>
+      </>
+    ) : (
+      <span class="no-result"><strong>— &nbsp;—</strong><small>NO RESULT</small></span>
+    )}
+  </span>
+
+  <HomeTeam
+    team={match.teams.dire}
+    side="dire"
+    winner={match.result.winner === 'dire'}
+  />
+
+  <span class="home-match-meta">
+    <span>{duration}</span>
+    <span aria-hidden="true">·</span>
+    <span>{match.patch.status === 'available' ? `patch ${match.patch.display}` : 'Patch unavailable'}</span>
+    <span class="row-arrow" aria-hidden="true">›</span>
+  </span>
+</a>

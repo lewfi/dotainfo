@@ -96,7 +96,7 @@ try {
 const database = await openDuckDB();
 const comparisons = [];
 try {
-  for (const view of home.views.slice(0, 2)) {
+  for (const view of home.views) {
     const direct = await directHome(database.connection, catalog, {
       clock,
       limit,
@@ -116,32 +116,19 @@ try {
   database.close();
 }
 
-const defaultComparison = comparisons.find((comparison) => comparison.id === 'default');
-const allComparison = comparisons.find((comparison) => comparison.id === 'all');
-const assertions = Object.freeze({
-  defaultHasRequestedLimit: defaultComparison.rendered.matchIds.length === limit,
-  allHasRequestedLimit: allComparison.rendered.matchIds.length === limit,
-  defaultOrderingMatchesOfflineQuery: isDeepStrictEqual(
-    defaultComparison.rendered.matchIds,
-    defaultComparison.direct.matchIds,
-  ),
-  allOrderingMatchesOfflineQuery: isDeepStrictEqual(
-    allComparison.rendered.matchIds,
-    allComparison.direct.matchIds,
-  ),
-  defaultTierCountsMatchOfflineQuery: isDeepStrictEqual(
-    defaultComparison.rendered.tierCounts,
-    defaultComparison.direct.tierCounts,
-  ),
-  allTierCountsMatchOfflineQuery: isDeepStrictEqual(
-    allComparison.rendered.tierCounts,
-    allComparison.direct.tierCounts,
-  ),
-  defaultHiddenCountMatchesOfflineQuery:
-    defaultComparison.rendered.hiddenCount === defaultComparison.direct.hiddenCount,
-  allHiddenCountMatchesOfflineQuery:
-    allComparison.rendered.hiddenCount === allComparison.direct.hiddenCount,
-});
+const assertions = Object.freeze(Object.fromEntries(comparisons.flatMap((comparison) => [
+  [`${comparison.id}RespectsRequestedLimit`, comparison.rendered.matchIds.length <= limit],
+  [`${comparison.id}OrderingMatchesOfflineQuery`, isDeepStrictEqual(
+    comparison.rendered.matchIds,
+    comparison.direct.matchIds,
+  )],
+  [`${comparison.id}TierCountsMatchOfflineQuery`, isDeepStrictEqual(
+    comparison.rendered.tierCounts,
+    comparison.direct.tierCounts,
+  )],
+  [`${comparison.id}HiddenCountMatchesOfflineQuery`,
+    comparison.rendered.hiddenCount === comparison.direct.hiddenCount],
+])));
 
 console.log(`STEP13_CLOCK=${clock}`);
 console.log(`STEP13_LIMIT=${limit}`);

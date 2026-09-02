@@ -1,5 +1,5 @@
 ---
-import MatchSummary from './MatchSummary.astro';
+import HomeMatchRow from './HomeMatchRow.astro';
 
 const { view, active = false } = Astro.props;
 ---
@@ -11,27 +11,46 @@ const { view, active = false } = Astro.props;
   aria-labelledby={`home-view-${view.id}-title`}
   hidden={!active}
 >
-  <h2 id={`home-view-${view.id}-title`}>{view.label}</h2>
-  <p>{view.matches.length} newest matching matches</p>
-  <ul class="tier-counts" aria-label="Tier counts in this view's time range">
-    {view.tierCounts.map(({ tier, count }) => (
-      <li data-tier={tier ?? ''}>{tier?.trim() || 'Tier unavailable'}: {count}</li>
-    ))}
-  </ul>
-  <ol class="match-feed">
-    {view.matches.map((match) => (
-      <li class="match-card" data-match-id={match.matchId}>
-        <article aria-labelledby={`match-${view.id}-${match.matchId}`}>
-          <MatchSummary
-            summary={match}
-            headingId={`match-${view.id}-${match.matchId}`}
-            headingLevel="h3"
-          />
-          <p class="match-link">
-            <a href={`/matches/${match.matchId}/`}>View match {match.matchId} details</a>
-          </p>
-        </article>
-      </li>
-    ))}
-  </ol>
+  <header class="home-view-heading">
+    <h2 id={`home-view-${view.id}-title`}>{view.label}</h2>
+    <p>{view.matches.length} newest matching matches</p>
+  </header>
+
+  {view.days.map((day, dayIndex) => (
+    <section class="day-group" aria-labelledby={`day-${view.id}-${dayIndex}`}>
+      <header class="day-heading">
+        <h3 id={`day-${view.id}-${dayIndex}`}>
+          <span class="day-label-long">{day.label}</span>
+          <span class="day-label-short" aria-hidden="true">{day.shortLabel}</span>
+        </h3>
+        <span aria-hidden="true"></span>
+        <p>{day.count} {day.count === 1 ? 'game' : 'games'}</p>
+      </header>
+
+      {day.leagues.map((league, leagueIndex) => (
+        <section
+          class="league-group"
+          aria-labelledby={`league-${view.id}-${dayIndex}-${leagueIndex}`}
+        >
+          <header class="league-heading">
+            <span class="tier-badge">{league.category.badge}</span>
+            <h4 id={`league-${view.id}-${dayIndex}-${leagueIndex}`}>{league.name}</h4>
+            <p>
+              {league.matches.length} {league.matches.length === 1 ? 'game' : 'games'}
+              {league.category.id === 'other' && (
+                <> · tier {league.rawTier ? `“${league.rawTier}”` : 'unavailable'} mapped to Other</>
+              )}
+            </p>
+          </header>
+          <ol class="match-feed">
+            {league.matches.map((match) => (
+              <li class="match-card" data-match-id={match.matchId}>
+                <HomeMatchRow match={match} />
+              </li>
+            ))}
+          </ol>
+        </section>
+      ))}
+    </section>
+  ))}
 </section>

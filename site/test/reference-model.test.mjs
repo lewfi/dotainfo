@@ -70,11 +70,13 @@ test('team resolution trims names and exposes explicit fallback and no-logo stat
   assert.equal(current.name.display, 'Current Name');
   assert.equal(current.name.source, 'reference-current');
   assert.deepEqual(current.logo, { status: 'available', url: 'https://logo.test/1' });
+  assert.equal(current.monogram, 'TA');
 
   const snapshot = references.resolveTeam({ teamId: 2, denormalizedName: ' Snapshot Name ' });
   assert.equal(snapshot.name.display, 'Snapshot Name');
   assert.equal(snapshot.name.source, 'match-write-time');
   assert.deepEqual(snapshot.logo, { status: 'missing', url: null });
+  assert.equal(snapshot.monogram, 'SN');
 
   const absentReference = references.resolveTeam({
     teamId: 999,
@@ -88,6 +90,7 @@ test('team resolution trims names and exposes explicit fallback and no-logo stat
   assert.equal(tagFallback.name.status, 'available');
   assert.equal(tagFallback.name.display, 'RECOVERED');
   assert.equal(tagFallback.name.source, 'reference-tag');
+  assert.equal(tagFallback.monogram, 'RE');
 
   const noNameOrTag = references.resolveTeam({ teamId: 4, denormalizedName: ' ' });
   assert.equal(noNameOrTag.name.status, 'missing');
@@ -98,6 +101,7 @@ test('team resolution trims names and exposes explicit fallback and no-logo stat
   assert.equal(missing.name.status, 'missing');
   assert.equal(missing.name.display, 'Team name unavailable');
   assert.deepEqual(missing.logo, { status: 'missing', url: null });
+  assert.equal(missing.monogram, '?');
 });
 
 test('league, player, and hero resolution preserve open and undocumented values', () => {

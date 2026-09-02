@@ -42,26 +42,36 @@ function isoFromEpoch(epoch) {
 
   <section class="tier-control" aria-labelledby="tier-control-title">
     <h2 id="tier-control-title">League tiers</h2>
-    <label for="home-view-select">Show</label>
-    <select
-      id="home-view-select"
-      data-home-view-select
-      data-current-view={home.views[0].id}
-      aria-describedby="tier-filter-status tier-filter-range"
-      aria-controls={home.views.map((view) => `home-view-${view.id}`).join(' ')}
+    <div
+      class="tier-options"
+      role="group"
+      aria-label="Filter recent matches by league tier"
+      aria-describedby="tier-hints tier-filter-status tier-filter-range"
     >
       {home.views.map((view, index) => (
-        <option
-          value={view.id}
-          selected={index === 0}
+        <button
+          type="button"
+          class="tier-option"
+          data-home-view-option={view.id}
+          data-view-label={view.label}
+          aria-pressed={index === 0 ? 'true' : 'false'}
+          aria-controls={`home-view-${view.id}`}
+          title={view.hint}
           data-hidden-count={view.hiddenCount}
           data-range-start={isoFromEpoch(view.range.startEpoch)}
           data-range-end={isoFromEpoch(view.range.endEpoch)}
         >
-          {view.label}
-        </option>
+          <span class="tier-option-check" aria-hidden="true">✓</span>
+          <span>{view.label}</span>
+          <small>{view.matches.length}</small>
+        </button>
       ))}
-    </select>
+    </div>
+    <p id="tier-hints" class="tier-hints">
+      {home.views.slice(1).map((view) => (
+        <span><strong>{view.label}</strong> = {view.hint}.</span>
+      ))}
+    </p>
     <p id="tier-filter-status" class="hidden-count" role="status" aria-live="polite">
       Current view: <strong data-current-view-output>{home.views[0].label}</strong>.
       <strong data-hidden-count-output>{home.views[0].hiddenCount}</strong> matches hidden.
@@ -75,23 +85,31 @@ function isoFromEpoch(epoch) {
   {home.views.map((view, index) => <HomeFeed view={view} active={index === 0} />)}
 
   <script is:inline>
-    const select = document.querySelector('[data-home-view-select]');
+    const options = document.querySelectorAll('[data-home-view-option]');
     const hiddenCount = document.querySelector('[data-hidden-count-output]');
     const hiddenRange = document.querySelector('[data-hidden-range]');
     const currentView = document.querySelector('[data-current-view-output]');
 
-    function selectHomeView() {
-      const option = select?.selectedOptions[0];
-      if (!option) return;
+    function selectHomeView(option) {
       for (const view of document.querySelectorAll('[data-home-view]')) {
-        view.hidden = view.dataset.homeView !== option.value;
+        view.hidden = view.dataset.homeView !== option.dataset.homeViewOption;
       }
-      select.dataset.currentView = option.value;
-      currentView.textContent = option.textContent.trim();
+      for (const candidate of options) {
+        candidate.setAttribute('aria-pressed', String(candidate === option));
+      }
+      currentView.textContent = option.dataset.viewLabel;
       hiddenCount.textContent = option.dataset.hiddenCount;
       hiddenRange.textContent = `Counted from ${option.dataset.rangeStart} inclusive to ${option.dataset.rangeEnd} exclusive.`;
     }
 
-    select?.addEventListener('change', selectHomeView);
+    for (const option of options) {
+      option.addEventListener('click', () => selectHomeView(option));
+    }
+
+    for (const logo of document.querySelectorAll('[data-team-logo]')) {
+      const hideFailedLogo = () => { logo.hidden = true; };
+      logo.addEventListener('error', hideFailedLogo);
+      if (logo.complete && logo.naturalWidth === 0) hideFailedLogo();
+    }
   </script>
 </SiteLayout>

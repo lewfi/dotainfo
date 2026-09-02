@@ -367,27 +367,58 @@ const pageFailures = pageResults.filter(
 );
 
 const homeHtml = await readFile(path.join(outputRoot, 'index.html'), 'utf8');
-const selectTag = homeHtml.match(/<select\b[^>]*data-home-view-select[^>]*>/i)?.[0] ?? '';
-const select = attributes(selectTag);
-const describedBy = (select.get('aria-describedby') ?? '').split(/\s+/).filter(Boolean);
-const controlled = (select.get('aria-controls') ?? '').split(/\s+/).filter(Boolean);
+const tierGroupTag = homeHtml.match(/<div\b[^>]*class=["'][^"']*tier-options[^"']*["'][^>]*>/i)?.[0] ?? '';
+const tierGroup = attributes(tierGroupTag);
+const describedBy = (tierGroup.get('aria-describedby') ?? '').split(/\s+/).filter(Boolean);
+const tierButtons = [...homeHtml.matchAll(/<button\b[^>]*data-home-view-option=["'][^"']+["'][^>]*>/gi)];
+const tierButtonAttributes = tierButtons.map((match) => attributes(match[0]));
+const controlled = tierButtonAttributes.map((button) => button.get('aria-controls') ?? '');
 const homeMatchCards = [...homeHtml.matchAll(/<li\b[^>]*>/gi)]
   .filter((match) => (attributes(match[0]).get('class') ?? '').split(/\s+/).includes('match-card'));
 const homeMatchLinks = [...homeHtml.matchAll(/<a\b[^>]*>/gi)]
   .filter((match) => /^\/matches\/\d+\/$/.test(attributes(match[0]).get('href') ?? ''));
+const homeTeamLogos = [...homeHtml.matchAll(/<img\b[^>]*data-team-logo[^>]*>/gi)]
+  .map((match) => attributes(match[0]));
+const tierViewIds = new Set(tierButtonAttributes.map((button) => button.get('data-home-view-option')));
 const tierAssertions = Object.freeze({
-  nativeKeyboardControl: selectTag.startsWith('<select')
-    && !select.has('disabled')
-    && select.get('tabindex') !== '-1',
-  associatedLabel: new RegExp(`<label\\b[^>]*for=["']${select.get('id')}["']`, 'i').test(homeHtml),
-  selectedStateInMarkup: /<option\b[^>]*\bselected(?:\s|>|=)/i.test(homeHtml),
+  nativeKeyboardControl: tierButtons.length === 5
+    && tierButtonAttributes.every((button) => (
+      (button.get('type') ?? '').toLowerCase() === 'button'
+      && !button.has('disabled')
+      && button.get('tabindex') !== '-1'
+    )),
+  associatedLabel: tierGroup.get('role') === 'group'
+    && (tierGroup.get('aria-label') ?? '').trim().length > 0,
+  selectedStateInMarkup: tierButtonAttributes.filter(
+    (button) => button.get('aria-pressed') === 'true',
+  ).length === 1 && tierButtonAttributes.every((button) => button.has('aria-pressed')),
   currentStateDescribed: describedBy.length >= 1
     && describedBy.every((id) => idExists(homeHtml, id))
     && /role=["']status["']/i.test(homeHtml),
-  controlsReferenceViews: controlled.length > 0 && controlled.every((id) => idExists(homeHtml, id)),
+  controlsReferenceViews: controlled.length === 5 && controlled.every((id) => idExists(homeHtml, id)),
+  openTierDomainMapsToOther: ['all', 'top', 'pro', 'amateur', 'other'].every(
+    (id) => tierViewIds.has(id),
+  ),
+  categoryHintsAreVisible: /Top tier<\/strong>\s*=\s*Flagship events/i.test(homeHtml)
+    && /Other<\/strong>\s*=\s*Unclassified, excluded/i.test(homeHtml),
   stateNotColorOnly: /Current view:/i.test(homeHtml) && /matches hidden/i.test(homeHtml),
   everyMatchCardLinksToItsCanonicalRoute: homeMatchCards.length > 0
     && homeMatchLinks.length === homeMatchCards.length,
+  everyWholeRowLinkNamesItsMatch: homeMatchLinks.every((match) => {
+    const link = attributes(match[0]);
+    return (link.get('class') ?? '').split(/\s+/).includes('match-row')
+      && (link.get('aria-label') ?? '').includes('view match details');
+  }),
+  everyTeamLogoIsStableAndAccessible: homeTeamLogos.length > 0
+    && homeTeamLogos.every((logo) => (
+      logo.get('width') === '30'
+      && logo.get('height') === '30'
+      && (logo.get('alt') ?? '').trim().length > 0
+      && logo.get('loading') === 'lazy'
+    )),
+  monogramFallbacksArePresent: /class=["']team-mark["'][^>]*data-monogram=["'][^"']+["'][^>]*role=["']img["']/i.test(homeHtml),
+  realDayAndLeagueHeadings: /<h3\b[^>]*>[^<]*(?:<span[^>]*>[^<]+<\/span>)/i.test(homeHtml)
+    && /<h4\b[^>]*>[^<]+<\/h4>/i.test(homeHtml),
 });
 
 const notFoundHtml = await readFile(path.join(outputRoot, '404.html'), 'utf8');

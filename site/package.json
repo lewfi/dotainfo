@@ -13,6 +13,7 @@
     "audit:references": "node scripts/audit-references.mjs",
     "audit:home": "node scripts/audit-home.mjs",
     "audit:home-card-states": "node scripts/audit-home-card-states.mjs",
+    "audit:home-browser": "node scripts/audit-home-browser.mjs",
     "audit:recent": "node scripts/audit-recent.mjs",
     "audit:historical": "node scripts/audit-historical.mjs",
     "audit:a11y": "node scripts/audit-accessibility.mjs",

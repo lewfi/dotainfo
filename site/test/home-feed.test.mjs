@@ -136,13 +136,25 @@ test('home views match an offline query by ordering and range-scoped tier counts
     'premium',
     'professional',
   ]);
-  assert.equal(home.views[0].id, 'default');
-  assert.equal(home.views[1].id, 'all');
-  assert.ok(home.views.some((view) => view.label === 'future-tier'));
+  assert.deepEqual(home.views.map((view) => view.id), [
+    'all',
+    'top',
+    'pro',
+    'amateur',
+    'other',
+  ]);
+  const other = home.views.find((view) => view.id === 'other');
+  assert.deepEqual(other.selectedTiers, ['excluded', 'future-tier']);
+  assert.ok(other.matches.some((match) => match.league.tier.value === 'future-tier'));
+  assert.equal(other.label, 'Other');
+  assert.ok(home.views.every((view) => view.days.length > 0 || view.matches.length === 0));
+  assert.ok(home.views.flatMap((view) => view.days).every((day) => (
+    day.leagues.flatMap((league) => league.matches).length === day.count
+  )));
 
   const database = await openDuckDB();
   t.after(() => database.close());
-  for (const view of home.views.slice(0, 2)) {
+  for (const view of home.views) {
     const expected = await directView(database.connection, catalog, {
       clock: CLOCK,
       limit: 3,

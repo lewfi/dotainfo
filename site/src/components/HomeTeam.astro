@@ -1,0 +1,43 @@
+---
+const { team, side, winner } = Astro.props;
+const states = [];
+if (team.teamId === null) states.push('Team ID unavailable');
+if (team.name.source === 'reference-tag') states.push('Tag fallback');
+if (team.name.status === 'missing') states.push('No resolved name');
+const state = states.join(' · ');
+const logoAlt = `${team.name.display} logo`;
+const fallbackAlt = `No logo on file for ${team.name.display}`;
+---
+
+<span
+  class:list={['home-team', `home-team--${side}`, { winner }]}
+  data-team-id={team.teamId ?? undefined}
+  data-team-id-state={team.teamId === null ? 'missing' : undefined}
+  data-team-name-source={team.name.source === 'reference-tag' ? 'reference-tag' : undefined}
+  data-logo-state={team.logo.status === 'missing' ? 'missing' : undefined}
+  data-team-display={team.name.display}
+>
+  <span
+    class="team-mark"
+    data-monogram={team.monogram}
+    role={team.logo.status === 'missing' ? 'img' : undefined}
+    aria-label={team.logo.status === 'missing' ? fallbackAlt : undefined}
+    title={team.logo.status === 'missing' ? fallbackAlt : undefined}
+  >
+    {team.logo.status === 'available' && (
+      <img
+        data-team-logo
+        src={team.logo.url}
+        alt={logoAlt}
+        width="30"
+        height="30"
+        loading="lazy"
+      />
+    )}
+  </span>
+  <span class="team-copy">
+    <span class="team-name">{team.name.display}</span>
+    <small class="team-tag">{team.tag ?? 'NO TAG'}</small>
+    {state && <small class="team-state">{state}</small>}
+  </span>
+</span>

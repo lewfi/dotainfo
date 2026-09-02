@@ -249,13 +249,10 @@ img {
 }
 
 .tier-control {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
+  display: grid;
   gap: 0.65rem;
-  padding: 0.75rem 1rem;
+  padding: 0.9rem 1.25rem;
   border: 1px solid var(--line-strong);
-  border-radius: 0;
   background: var(--surface);
 }
 
@@ -266,28 +263,57 @@ img {
   letter-spacing: -0.02em;
 }
 
-.tier-control label {
-  margin-left: auto;
-  color: var(--fg-2);
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.09em;
-  text-transform: uppercase;
+.tier-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
 }
 
-.tier-control select {
-  min-height: 2.75rem;
-  margin-left: 0;
-  padding-inline: 0.65rem 2rem;
+.tier-option {
+  display: inline-flex;
+  min-height: 2.25rem;
+  align-items: center;
+  gap: 0.45rem;
+  padding-inline: 0.75rem;
   border: 1px solid var(--line-strong);
-  border-radius: 0;
+  border-radius: 999px;
   color: var(--fg);
-  background: var(--bg);
+  background: var(--surface);
   font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.tier-option[aria-pressed='true'] {
+  background: var(--surface-2);
+  font-weight: 700;
+}
+
+.tier-option[aria-pressed='false'] .tier-option-check {
+  visibility: hidden;
+}
+
+.tier-option small {
+  color: var(--fg-3);
+  font-family: var(--mono);
+  font-size: 10px;
+}
+
+.tier-hints {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 1rem;
+  margin: 0;
+  color: var(--fg-2);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.tier-hints strong {
+  color: var(--fg);
 }
 
 .hidden-count {
-  flex-basis: 100%;
   margin: 0;
   color: var(--fg-2);
   font-size: 11px;
@@ -300,32 +326,100 @@ img {
 }
 
 .home-view {
-  padding-block: 1.5rem 2rem;
+  margin-block: 1rem 2rem;
+  border: 1px solid var(--line-strong);
+  background: var(--surface);
 }
 
-.home-view > p {
-  margin-block: 0.25rem 0;
+.home-view-heading {
+  padding: 0.9rem 1.25rem;
+}
+
+.home-view-heading p {
+  margin: 0.2rem 0 0;
   color: var(--fg-2);
   font-size: 11px;
 }
 
-.tier-counts {
+.home-view .day-heading {
   display: flex;
-  flex-wrap: wrap;
-  gap: 0.35rem 0.9rem;
-  margin-block: 0.75rem;
-  padding: 0;
-  color: var(--fg-2);
+  align-items: center;
+  gap: 0.9rem;
+  padding: 0.95rem 1.25rem 0.65rem;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  background: var(--bg);
+}
+
+.day-heading h3,
+.day-heading p,
+.league-heading h4,
+.league-heading p {
+  margin: 0;
+}
+
+.day-heading h3 {
+  font-size: 13px;
+  letter-spacing: 0.02em;
+  line-height: 1;
+}
+
+.day-heading > span {
+  height: 1px;
+  flex: 1;
+  background: var(--line);
+}
+
+.day-heading p {
+  color: var(--fg-3);
+  font-family: var(--mono);
   font-size: 10px;
+  white-space: nowrap;
+}
+
+.day-label-short {
+  display: none;
+}
+
+.home-view .league-heading {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.7rem 1.25rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.tier-badge {
+  flex: none;
+  padding: 0.28rem 0.4rem;
+  border: 1px solid var(--line-strong);
+  border-radius: 0.2rem;
+  color: var(--fg-2);
+  background: var(--surface-2);
+  font-family: var(--mono);
+  font-size: 9px;
   font-weight: 700;
   letter-spacing: 0.09em;
-  list-style: none;
-  text-transform: uppercase;
+}
+
+.league-heading h4 {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 13px;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.league-heading p {
+  margin-left: auto;
+  color: var(--fg-3);
+  font-size: 10px;
+  white-space: nowrap;
 }
 
 .match-feed {
-  display: grid;
-  gap: 0.5rem;
+  margin: 0;
   padding: 0;
   list-style: none;
 }
@@ -337,18 +431,202 @@ img {
   box-shadow: none;
 }
 
-.match-card {
+.match-detail-summary,
+.historical-summary {
   padding: 1rem 1.25rem;
   border: 1px solid var(--line-strong);
-  border-radius: 0;
   background: var(--surface);
 }
 
-.match-feed .match-card > article {
+.home-view .match-card {
+  border-bottom: 1px solid var(--line);
+}
+
+.home-view .match-card:last-child {
+  border-bottom: 0;
+}
+
+.match-row {
   display: grid;
-  grid-template-columns: minmax(10rem, 0.9fr) minmax(18rem, 1.35fr) minmax(12rem, 1fr) auto;
-  gap: 1rem;
+  grid-template-columns: 4rem minmax(9rem, 1fr) 7rem minmax(9rem, 1fr) 10rem;
   align-items: center;
+  gap: 0.8rem;
+  min-width: 0;
+  padding: 0.75rem 1.25rem;
+  text-decoration: none;
+}
+
+.match-row:hover {
+  color: var(--fg);
+  background: var(--surface-2);
+}
+
+.match-row:focus-visible {
+  position: relative;
+  z-index: 1;
+  outline-offset: -0.25rem;
+}
+
+.match-time,
+.home-match-meta {
+  color: var(--fg-2);
+  font-family: var(--mono);
+  font-size: 11px;
+}
+
+.home-team {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.home-team--radiant {
+  justify-content: flex-end;
+}
+
+.home-team--radiant .team-mark {
+  order: 2;
+}
+
+.home-team--radiant .team-copy {
+  align-items: flex-end;
+  text-align: right;
+}
+
+.team-mark {
+  position: relative;
+  display: grid;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 30px;
+  overflow: hidden;
+  border: 1px dashed var(--line-strong);
+  border-radius: 0.35rem;
+  background: var(--surface-2);
+  place-items: center;
+}
+
+.team-mark::before {
+  color: var(--fg-3);
+  content: attr(data-monogram);
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.team-mark:has(img:not([hidden])) {
+  border-style: solid;
+}
+
+.team-mark img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  background: var(--surface-2);
+  object-fit: contain;
+}
+
+.team-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+
+.team-name {
+  max-width: 14rem;
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.team-tag,
+.team-state {
+  max-width: 14rem;
+  overflow: hidden;
+  color: var(--fg-3);
+  font-family: var(--mono);
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 0.05em;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.team-state {
+  color: var(--fg-2);
+  letter-spacing: 0;
+}
+
+.home-score {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  font-family: var(--mono);
+}
+
+.home-score > span {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.home-score strong {
+  font-size: 16px;
+}
+
+.home-score small {
+  padding: 0.2rem 0.25rem;
+  border-radius: 0.2rem;
+  color: var(--win-fg);
+  background: var(--win-bg);
+  font-size: 8px;
+  font-weight: 800;
+}
+
+.score-separator,
+.home-score > span:not(.score-winner) strong {
+  color: var(--fg-3);
+  font-weight: 500;
+}
+
+.home-score .no-result {
+  flex-direction: column;
+  gap: 0.15rem;
+  color: var(--fg-3);
+}
+
+.home-score .no-result strong {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.home-score .no-result small {
+  padding: 0;
+  color: var(--fg-3);
+  background: transparent;
+  font-size: 8px;
+  letter-spacing: 0.06em;
+}
+
+.home-match-meta {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.45rem;
+  white-space: nowrap;
+}
+
+.home-match-meta .row-arrow {
+  color: var(--fg-3);
+  font-family: var(--sans);
+  font-size: 15px;
 }
 
 .match-heading,
@@ -388,13 +666,6 @@ img {
   font-size: 10px;
   letter-spacing: 0.09em;
   text-transform: uppercase;
-}
-
-.match-link {
-  margin: 0;
-  font-size: 12px;
-  font-weight: 600;
-  white-space: nowrap;
 }
 
 .teams {
@@ -668,21 +939,146 @@ img {
     padding-block: 2rem 1.5rem;
   }
 
-  .tier-control select {
+  .tier-control {
+    padding-inline: 0.75rem;
+  }
+
+  .tier-options {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding: 0.2rem;
+    overscroll-behavior-inline: contain;
+  }
+
+  .tier-option {
+    flex: none;
+  }
+
+  .tier-hints {
+    display: grid;
+    gap: 0.2rem;
+  }
+
+  .home-view {
+    margin-top: 0.75rem;
+  }
+
+  .home-view-heading,
+  .home-view .day-heading,
+  .home-view .league-heading {
+    padding-inline: 0.75rem;
+  }
+
+  .day-label-long {
+    display: none;
+  }
+
+  .day-label-short {
+    display: inline;
+  }
+
+  .home-view .league-heading {
+    flex-wrap: wrap;
+    gap: 0.45rem;
+  }
+
+  .league-heading h4 {
+    flex: 1;
+    font-size: 12px;
+  }
+
+  .league-heading p {
     width: 100%;
-    margin: 0.5rem 0 0;
-  }
-
-  .tier-control label {
     margin-left: 0;
+    overflow-wrap: anywhere;
+    white-space: normal;
   }
 
-  .match-feed .match-card > article {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 0.75rem;
+  .match-row {
+    position: relative;
+    display: grid;
+    grid-template-areas:
+      'radiant radiant'
+      'dire dire'
+      'time meta';
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 0.45rem;
+    padding: 0.7rem 0.75rem;
   }
 
-  .match-card,
+  .match-time {
+    grid-area: time;
+    align-self: center;
+  }
+
+  .home-team--radiant {
+    grid-area: radiant;
+  }
+
+  .home-team--dire {
+    grid-area: dire;
+  }
+
+  .home-team,
+  .home-team--radiant {
+    justify-content: flex-start;
+    padding-right: 3.5rem;
+  }
+
+  .home-team--radiant .team-mark {
+    order: 0;
+  }
+
+  .home-team--radiant .team-copy {
+    align-items: flex-start;
+    text-align: left;
+  }
+
+  .team-mark {
+    width: 24px;
+    height: 24px;
+    flex-basis: 24px;
+  }
+
+  .team-name,
+  .team-tag,
+  .team-state {
+    max-width: calc(100vw - 7.5rem);
+  }
+
+  .home-score {
+    position: absolute;
+    z-index: 1;
+    inset: 0.75rem 0.9rem auto auto;
+    display: flex;
+    height: 3.85rem;
+    flex-direction: column;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0;
+  }
+
+  .home-score .score-separator {
+    display: none;
+  }
+
+  .home-score .no-result {
+    justify-content: center;
+  }
+
+  .home-match-meta {
+    grid-area: meta;
+    justify-content: flex-start;
+    padding-left: 0.5rem;
+    color: var(--fg-3);
+    font-size: 10px;
+    white-space: normal;
+  }
+
+  .home-match-meta .row-arrow {
+    margin-left: auto;
+  }
+
   .detail-section {
     padding: 1rem;
   }

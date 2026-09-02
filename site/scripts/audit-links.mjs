@@ -168,11 +168,15 @@ assert.ok(homeHtml, 'emitted home page is missing');
 const homeViews = [];
 const distinctHomeMatchIds = new Set();
 const distinctPayloadFallbackIds = new Set();
-for (const section of homeHtml.matchAll(
-  /<section\b[^>]*data-home-view="([^"]+)"[^>]*>([\s\S]*?)<\/section>/gi,
-)) {
-  const matchIds = [...section[2].matchAll(/href="\/matches\/(\d+)\/"/g)]
+const homeViewMarkers = [...homeHtml.matchAll(
+  /<section\b[^>]*data-home-view="([^"]+)"[^>]*>/gi,
+)];
+for (const [index, section] of homeViewMarkers.entries()) {
+  const sectionEnd = homeViewMarkers[index + 1]?.index ?? homeHtml.length;
+  const sectionHtml = homeHtml.slice(section.index, sectionEnd);
+  const matchIds = [...sectionHtml.matchAll(/href="\/matches\/(\d+)\/"/g)]
     .map((match) => Number(match[1]));
+  const cards = [...sectionHtml.matchAll(/<li\b[^>]*class="[^"]*\bmatch-card\b[^"]*"/g)].length;
   let preRendered = 0;
   let viaPayload = 0;
   let unresolved = 0;
@@ -187,6 +191,7 @@ for (const section of homeHtml.matchAll(
   }
   homeViews.push(Object.freeze({
     view: section[1],
+    cards,
     links: matchIds.length,
     preRendered,
     viaPayload,
@@ -206,6 +211,7 @@ const resolutionCounts = Object.fromEntries(
 const assertions = Object.freeze({
   everyInternalHrefResolves: resolutionCounts.unresolved === 0,
   homeViewsWereFound: homeViews.length > 0,
+  everyHomeViewHasOneLinkPerCard: homeViews.every((view) => view.links === view.cards),
   everyHomeViewLinkResolves: homeViews.every((view) => view.unresolved === 0),
   everyHtmlPageHasIconReference:
     new Set(iconReferences.filter((icon) => icon.href).map((icon) => icon.source)).size

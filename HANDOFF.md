@@ -1370,6 +1370,64 @@ The immediately preceding pre-change baseline run by the same agent on this mach
 as a performance claim. The differing page counts reflect the moving trailing-90-day window
 and seven matches added by two ingest commits fetched before final verification.
 
+**Home feed visual overhaul - step 22 complete.** The home page now follows section 01 and
+the 380px variant of `design/reference-v2.html` without changing the match-detail summary,
+draft, boxscores, or advantage graph reserved for step 23. The default view is **All
+results**, matching the reference's filter state and ensuring the no-JavaScript page shows a
+useful cross-tier result set. It is followed by the fixed Top tier, Pro, Amateur, and Other
+views. Premium maps to Top tier, professional to Pro, amateur to Amateur, and excluded,
+null, blank, or any unrecognised future value maps to Other. The committed home fixture's
+invented `future-tier` is asserted to render in Other, so the open tier domain cannot silently
+drop or throw on new values. Each named category has its reference hint in visible control
+text as well as on its native filter button.
+
+Matches are grouped first by UTC calendar day and then by league within the day. The page
+retains one `h1`; view titles are `h2`, day labels are real `h3` headings, and league names
+are `h4`. Each match is one keyboard-focusable canonical anchor covering its complete row,
+with an `aria-label` naming both teams, the score or no-result state, league, duration, and
+the details action. The old visible `View match {id} details` tail is gone, while the step 17
+gate still requires exactly one resolving match link per card.
+
+Home identity comes from `teams.parquet`: an available `logo_url` emits a remote image with
+30px width and height attributes, descriptive alt text, and lazy loading inside a fixed-size
+slot. The slot carries a CSS monogram underneath, and the home script hides an image after a
+load error, so a failed remote request exposes the same fallback without changing row
+geometry. The monogram uses the trimmed team tag when present, otherwise initials from the
+resolved name, and `?` only for the explicit unresolved identity. Missing-logo slots have an
+accessible `No logo on file for …` label and a dashed `--line-strong` boundary.
+
+At the moving audit clock `2026-09-02T20:51:28Z`, the five category views contain 400 card
+placements and 300 unique matches: All results 100, Top tier 100, Pro 100, Amateur 0, and
+Other 100. Amateur is empty because the current committed tier domain is exactly excluded,
+premium, and professional; the stable empty category remains present rather than vanishing.
+The 400 placements contain 97 null-team-ID side appearances across 63 cards / 34 unique
+matches, and 135 missing-logo side appearances across 95 cards / 64 unique matches, including
+seven distinct non-null team IDs. Real match `8974900056` renders the Radiant side as `Team
+name unavailable`, `?`, `NO TAG`, and `Team ID unavailable · No resolved name`. Real match
+`8973266808` renders Radiant team ID `6137196` (`SHINFU.'s party`) in the same 30px slot with
+the name-derived `SS` monogram and the accessible missing-logo label.
+
+The emitted CSS keeps every decorative home divider inside `.home-view`, whose own border
+uses `--line-strong`; selectors for day headings, league headings, and rows literally begin
+with `.home-view ` before using `--line`, satisfying the step 21 syntactic and semantic gate.
+No new colour was introduced. Headless Chrome's device emulation measured both
+`clientWidth` and `scrollWidth` as 380px at the reference width, and as 320px at the smaller
+check, with no document-level horizontal overflow in either case. Separate script-disabled
+380px screenshots sampled the body background as `rgb(246, 242, 234)` for a light preference
+and `rgb(15, 17, 20)` for dark; the static All results view remained the sole visible view.
+
+Against the existing step 21 artifact on this checkout, `dist/index.html` grew from 476,615
+to 682,568 bytes: +205,953 bytes / **43.212%**, above the 25% reporting threshold. The cost is
+the required repeated identity markup—up to two remote logo records or accessible monogram
+slots per row—plus day/league heading structure and whole-row accessible labels. It is not
+additional match data: the new fixed categories currently emit only 400 placements versus
+the old five raw/combined views' 500. A first direct implementation reached 866,926 bytes;
+reusing score/time nodes across desktop and mobile and storing the failure monogram on the
+fixed slot reduced the shipped result by 184,232 bytes without weakening the degraded
+states. The final verified build produced 1,537 HTML pages in 41,161.929 ms total; both build
+assertions passed. No ms/page comparison is made because the measured machine variance is
+not useful for this step.
+
 ### v1 acceptance criteria
 
 - [ ] `npm run build` reports a warning at 10 minutes and fails before Cloudflare's 20-minute cap
@@ -1824,3 +1882,11 @@ These steps continue the canonical numbering in `AGENTS.md`.
     emitted CSS, every text/focus/structural contrast pair passes in both themes, decorative
     borders are provably inside a separately bounded component, both deliberate audit
     violations fail, and script-disabled browser renders follow both colour preferences.
+22. **Home feed visual overhaul.** Apply section 01 and its 380px variant from the second
+    visual reference to the home feed only: render reference logos with stable monogram
+    fallbacks, group results by UTC day and league, expose the fixed open-domain tier mapping,
+    and make each complete row the canonical match link. Keep match-detail draft, scoreboards,
+    and advantage graph unchanged for step 23. Approval gate: the invented tier fixture maps
+    to Other, current degraded states render against real committed IDs, every card retains
+    one resolving accessible link, 380px and 320px headless renders have no document overflow,
+    and the home artifact growth is measured and explained.

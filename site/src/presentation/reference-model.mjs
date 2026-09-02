@@ -44,6 +44,20 @@ function resolveLogo(value) {
     : Object.freeze({ status: 'missing', url: null });
 }
 
+function teamMonogram(tag, name) {
+  const cleanedTag = cleanText(tag);
+  if (cleanedTag) {
+    const characters = cleanedTag.match(/[\p{L}\p{N}]/gu) ?? [];
+    if (characters.length > 0) return characters.slice(0, 2).join('').toUpperCase();
+  }
+
+  const cleanedName = cleanText(name);
+  if (!cleanedName) return '?';
+  const words = cleanedName.match(/[\p{L}\p{N}]+/gu) ?? [];
+  if (words.length > 1) return `${words[0][0]}${words[1][0]}`.toUpperCase();
+  return (words[0]?.slice(0, 2) || '?').toUpperCase();
+}
+
 function heroIcon(machineName) {
   const cleaned = cleanText(machineName);
   const slug = cleaned?.replace(/^npc_dota_hero_/, '') ?? null;
@@ -99,19 +113,22 @@ export class ReferenceResolver {
   resolveTeam({ teamId, denormalizedName = null } = {}) {
     const id = normalizeId(teamId);
     const reference = id === null ? null : this.#teams.get(id) ?? null;
+    const name = resolveName(
+      [
+        [reference?.name, 'reference-current'],
+        [denormalizedName, 'match-write-time'],
+        [reference?.tag, 'reference-tag'],
+      ],
+      MISSING_LABELS.team,
+    );
+    const tag = cleanText(reference?.tag);
     return Object.freeze({
       teamId: id,
       referenceFound: reference !== null,
-      name: resolveName(
-        [
-          [reference?.name, 'reference-current'],
-          [denormalizedName, 'match-write-time'],
-          [reference?.tag, 'reference-tag'],
-        ],
-        MISSING_LABELS.team,
-      ),
+      name,
       logo: resolveLogo(reference?.logo_url),
-      tag: cleanText(reference?.tag),
+      tag,
+      monogram: teamMonogram(tag, name.value),
     });
   }
 

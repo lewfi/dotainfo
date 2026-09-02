@@ -28,6 +28,7 @@ Refer to steps by these numbers only. Do not renumber.
 19. Match summary card and home feed styling
 20. Match detail page styling
 21. Token migration for the second visual design
+22. Home feed visual overhaul
 
 ## Never
 
