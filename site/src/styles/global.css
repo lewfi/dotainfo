@@ -35,9 +35,14 @@ a {
   text-decoration: none;
 }
 
-.intro {
+.intro,
+.home-intro {
   max-width: 42rem;
   padding-block: 6rem;
+}
+
+.home-intro {
+  padding-block: 3rem 2rem;
 }
 
 .eyebrow {
@@ -55,6 +60,100 @@ h1 {
 
 p {
   line-height: 1.6;
+}
+
+.tier-control {
+  padding: 1rem;
+  border: 1px solid #3a3d44;
+  border-radius: 0.5rem;
+  background: #202329;
+}
+
+.tier-control h2,
+.home-view h2 {
+  margin-top: 0;
+}
+
+.tier-control select {
+  margin-left: 0.5rem;
+  padding: 0.4rem;
+  color: inherit;
+  background: #17191d;
+  border: 1px solid #737984;
+}
+
+.hidden-count {
+  margin-bottom: 0;
+  color: #c7cad0;
+}
+
+.hidden-count span {
+  display: block;
+  font-size: 0.875rem;
+}
+
+.home-view {
+  padding-block: 2rem;
+}
+
+.tier-counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  padding: 0;
+  list-style: none;
+  color: #c7cad0;
+}
+
+.match-feed {
+  display: grid;
+  gap: 1rem;
+  padding: 0;
+  list-style: none;
+}
+
+.match-card {
+  padding: 1rem;
+  border: 1px solid #3a3d44;
+  border-radius: 0.5rem;
+  background: #202329;
+}
+
+.match-heading,
+.match-meta,
+.teams p {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.match-heading h3,
+.teams p {
+  margin: 0;
+}
+
+.match-heading span,
+.match-meta {
+  color: #a9adb5;
+  font-size: 0.875rem;
+}
+
+.teams {
+  margin-block: 1rem;
+}
+
+.teams .winner {
+  color: #f3c869;
+}
+
+.teams small {
+  margin-left: 0.5rem;
+  font-weight: 700;
+}
+
+.match-meta {
+  flex-wrap: wrap;
+  justify-content: flex-start;
 }
 
 .site-footer {

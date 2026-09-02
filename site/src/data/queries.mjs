@@ -1,10 +1,11 @@
 import {
   lateShards,
   monthShards,
+  readableShards,
   regularShards,
   windowShards,
 } from './catalog.mjs';
-import { trailingWindow, utcMonthFromEpoch } from './clock.mjs';
+import { buildClockEpoch, trailingWindow, utcMonthFromEpoch } from './clock.mjs';
 import { openDuckDB, queryRows, sourceUnionSql } from './duckdb.mjs';
 import {
   DRAFT_COLUMNS,
@@ -21,6 +22,67 @@ function validateMatchId(matchId) {
 
 function shardNames(shards) {
   return shards.map((shard) => `${shard.table}/${shard.name}`);
+}
+
+function sqlString(value) {
+  return `'${String(value).replaceAll("'", "''")}'`;
+}
+
+function normalizeHomeTiers(tiers) {
+  if (tiers === null || tiers === undefined) {
+    return null;
+  }
+  if (!Array.isArray(tiers)) {
+    throw new TypeError('home tiers must be an array or null for all tiers');
+  }
+  for (const tier of tiers) {
+    if (tier !== null && typeof tier !== 'string') {
+      throw new TypeError('home tier values must be strings or null');
+    }
+  }
+  return Object.freeze([...new Set(tiers)]);
+}
+
+function tierPredicate(tiers) {
+  if (tiers === null) {
+    return null;
+  }
+  if (tiers.length === 0) {
+    return 'FALSE';
+  }
+  const values = tiers.filter((tier) => tier !== null);
+  const clauses = [];
+  if (values.length > 0) {
+    clauses.push(`league_tier IN (${values.map(sqlString).join(', ')})`);
+  }
+  if (tiers.includes(null)) {
+    clauses.push('league_tier IS NULL');
+  }
+  return clauses.length === 1 ? clauses[0] : `(${clauses.join(' OR ')})`;
+}
+
+function homeWhere(endEpoch, tiers, startEpoch = null) {
+  const clauses = [`start_time < ${endEpoch}`];
+  if (startEpoch !== null) {
+    clauses.unshift(`start_time >= ${startEpoch}`);
+  }
+  const selectedTierPredicate = tierPredicate(tiers);
+  if (selectedTierPredicate) {
+    clauses.push(selectedTierPredicate);
+  }
+  return `WHERE ${clauses.join(' AND ')}`;
+}
+
+function tierIsSelected(tier, selectedTiers) {
+  return selectedTiers === null || selectedTiers.includes(tier);
+}
+
+function sortedTiers(tiers) {
+  return [...tiers].sort((left, right) => {
+    if (left === null) return 1;
+    if (right === null) return -1;
+    return left.localeCompare(right);
+  });
 }
 
 async function selectRows(connection, shards, table, columns, suffix = '') {
@@ -42,20 +104,39 @@ export class DataReader {
   constructor(catalog, database) {
     this.catalog = catalog;
     this.database = database;
+    this.homeTiers = null;
   }
 
   close() {
     this.database.close();
   }
 
-  async home({ limit = 100 } = {}) {
+  async availableHomeTiers() {
+    if (this.homeTiers !== null) {
+      return this.homeTiers;
+    }
+    const shards = readableShards(this.catalog, 'matches');
+    const rows = await selectRows(
+      this.database.connection,
+      shards,
+      'matches',
+      ['league_tier'],
+    );
+    this.homeTiers = Object.freeze(sortedTiers(new Set(rows.map((row) => row.league_tier))));
+    return this.homeTiers;
+  }
+
+  async home({ limit = 100, tiers = null, clock = new Date() } = {}) {
     if (!Number.isInteger(limit) || limit <= 0) {
       throw new TypeError('home limit must be a positive integer');
     }
 
-    const regular = regularShards(this.catalog, 'matches').sort(
-      (left, right) => right.month.localeCompare(left.month),
-    );
+    const endEpoch = buildClockEpoch(clock);
+    const selectedTiers = normalizeHomeTiers(tiers);
+
+    const regular = regularShards(this.catalog, 'matches')
+      .filter((shard) => shard.startEpoch < endEpoch)
+      .sort((left, right) => right.month.localeCompare(left.month));
     const selected = [...lateShards(this.catalog, 'matches')];
     let rows = [];
 
@@ -66,7 +147,8 @@ export class DataReader {
         selected,
         'matches',
         HOME_COLUMNS,
-        `ORDER BY start_time DESC, match_id DESC LIMIT ${limit}`,
+        `${homeWhere(endEpoch, selectedTiers)} `
+          + `ORDER BY start_time DESC, match_id DESC LIMIT ${limit}`,
       );
       const nextOlderShard = regular[index + 1];
       const oldestSelectedStart = rows.at(-1)?.start_time;
@@ -84,11 +166,45 @@ export class DataReader {
         selected,
         'matches',
         HOME_COLUMNS,
-        `ORDER BY start_time DESC, match_id DESC LIMIT ${limit}`,
+        `${homeWhere(endEpoch, selectedTiers)} `
+          + `ORDER BY start_time DESC, match_id DESC LIMIT ${limit}`,
       );
     }
 
-    return Object.freeze({ rows, sources: Object.freeze(shardNames(selected)) });
+    const startEpoch = rows.at(-1)?.start_time ?? endEpoch;
+    const rangeRows = rows.length === 0
+      ? []
+      : await selectRows(
+        this.database.connection,
+        selected,
+        'matches',
+        ['start_time', 'league_tier'],
+        homeWhere(endEpoch, null, startEpoch),
+      );
+    const tierCounts = new Map();
+    for (const row of rangeRows) {
+      tierCounts.set(row.league_tier, (tierCounts.get(row.league_tier) ?? 0) + 1);
+    }
+    const tierCountRows = Object.freeze(
+      sortedTiers(tierCounts.keys()).map((tier) => Object.freeze({
+        tier,
+        count: tierCounts.get(tier),
+      })),
+    );
+    const hiddenCount = tierCountRows.reduce(
+      (count, entry) => count + (tierIsSelected(entry.tier, selectedTiers) ? 0 : entry.count),
+      0,
+    );
+
+    return Object.freeze({
+      rows,
+      sources: Object.freeze(shardNames(selected)),
+      selectedTiers,
+      availableTiers: await this.availableHomeTiers(),
+      tierCounts: tierCountRows,
+      hiddenCount,
+      range: Object.freeze({ startEpoch, endEpoch }),
+    });
   }
 
   async detail(matchId) {

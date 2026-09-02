@@ -1,14 +1,107 @@
 ---
+import path from 'node:path';
+
+import HomeFeed from '../components/HomeFeed.astro';
+import { createCatalog } from '../data/catalog.mjs';
+import { DataReader } from '../data/queries.mjs';
+import { loadReferences } from '../data/references.mjs';
 import SiteLayout from '../layouts/SiteLayout.astro';
+import { createHomeFeedViews } from '../presentation/home-feed.mjs';
+
+const buildClock = process.env.DOTAINFO_BUILD_CLOCK ?? new Date().toISOString();
+const dataRoot = path.resolve(process.cwd(), '../data');
+const [catalog, references] = await Promise.all([
+  createCatalog({ dataRoot }),
+  loadReferences({ referenceRoot: path.join(dataRoot, 'reference') }),
+]);
+const reader = await DataReader.create(catalog);
+let home;
+try {
+  home = await createHomeFeedViews({
+    reader,
+    references,
+    clock: buildClock,
+    limit: 100,
+  });
+} finally {
+  reader.close();
+}
+
+function isoFromEpoch(epoch) {
+  return new Date(epoch * 1000).toISOString();
+}
 ---
 
-<SiteLayout>
-  <section class="intro" aria-labelledby="page-title">
+<SiteLayout title="Recent Dota 2 matches">
+  <section class="home-intro" aria-labelledby="page-title">
     <p class="eyebrow">Dota 2 professional matches</p>
-    <h1 id="page-title">Results, drafts, and box scores</h1>
-    <p>
-      The static site scaffold is ready. Match data and detail views will be added in the
-      next implementation steps.
+    <h1 id="page-title">Recent match results</h1>
+    <p>The newest 100 matches for the selected league tiers.</p>
+  </section>
+
+  <section class="tier-control" aria-labelledby="tier-control-title">
+    <h2 id="tier-control-title">League tiers</h2>
+    <label for="home-view-select">Show</label>
+    <select id="home-view-select" data-home-view-select>
+      {home.views.map((view, index) => (
+        <option
+          value={view.id}
+          selected={index === 0}
+          data-hidden-count={view.hiddenCount}
+          data-range-start={isoFromEpoch(view.range.startEpoch)}
+          data-range-end={isoFromEpoch(view.range.endEpoch)}
+        >
+          {view.label}
+        </option>
+      ))}
+    </select>
+    <p class="hidden-count" aria-live="polite">
+      <strong data-hidden-count-output>{home.views[0].hiddenCount}</strong> matches hidden.
+      <span data-hidden-range>
+        Counted from {isoFromEpoch(home.views[0].range.startEpoch)} inclusive to
+        {' '}{isoFromEpoch(home.views[0].range.endEpoch)} exclusive.
+      </span>
     </p>
   </section>
+
+  {home.views.map((view, index) => <HomeFeed view={view} active={index === 0} />)}
+
+  <script is:inline>
+    const select = document.querySelector('[data-home-view-select]');
+    const hiddenCount = document.querySelector('[data-hidden-count-output]');
+    const hiddenRange = document.querySelector('[data-hidden-range]');
+
+    function selectHomeView() {
+      const option = select?.selectedOptions[0];
+      if (!option) return;
+      for (const view of document.querySelectorAll('[data-home-view]')) {
+        view.hidden = view.dataset.homeView !== option.value;
+      }
+      hiddenCount.textContent = option.dataset.hiddenCount;
+      hiddenRange.textContent = `Counted from ${option.dataset.rangeStart} inclusive to ${option.dataset.rangeEnd} exclusive.`;
+    }
+
+    function updateRelativeTimes() {
+      const formatter = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' });
+      const units = [
+        ['year', 31_536_000],
+        ['month', 2_592_000],
+        ['day', 86_400],
+        ['hour', 3_600],
+        ['minute', 60],
+      ];
+      for (const time of document.querySelectorAll('[data-relative-time]')) {
+        const timestamp = Date.parse(time.dateTime);
+        if (!Number.isFinite(timestamp)) continue;
+        const difference = (timestamp - Date.now()) / 1000;
+        const [unit, seconds] = units.find(([, size]) => Math.abs(difference) >= size) ?? ['second', 1];
+        time.textContent = formatter.format(Math.trunc(difference / seconds), unit);
+        time.title = new Date(timestamp).toISOString();
+      }
+    }
+
+    select?.addEventListener('change', selectHomeView);
+    updateRelativeTimes();
+    window.setInterval(updateRelativeTimes, 60_000);
+  </script>
 </SiteLayout>

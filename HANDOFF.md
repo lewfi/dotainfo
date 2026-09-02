@@ -1028,8 +1028,9 @@ Observable Plot for charts, plain CSS. No React, no Tailwind, no UI framework.
   matches and no premium matches in those seven closed months; The International 2026 then
   contributes 147 premium matches in August. Excluded exceeds half of every month from
   January through June, peaks at 81.65% in May, and falls to 14.71% in July. The
-  premium-plus-professional default would hide most matches in several recent months, so
-  revisit whether it is appropriate for the home feed and 90-day window.
+  premium-plus-professional default hides most matches in several recent months. That default
+  is explicitly approved for v1. Wherever this filter hides matches, show the hidden-match
+  count alongside the control.
 - `/matches/[id]` has two page types divided by the build's trailing-90-day boundary:
   - **Full recent page:** pre-rendered for matches inside the window, with draft order (picks
     and bans, both teams, in `ord` sequence), both boxscores (hero, K/D/A, LH/DN, GPM/XPM,
@@ -1157,12 +1158,12 @@ The newest samples are compositionally biased because the partial REST shard con
 | 2026-06 | 1,113 | 533 | 47.889% | 580 | 0 | 533 |
 | 2026-07 | 435 | 371 | 85.287% | 64 | 0 | 371 |
 
-**Finding and recommendation, pending approval:** the same default appears to keep 100% of
+**Decision:** the same default appears to keep 100% of
 the newest feed while hiding 69–82% of several recent closed months. That discontinuity is a
-source-path artifact, not a stable user-facing definition of relevance. v1 should default to
-all tiers and expose tier as a visible control, with `premium` plus `professional` available
-as an explicit selection. Do not silently retain the current default. This recommendation is
-recorded for review; §7 remains unchanged.
+source-path artifact, not a stable user-facing definition of relevance. The `premium` plus
+`professional` default is nevertheless explicitly approved for v1. The tier control must
+show the number of hidden matches wherever filtering hides any, using the same half-open
+`start_time` range as the rendered set.
 
 ### Match-page completeness
 
@@ -1454,9 +1455,11 @@ These steps continue the canonical numbering in `AGENTS.md`.
     null-ID, unusable-name, missing-reference, and missing-logo counts without pinning them,
     because scheduled ingest and weekly reference refreshes can change those counts.
 13. **Home feed and tier control.** Render the newest 100 matches with results, duration,
-    league, relative time, and a visible tier filter. Approval gate: ordering and tier counts
-    match the offline query, all-tier and premium-plus-professional views are both testable,
-    and the chosen default is explicitly approved.
+    league, relative time, and a visible tier filter. The explicitly approved default is
+    `premium` plus `professional`. Wherever filtering hides matches, show the hidden-match
+    count alongside the control; define it over the same half-open `start_time` range as the
+    rendered set. Approval gate: ordering and tier counts match the offline query, and
+    all-tier and premium-plus-professional views are both testable.
 14. **Recent full match pages and dynamic pre-render budget.** Build the full page and
     pre-render it only for the measured trailing 90-day set, including boxscores, draft, and
     advantage graph when available. Approval gate: normal, no-draft, null-team,

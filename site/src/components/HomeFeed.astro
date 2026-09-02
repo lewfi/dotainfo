@@ -1,0 +1,76 @@
+---
+const { view, active = false } = Astro.props;
+
+function durationLabel(duration) {
+  if (duration.status !== 'available') {
+    return 'Duration unavailable';
+  }
+  const minutes = Math.floor(duration.value / 60);
+  const seconds = duration.value % 60;
+  return `${minutes}:${String(seconds).padStart(2, '0')}`;
+}
+
+function scoreLabel(score) {
+  return score.status === 'available'
+    ? `${score.radiant}–${score.dire}`
+    : 'Score unavailable';
+}
+---
+
+<section
+  class="home-view"
+  id={`home-view-${view.id}`}
+  data-home-view={view.id}
+  hidden={!active}
+>
+  <h2>{view.label}</h2>
+  <p>{view.matches.length} newest matching matches</p>
+  <ul class="tier-counts" aria-label="Tier counts in this view's time range">
+    {view.tierCounts.map(({ tier, count }) => (
+      <li data-tier={tier ?? ''}>{tier?.trim() || 'Tier unavailable'}: {count}</li>
+    ))}
+  </ul>
+  <ol class="match-feed">
+    {view.matches.map((match) => (
+      <li class="match-card" data-match-id={match.matchId}>
+        <article aria-labelledby={`match-${view.id}-${match.matchId}`}>
+          <header class="match-heading">
+            <h3 id={`match-${view.id}-${match.matchId}`}>{match.league.name.display}</h3>
+            <span>{match.league.tier.display}</span>
+          </header>
+          <div class="teams">
+            <p
+              class:list={{ winner: match.result.winner === 'radiant' }}
+              data-team-id={match.teams.radiant.teamId ?? undefined}
+            >
+              <span>
+                {match.teams.radiant.name.display}
+                {match.result.winner === 'radiant' && <small>Winner</small>}
+              </span>
+              <strong>{match.score.radiant ?? '—'}</strong>
+            </p>
+            <p
+              class:list={{ winner: match.result.winner === 'dire' }}
+              data-team-id={match.teams.dire.teamId ?? undefined}
+            >
+              <span>
+                {match.teams.dire.name.display}
+                {match.result.winner === 'dire' && <small>Winner</small>}
+              </span>
+              <strong>{match.score.dire ?? '—'}</strong>
+            </p>
+          </div>
+          <footer class="match-meta">
+            <span>{scoreLabel(match.score)}</span>
+            <span>{durationLabel(match.duration)}</span>
+            {match.date.status === 'available' ? (
+              <time datetime={match.date.isoUtc} data-relative-time>{match.date.isoUtc}</time>
+            ) : (
+              <span>Time unavailable</span>
+            )}
+          </footer>
+        </article>
+      </li>
+    ))}
+  </ol>
+</section>

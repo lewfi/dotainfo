@@ -9,7 +9,8 @@
     "preview": "node scripts/run-astro.mjs preview",
     "test": "node --test",
     "audit:data": "node scripts/audit-data.mjs",
-    "audit:references": "node scripts/audit-references.mjs"
+    "audit:references": "node scripts/audit-references.mjs",
+    "audit:home": "node scripts/audit-home.mjs"
   },
   "engines": {
     "node": ">=22.12.0 <23"
