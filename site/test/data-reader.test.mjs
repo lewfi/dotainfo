@@ -201,6 +201,7 @@ test('window query uses injected UTC half-open cutoffs and month pruning', async
 
   const clock = '2026-01-31T00:00:00Z';
   const [thirty, ninety] = await reader.windows({ clock, days: [30, 90] });
+  const routed = await reader.window({ clock, days: 30, includeMatchIds: true });
   assert.deepEqual(
     { count: thirty.count, tiers: thirty.tiers },
     { count: 3, tiers: { premium: 1, excluded: 1, professional: 1 } },
@@ -211,6 +212,7 @@ test('window query uses injected UTC half-open cutoffs and month pruning', async
   ]);
   assert.equal(ninety.count, 4);
   assert.ok(ninety.sources.includes('matches/2025-12.parquet'));
+  assert.deepEqual(routed.matchIds, [2002, 1500, 2001]);
   assert.throws(() => buildClockEpoch('2026-01-31T00:00:00'), /ending in Z/);
 });
 

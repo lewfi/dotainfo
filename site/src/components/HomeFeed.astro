@@ -1,20 +1,7 @@
 ---
+import MatchSummary from './MatchSummary.astro';
+
 const { view, active = false } = Astro.props;
-
-function durationLabel(duration) {
-  if (duration.status !== 'available') {
-    return 'Duration unavailable';
-  }
-  const minutes = Math.floor(duration.value / 60);
-  const seconds = duration.value % 60;
-  return `${minutes}:${String(seconds).padStart(2, '0')}`;
-}
-
-function scoreLabel(score) {
-  return score.status === 'available'
-    ? `${score.radiant}–${score.dire}`
-    : 'Score unavailable';
-}
 ---
 
 <section
@@ -34,41 +21,11 @@ function scoreLabel(score) {
     {view.matches.map((match) => (
       <li class="match-card" data-match-id={match.matchId}>
         <article aria-labelledby={`match-${view.id}-${match.matchId}`}>
-          <header class="match-heading">
-            <h3 id={`match-${view.id}-${match.matchId}`}>{match.league.name.display}</h3>
-            <span>{match.league.tier.display}</span>
-          </header>
-          <div class="teams">
-            <p
-              class:list={{ winner: match.result.winner === 'radiant' }}
-              data-team-id={match.teams.radiant.teamId ?? undefined}
-            >
-              <span>
-                {match.teams.radiant.name.display}
-                {match.result.winner === 'radiant' && <small>Winner</small>}
-              </span>
-              <strong>{match.score.radiant ?? '—'}</strong>
-            </p>
-            <p
-              class:list={{ winner: match.result.winner === 'dire' }}
-              data-team-id={match.teams.dire.teamId ?? undefined}
-            >
-              <span>
-                {match.teams.dire.name.display}
-                {match.result.winner === 'dire' && <small>Winner</small>}
-              </span>
-              <strong>{match.score.dire ?? '—'}</strong>
-            </p>
-          </div>
-          <footer class="match-meta">
-            <span>{scoreLabel(match.score)}</span>
-            <span>{durationLabel(match.duration)}</span>
-            {match.date.status === 'available' ? (
-              <time datetime={match.date.isoUtc} data-relative-time>{match.date.isoUtc}</time>
-            ) : (
-              <span>Time unavailable</span>
-            )}
-          </footer>
+          <MatchSummary
+            summary={match}
+            headingId={`match-${view.id}-${match.matchId}`}
+            headingLevel="h3"
+          />
         </article>
       </li>
     ))}

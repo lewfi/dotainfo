@@ -1,18 +1,16 @@
 ---
-import path from 'node:path';
-
 import HomeFeed from '../components/HomeFeed.astro';
+import { BUILD_CLOCK, buildDataPaths } from '../build-context.mjs';
 import { createCatalog } from '../data/catalog.mjs';
 import { DataReader } from '../data/queries.mjs';
 import { loadReferences } from '../data/references.mjs';
 import SiteLayout from '../layouts/SiteLayout.astro';
 import { createHomeFeedViews } from '../presentation/home-feed.mjs';
 
-const buildClock = process.env.DOTAINFO_BUILD_CLOCK ?? new Date().toISOString();
-const dataRoot = path.resolve(process.cwd(), '../data');
+const { dataRoot, referenceRoot } = buildDataPaths();
 const [catalog, references] = await Promise.all([
   createCatalog({ dataRoot }),
-  loadReferences({ referenceRoot: path.join(dataRoot, 'reference') }),
+  loadReferences({ referenceRoot }),
 ]);
 const reader = await DataReader.create(catalog);
 let home;
@@ -20,7 +18,7 @@ try {
   home = await createHomeFeedViews({
     reader,
     references,
-    clock: buildClock,
+    clock: BUILD_CLOCK,
     limit: 100,
   });
 } finally {
@@ -81,27 +79,6 @@ function isoFromEpoch(epoch) {
       hiddenRange.textContent = `Counted from ${option.dataset.rangeStart} inclusive to ${option.dataset.rangeEnd} exclusive.`;
     }
 
-    function updateRelativeTimes() {
-      const formatter = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' });
-      const units = [
-        ['year', 31_536_000],
-        ['month', 2_592_000],
-        ['day', 86_400],
-        ['hour', 3_600],
-        ['minute', 60],
-      ];
-      for (const time of document.querySelectorAll('[data-relative-time]')) {
-        const timestamp = Date.parse(time.dateTime);
-        if (!Number.isFinite(timestamp)) continue;
-        const difference = (timestamp - Date.now()) / 1000;
-        const [unit, seconds] = units.find(([, size]) => Math.abs(difference) >= size) ?? ['second', 1];
-        time.textContent = formatter.format(Math.trunc(difference / seconds), unit);
-        time.title = new Date(timestamp).toISOString();
-      }
-    }
-
     select?.addEventListener('change', selectHomeView);
-    updateRelativeTimes();
-    window.setInterval(updateRelativeTimes, 60_000);
   </script>
 </SiteLayout>

@@ -271,7 +271,10 @@ export class DataReader {
     });
   }
 
-  async window({ clock, days }) {
+  async window({ clock, days, includeMatchIds = false }) {
+    if (typeof includeMatchIds !== 'boolean') {
+      throw new TypeError('includeMatchIds must be a boolean');
+    }
     const range = trailingWindow(clock, days);
     const sources = windowShards(
       this.catalog,
@@ -284,7 +287,8 @@ export class DataReader {
       sources,
       'matches',
       ['match_id', 'start_time', 'league_tier'],
-      `WHERE start_time >= ${range.startEpoch} AND start_time < ${range.endEpoch}`,
+      `WHERE start_time >= ${range.startEpoch} AND start_time < ${range.endEpoch} `
+        + 'ORDER BY start_time DESC, match_id DESC',
     );
     const tiers = {};
     for (const row of rows) {
@@ -297,6 +301,9 @@ export class DataReader {
       count: rows.length,
       tiers: Object.freeze(tiers),
       sources: Object.freeze(shardNames(sources)),
+      ...(includeMatchIds
+        ? { matchIds: Object.freeze(rows.map((row) => row.match_id)) }
+        : {}),
     });
   }
 

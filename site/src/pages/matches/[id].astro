@@ -1,0 +1,23 @@
+---
+import { BUILD_CLOCK } from '../../build-context.mjs';
+import MatchDetail from '../../components/MatchDetail.astro';
+import SiteLayout from '../../layouts/SiteLayout.astro';
+import { createMatchDetailModel } from '../../presentation/match-detail.mjs';
+import { recentBuildContext, recentMatchPaths } from '../../recent-build.mjs';
+
+export async function getStaticPaths() {
+  if (process.env.DOTAINFO_STEP14_FIXTURE_BUILD === '1') return [];
+  return recentMatchPaths(BUILD_CLOCK);
+}
+
+const { matchId } = Astro.props;
+const { reader, references } = await recentBuildContext();
+const detail = await reader.detail(matchId);
+if (!detail) throw new Error(`recent match ${matchId} was not found during rendering`);
+const model = createMatchDetailModel(detail, references);
+const title = `${model.summary.teams.radiant.name.display} vs ${model.summary.teams.dire.name.display}`;
+---
+
+<SiteLayout title={title} description={`${title} — full match details and boxscores.`}>
+  <MatchDetail model={model} />
+</SiteLayout>

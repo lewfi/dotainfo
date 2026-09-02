@@ -33,5 +33,29 @@ const {
         <p>Professional match data, built as a static site.</p>
       </footer>
     </div>
+    <script is:inline>
+      function updateRelativeTimes() {
+        const formatter = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' });
+        const units = [
+          ['year', 31_536_000],
+          ['month', 2_592_000],
+          ['day', 86_400],
+          ['hour', 3_600],
+          ['minute', 60],
+        ];
+        for (const time of document.querySelectorAll('[data-relative-time]')) {
+          const timestamp = Date.parse(time.dateTime);
+          if (!Number.isFinite(timestamp)) continue;
+          const difference = (timestamp - Date.now()) / 1000;
+          const [unit, seconds] = units.find(([, size]) => Math.abs(difference) >= size)
+            ?? ['second', 1];
+          time.textContent = formatter.format(Math.trunc(difference / seconds), unit);
+          time.title = new Date(timestamp).toISOString();
+        }
+      }
+
+      updateRelativeTimes();
+      window.setInterval(updateRelativeTimes, 60_000);
+    </script>
   </body>
 </html>

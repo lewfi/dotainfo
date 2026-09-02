@@ -1,0 +1,26 @@
+---
+import MatchDetail from '../../components/MatchDetail.astro';
+import SiteLayout from '../../layouts/SiteLayout.astro';
+import { createMatchDetailModel } from '../../presentation/match-detail.mjs';
+import {
+  DETAIL_FIXTURE_CASES,
+  fixtureReferences,
+} from '../../../test/fixtures/match-detail/cases.mjs';
+
+export function getStaticPaths() {
+  if (process.env.DOTAINFO_STEP14_FIXTURE_BUILD !== '1') return [];
+  return DETAIL_FIXTURE_CASES.map((fixture) => ({
+    params: { case: fixture.id },
+    props: { fixtureId: fixture.id },
+  }));
+}
+
+const { fixtureId } = Astro.props;
+const fixture = DETAIL_FIXTURE_CASES.find((candidate) => candidate.id === fixtureId);
+if (!fixture) throw new Error(`unknown Step 14 fixture: ${fixtureId}`);
+const model = createMatchDetailModel(fixture.detail, fixtureReferences());
+---
+
+<SiteLayout title={`Step 14 fixture: ${fixtureId}`}>
+  <MatchDetail model={model} />
+</SiteLayout>

@@ -1,0 +1,140 @@
+---
+import MatchSummary from './MatchSummary.astro';
+
+const { model } = Astro.props;
+
+function stat(value) {
+  return Number.isFinite(value) ? value : '—';
+}
+
+function draftLabel(entry) {
+  const side = entry.side === 'radiant'
+    ? model.summary.teams.radiant.name.display
+    : entry.side === 'dire'
+      ? model.summary.teams.dire.name.display
+      : 'Team unavailable';
+  const action = entry.action === 'pick'
+    ? 'picked'
+    : entry.action === 'ban'
+      ? 'banned'
+      : 'selected';
+  return `${side} ${action}`;
+}
+
+const boxscores = [
+  ['Radiant', model.boxscores.radiant],
+  ['Dire', model.boxscores.dire],
+];
+---
+
+<article class="match-detail" aria-labelledby="match-title" data-match-detail={model.summary.matchId}>
+  <section class="match-card match-detail-summary">
+    <MatchSummary
+      summary={model.summary}
+      headingId="match-title"
+      headingLevel="h1"
+      showPatch={true}
+    />
+  </section>
+
+  {model.advantage && (
+    <section class="detail-section" aria-labelledby="advantage-title">
+      <h2 id="advantage-title">Radiant advantage</h2>
+      <figure
+        class="advantage-graph"
+        data-advantage-graph
+        data-gold-values={JSON.stringify(model.advantage.gold)}
+        data-xp-values={model.advantage.xp ? JSON.stringify(model.advantage.xp) : undefined}
+      >
+        <figcaption>Gold and experience advantage by minute; negative values favor Dire.</figcaption>
+      </figure>
+    </section>
+  )}
+
+  <section
+    class="detail-section"
+    aria-labelledby="draft-title"
+    data-draft-state={model.draft.length > 0 ? 'available' : 'unavailable'}
+  >
+    <h2 id="draft-title">Draft</h2>
+    {model.draft.length > 0 ? (
+      <ol class="draft-order">
+        {model.draft.map((entry) => (
+          <li value={entry.order + 1}>
+            {entry.hero.icon.status === 'available' && (
+              <img src={entry.hero.icon.url} alt="" width="48" height="27" loading="lazy" />
+            )}
+            <span>{draftLabel(entry)} <strong>{entry.hero.name.display}</strong></span>
+          </li>
+        ))}
+      </ol>
+    ) : (
+      <p>Draft data is not available for this match.</p>
+    )}
+  </section>
+
+  <section class="detail-section" aria-labelledby="boxscores-title">
+    <h2 id="boxscores-title">Boxscores</h2>
+    {boxscores.map(([side, players]) => (
+      <section class="boxscore" aria-labelledby={`boxscore-${side.toLowerCase()}`}>
+        <h3 id={`boxscore-${side.toLowerCase()}`}>{side}</h3>
+        <div class="boxscore-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th scope="col">Player / hero</th>
+                <th scope="col">K / D / A</th>
+                <th scope="col">LH / DN</th>
+                <th scope="col">GPM / XPM</th>
+                <th scope="col">Net worth</th>
+                <th scope="col">Items</th>
+              </tr>
+            </thead>
+            <tbody>
+              {players.map((player) => (
+                <tr data-player-slot={player.slot}>
+                  <th scope="row">
+                    {player.hero.icon.status === 'available' && (
+                      <img src={player.hero.icon.url} alt="" width="48" height="27" loading="lazy" />
+                    )}
+                    <span>{player.player.name.display}<small>{player.hero.name.display}</small></span>
+                  </th>
+                  <td>{stat(player.kills)} / {stat(player.deaths)} / {stat(player.assists)}</td>
+                  <td>{stat(player.lastHits)} / {stat(player.denies)}</td>
+                  <td>{stat(player.goldPerMinute)} / {stat(player.xpPerMinute)}</td>
+                  <td>{stat(player.netWorth)}</td>
+                  <td>{player.items.length > 0 ? player.items.join(', ') : '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    ))}
+  </section>
+</article>
+
+<script>
+  import * as Plot from '@observablehq/plot';
+
+  for (const figure of document.querySelectorAll('[data-advantage-graph]')) {
+    const series = [];
+    const gold = JSON.parse(figure.dataset.goldValues ?? '[]');
+    const xp = JSON.parse(figure.dataset.xpValues ?? '[]');
+    gold.forEach((value, minute) => series.push({ minute, value, type: 'Gold' }));
+    xp.forEach((value, minute) => series.push({ minute, value, type: 'Experience' }));
+    const plot = Plot.plot({
+      width: 800,
+      height: 360,
+      marginLeft: 64,
+      x: { label: 'Minute' },
+      y: { grid: true, label: 'Radiant advantage' },
+      color: { legend: true },
+      marks: [
+        Plot.ruleY([0], { stroke: '#a9adb5' }),
+        Plot.lineY(series, { x: 'minute', y: 'value', stroke: 'type' }),
+      ],
+    });
+    figure.insertBefore(plot, figure.firstChild);
+  }
+</script>

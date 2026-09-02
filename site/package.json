@@ -10,13 +10,15 @@
     "test": "node --test",
     "audit:data": "node scripts/audit-data.mjs",
     "audit:references": "node scripts/audit-references.mjs",
-    "audit:home": "node scripts/audit-home.mjs"
+    "audit:home": "node scripts/audit-home.mjs",
+    "audit:recent": "node scripts/audit-recent.mjs"
   },
   "engines": {
     "node": ">=22.12.0 <23"
   },
   "dependencies": {
-    "@duckdb/node-api": "1.5.5-r.4"
+    "@duckdb/node-api": "1.5.5-r.4",
+    "@observablehq/plot": "0.6.17"
   },
   "devDependencies": {
     "astro": "7.2.10"
