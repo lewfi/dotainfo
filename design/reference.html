@@ -1,0 +1,1131 @@
+<!--
+  dotainfo — visual design reference (step 18 / 19)
+
+  WHAT THIS IS
+  Exported from a Claude Design mock ("DATADRAFT"). Product name is not
+  adopted; the site is dotainfo. Extracted from a bundled React artifact:
+  the bundler runtime, the four embedded Instrument Sans woff2 blobs, and
+  the @font-face rules have all been stripped. What remains is the markup
+  and its inline styles.
+
+  TEMPLATE SYNTAX
+  <sc-if>, <sc-for> and {{ expr }} are the design tool's own DSL, not
+  something to reproduce. Read them as "this repeats" / "this is
+  conditional". The <script data-dc-script> block at the end holds mock
+  data and layout logic; the team names, standings and win probabilities
+  in it are invented and must not be treated as a data contract.
+
+  WHAT TO TAKE
+  Colour relationships, type scale, spacing, border weight, card and
+  table treatment, tabular-number alignment, small-uppercase micro-labels.
+
+  WHAT TO IGNORE — these are deferred by HANDOFF section 8 or absent from
+  the data model entirely, and must NOT be built:
+    live match ticker and live win probability   (deferred)
+    search                                       (deferred)
+    "Following" list / user accounts             (deferred)
+    team and player pages                        (deferred, v3)
+    standings, group stages, playoff brackets    (no data model)
+    head-to-head history                         (no data model)
+    win probability model                        (does not exist)
+    series / Bo3 / Bo5 concepts                  (no data model)
+
+  WHAT IS BUILDABLE FROM COMMITTED DATA TODAY
+    the match card, the gold/xp advantage graph, the draft with picks in
+    order and bans, and the player scoreboard. Note that `level` exists in
+    the player schema and is currently unrendered, so the reference's
+    "Lvl" column is available.
+
+  MISSING-DATA STATES
+  The mock shows only complete matches. Production does not: 7,058 matches
+  have at least one null team id, 655 team-side appearances have a blank or
+  whitespace-only name, 1,782 match-used teams have no logo, and seven rows
+  are null across teams, scores, result and draft at once. Every restyled
+  component must still render an explicit unavailable state for each.
+
+  COLOURS IN THIS FILE ARE NOT THE ADOPTED PALETTE. Three failed WCAG at
+  the thresholds step 16 enforces and were replaced. Use the token values
+  in HANDOFF / global.css, not the hex codes below.
+-->
+<!DOCTYPE html>
+<html><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
+<style>
+
+</style>
+<style>
+  body { margin: 0; background: #EFEDE5; -webkit-font-smoothing: antialiased; }
+  * { box-sizing: border-box; }
+  a { color: #0F9B6C; text-decoration: none; }
+  a:hover { color: #0B7E57; text-decoration: underline; }
+  table { border-collapse: collapse; }
+  @keyframes livepulse { 0%,100% { opacity: 1 } 50% { opacity: .25 } }
+</style>
+</helmet>
+
+<div style="min-height: 100vh; background: #EFEDE5; color: #16170F; font-family: 'Instrument Sans', system-ui, sans-serif; font-feature-settings: 'tnum' 1, 'ss01' 1; font-size: 14px;">
+
+  <sc-if value="{{ isA }}" hint-placeholder-val="{{ true }}">
+    <div style="position: fixed; left: 0; top: 0; bottom: 0; width: 208px; background: #FAF8F2; border-right: 1px solid #E2DFD3; display: flex; flex-direction: column; z-index: 20;">
+      <div style="padding: 20px 18px 18px; border-bottom: 1px solid #E2DFD3;">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <div style="width: 20px; height: 20px; background: #16170F; display: grid; place-items: center; color: #F6F6F3; font-size: 11px; font-weight: 700;">D</div>
+          <div style="font-size: 15px; font-weight: 700; letter-spacing: -0.02em;">DATADRAFT</div>
+        </div>
+        <div style="margin-top: 6px; font-size: 10px; letter-spacing: 0.09em; text-transform: uppercase; color: #9A9B90;">Dota 2 results &amp; analytics</div>
+      </div>
+      <div style="padding: 14px 10px; display: flex; flex-direction: column; gap: 2px;">
+        <div style="padding: 4px 8px 8px; font-size: 10px; letter-spacing: 0.09em; text-transform: uppercase; color: #9A9B90;">Browse</div>
+        <sc-for list="{{ navItems }}" as="item" hint-placeholder-count="4">
+          <div sc-camel-on-click="{{ item.go }}" style="padding: 8px 10px; border-radius: 2px; cursor: pointer; display: flex; align-items: center; justify-content: space-between; font-weight: 500; background: {{ item.bg }}; color: {{ item.fg }};" style-hover="background: #EAE7DB;">
+            <span>{{ item.label }}</span>
+            <span style="font-size: 11px; color: #9A9B90;">{{ item.meta }}</span>
+          </div>
+        </sc-for>
+      </div>
+      <div style="margin-top: auto; padding: 14px; border-top: 1px solid #E2DFD3;">
+        <div style="font-size: 10px; letter-spacing: 0.09em; text-transform: uppercase; color: #9A9B90; margin-bottom: 8px;">Following</div>
+        <sc-for list="{{ following }}" as="t" hint-placeholder-count="3">
+          <div style="display: flex; align-items: center; gap: 8px; padding: 5px 0; font-size: 13px;">
+            <div style="width: 18px; height: 18px; border: 1px solid #E2DFD3; display: grid; place-items: center; font-size: 9px; font-weight: 700; color: #6E6F63;">{{ t.abbr }}</div>
+            <span style="flex: 1;">{{ t.name }}</span>
+            <span style="font-size: 11px; color: {{ t.color }}; font-weight: 600;">{{ t.next }}</span>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ isB }}" hint-placeholder-val="{{ false }}">
+    <div style="position: fixed; left: 0; right: 0; top: 0; background: #FAF8F2; border-bottom: 1px solid #E2DFD3; z-index: 20;">
+      <div style="max-width: 1180px; margin: 0 auto; padding: 0 24px; height: 56px; display: flex; align-items: center; gap: 28px;">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <div style="width: 20px; height: 20px; background: #16170F; display: grid; place-items: center; color: #F6F6F3; font-size: 11px; font-weight: 700;">D</div>
+          <div style="font-size: 15px; font-weight: 700; letter-spacing: -0.02em;">DATADRAFT</div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 4px;">
+          <sc-for list="{{ navItems }}" as="item" hint-placeholder-count="4">
+            <div sc-camel-on-click="{{ item.go }}" style="padding: 6px 12px; cursor: pointer; font-weight: 500; font-size: 14px; border-bottom: 2px solid {{ item.underline }}; color: {{ item.fg }};" style-hover="color: #16170F;">{{ item.label }}</div>
+          </sc-for>
+        </div>
+        <div style="margin-left: auto; display: flex; align-items: center; gap: 10px;">
+          <div style="border: 1px solid #E2DFD3; padding: 6px 10px; width: 190px; color: #9A9B90; font-size: 13px; display: flex; justify-content: space-between;">
+            <span>Search teams, players</span><span>/</span>
+          </div>
+          <div style="width: 30px; height: 30px; border: 1px solid #E2DFD3; display: grid; place-items: center; font-size: 11px; font-weight: 700; color: #6E6F63;">EU</div>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <div style="padding-left: {{ shellLeft }}; padding-top: {{ shellTop }}; padding-bottom: 80px;">
+
+    <sc-if value="{{ showHomeA }}" hint-placeholder-val="{{ true }}">
+      <div style="display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 0; align-items: start;">
+        <div style="border-right: 1px solid #E2DFD3; min-height: 100vh; overflow-x: auto;">
+          <div style="padding: 22px 26px 16px; border-bottom: 1px solid #E2DFD3; display: flex; align-items: flex-end; justify-content: space-between; background: #FAF8F2; min-width: 700px;">
+            <div>
+              <h1 style="margin: 0; font-size: 22px; font-weight: 700; letter-spacing: -0.025em;">Today's matches</h1>
+              <div style="margin-top: 4px; font-size: 13px; color: #6E6F63; white-space: nowrap;">{{ todayLabel }} · 14 series across 5 tournaments</div>
+            </div>
+            <div style="display: flex; gap: 0; border: 1px solid #E2DFD3;">
+              <sc-for list="{{ filters }}" as="f" hint-placeholder-count="3">
+                <div sc-camel-on-click="{{ f.go }}" style="padding: 6px 13px; font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap; border-left: 1px solid {{ f.sep }}; background: {{ f.bg }}; color: {{ f.fg }};">{{ f.label }}</div>
+              </sc-for>
+            </div>
+          </div>
+
+          <div style="background: #FAF8F2; border-bottom: 1px solid #E2DFD3;">
+            <div style="padding: 10px 26px; display: flex; align-items: center; gap: 8px; border-bottom: 1px solid #E4E1D5;">
+              <span style="width: 6px; height: 6px; background: #C43B2B; border-radius: 50%; animation: livepulse 1.6s ease-in-out infinite;"></span>
+              <span style="font-size: 10px; letter-spacing: 0.09em; text-transform: uppercase; font-weight: 700; color: #C43B2B;">Live now</span>
+              <span style="font-size: 12px; color: #9A9B90;">2 series</span>
+            </div>
+            <sc-for list="{{ liveMatches }}" as="m" hint-placeholder-count="2">
+              <div sc-camel-on-click="{{ m.open }}" style="padding: 17px 26px; display: grid; grid-template-columns: 84px minmax(300px, 1fr) 140px 74px; gap: 14px; min-width: 700px; align-items: center; cursor: pointer; border-bottom: 1px solid #E4E1D5;" style-hover="background: #F4F2E9;">
+                <div>
+                  <div style="font-size: 11px; font-weight: 700; color: #C43B2B; letter-spacing: 0.04em;">{{ m.clock }}</div>
+                  <div style="font-size: 11px; color: #9A9B90; margin-top: 2px;">{{ m.game }} · {{ m.format }}</div>
+                </div>
+                <div style="display: flex; align-items: center; gap: 14px;">
+                  <div style="display: flex; align-items: center; gap: 9px; flex: 1; min-width: 96px;">
+                    <div style="width: 22px; height: 22px; border: 1px solid #E2DFD3; display: grid; place-items: center; font-size: 9px; font-weight: 700; color: #6E6F63;">{{ m.a.abbr }}</div>
+                    <span style="font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ m.a.name }}</span>
+                  </div>
+                  <div style="font-size: 17px; font-weight: 700; letter-spacing: -0.02em; white-space: nowrap;">{{ m.a.score }}<span style="color: #C6C2B3; margin: 0 4px;">–</span>{{ m.b.score }}</div>
+                  <div style="display: flex; align-items: center; gap: 9px; flex: 1; min-width: 96px; justify-content: flex-end;">
+                    <span style="font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ m.b.name }}</span>
+                    <div style="width: 22px; height: 22px; border: 1px solid #E2DFD3; display: grid; place-items: center; font-size: 9px; font-weight: 700; color: #6E6F63;">{{ m.b.abbr }}</div>
+                  </div>
+                </div>
+                <sc-if value="{{ showProb }}" hint-placeholder-val="{{ true }}">
+                  <div>
+                    <div style="display: flex; justify-content: space-between; font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; color: #9A9B90; margin-bottom: 4px;">
+                      <span style="font-weight: 700; color: #0F9B6C;">{{ m.probA }}%</span>
+                      <span>win prob</span>
+                      <span style="font-weight: 700; color: #6E6F63;">{{ m.probB }}%</span>
+                    </div>
+                    <div style="height: 4px; background: #E4E1D5; display: flex;">
+                      <div style="width: {{ m.probAw }}; background: #0F9B6C;"></div>
+                      <div style="flex: 1; background: #C6C2B3;"></div>
+                    </div>
+                  </div>
+                </sc-if>
+                <div style="text-align: right; font-size: 11px; color: #6E6F63;">
+                  <sc-if value="{{ showH2H }}" hint-placeholder-val="{{ true }}">
+                    <div>H2H <span style="font-weight: 700; color: #16170F;">{{ m.h2h }}</span></div>
+                  </sc-if>
+                  <div style="margin-top: 2px; color: #9A9B90;">{{ m.tournamentShort }}</div>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+
+          <sc-for list="{{ groups }}" as="g" hint-placeholder-count="2">
+            <div style="background: #FAF8F2; border-bottom: 1px solid #E2DFD3;">
+              <div style="padding: 10px 26px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #E4E1D5; background: #F4F2E9; min-width: 700px;">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                  <span style="font-size: 12px; font-weight: 700;">{{ g.name }}</span>
+                  <span style="font-size: 11px; color: #9A9B90; white-space: nowrap;">{{ g.stage }}</span>
+                </div>
+                <span style="font-size: 11px; color: #9A9B90; white-space: nowrap;">{{ g.prize }}</span>
+              </div>
+              <sc-for list="{{ g.matches }}" as="m" hint-placeholder-count="3">
+                <div sc-camel-on-click="{{ m.open }}" style="padding: 16px 26px; display: grid; grid-template-columns: 84px minmax(300px, 1fr) 140px 74px; gap: 14px; min-width: 700px; align-items: center; cursor: pointer; border-bottom: 1px solid #EBE8DC;" style-hover="background: #F4F2E9;">
+                  <div>
+                    <div style="font-size: 13px; font-weight: 600; color: {{ m.timeColor }};">{{ m.time }}</div>
+                    <div style="font-size: 11px; color: #9A9B90; margin-top: 2px;">{{ m.format }}</div>
+                  </div>
+                  <div style="display: flex; align-items: center; gap: 14px;">
+                    <div style="display: flex; align-items: center; gap: 9px; flex: 1; min-width: 0;">
+                      <div style="width: 22px; height: 22px; border: 1px solid #E2DFD3; display: grid; place-items: center; font-size: 9px; font-weight: 700; color: #6E6F63;">{{ m.a.abbr }}</div>
+                      <span style="font-weight: {{ m.a.weight }}; color: {{ m.a.color }}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ m.a.name }}</span>
+                    </div>
+                    <div style="font-size: 15px; font-weight: 700; color: {{ m.scoreColor }}; white-space: nowrap;">{{ m.a.score }}<span style="color: #C6C2B3; margin: 0 4px;">–</span>{{ m.b.score }}</div>
+                    <div style="display: flex; align-items: center; gap: 9px; flex: 1; min-width: 0; justify-content: flex-end;">
+                      <span style="font-weight: {{ m.b.weight }}; color: {{ m.b.color }}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ m.b.name }}</span>
+                      <div style="width: 22px; height: 22px; border: 1px solid #E2DFD3; display: grid; place-items: center; font-size: 9px; font-weight: 700; color: #6E6F63;">{{ m.b.abbr }}</div>
+                    </div>
+                  </div>
+                  <div></div>
+                  <div style="text-align: right; font-size: 11px; color: #6E6F63;">
+                    <sc-if value="{{ showH2H }}" hint-placeholder-val="{{ true }}">
+                      <div>H2H <span style="font-weight: 700; color: #16170F;">{{ m.h2h }}</span></div>
+                    </sc-if>
+                    <div style="margin-top: 2px; color: #9A9B90;">{{ m.status }}</div>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+          </sc-for>
+        </div>
+
+        <div style="position: sticky; top: 0;">
+          <div style="padding: 18px 22px; border-bottom: 1px solid #E2DFD3;">
+            <div style="font-size: 10px; letter-spacing: 0.09em; text-transform: uppercase; color: #9A9B90; margin-bottom: 12px;">Group stage · Group A</div>
+            <sc-for list="{{ miniStandings }}" as="r" hint-placeholder-count="6">
+              <div style="display: grid; grid-template-columns: 16px 1fr 34px 30px; gap: 8px; align-items: center; padding: 6px 0; border-bottom: 1px solid #EBE8DC; font-size: 13px;">
+                <span style="color: #9A9B90; font-size: 11px; font-weight: 600;">{{ r.pos }}</span>
+                <span style="font-weight: {{ r.weight }}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ r.name }}</span>
+                <span style="text-align: right; color: #6E6F63;">{{ r.wl }}</span>
+                <span style="text-align: right; font-weight: 600; color: {{ r.diffColor }};">{{ r.diff }}</span>
+              </div>
+            </sc-for>
+            <div sc-camel-on-click="{{ goStandings }}" style="margin-top: 12px; font-size: 12px; font-weight: 600; color: #0F9B6C; cursor: pointer;">Full standings &amp; bracket →</div>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ showHomeB }}" hint-placeholder-val="{{ false }}">
+      <div style="max-width: 1180px; margin: 0 auto; padding: 26px 24px;">
+        <div style="background: #FAF8F2; border: 1px solid #E2DFD3; padding: 24px 26px; display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 32px; align-items: center;">
+          <div>
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 14px;">
+              <span style="width: 6px; height: 6px; background: #C43B2B; border-radius: 50%; animation: livepulse 1.6s ease-in-out infinite;"></span>
+              <span style="font-size: 10px; letter-spacing: 0.09em; text-transform: uppercase; font-weight: 700; color: #C43B2B;">Live · Game 3 · 34:12</span>
+              <span style="font-size: 11px; color: #9A9B90;">{{ featured.tournament }}</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 24px;">
+              <div style="display: flex; align-items: center; gap: 12px; flex: 1;">
+                <div style="width: 40px; height: 40px; border: 1px solid #E2DFD3; display: grid; place-items: center; font-size: 12px; font-weight: 700; color: #6E6F63;">{{ featured.a.abbr }}</div>
+                <div>
+                  <div style="font-size: 19px; font-weight: 700; letter-spacing: -0.02em;">{{ featured.a.name }}</div>
+                  <div style="font-size: 11px; color: #9A9B90; margin-top: 1px;">Radiant · +{{ featured.nwLead }} net worth</div>
+                </div>
+              </div>
+              <div style="font-size: 34px; font-weight: 700; letter-spacing: -0.03em;">{{ featured.a.score }}<span style="color: #C6C2B3; margin: 0 8px; font-weight: 400;">–</span>{{ featured.b.score }}</div>
+              <div style="display: flex; align-items: center; gap: 12px; flex: 1; justify-content: flex-end; text-align: right;">
+                <div>
+                  <div style="font-size: 19px; font-weight: 700; letter-spacing: -0.02em;">{{ featured.b.name }}</div>
+                  <div style="font-size: 11px; color: #9A9B90; margin-top: 1px;">Dire · 2 buybacks left</div>
+                </div>
+                <div style="width: 40px; height: 40px; border: 1px solid #E2DFD3; display: grid; place-items: center; font-size: 12px; font-weight: 700; color: #6E6F63;">{{ featured.b.abbr }}</div>
+              </div>
+            </div>
+            <sc-if value="{{ showProb }}" hint-placeholder-val="{{ true }}">
+              <div style="margin-top: 22px;">
+                <div style="display: flex; justify-content: space-between; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: #9A9B90; margin-bottom: 5px;">
+                  <span style="font-weight: 700; color: #0F9B6C;">{{ featured.probA }}% {{ featured.a.abbr }}</span>
+                  <span>live win probability</span>
+                  <span style="font-weight: 700; color: #6E6F63;">{{ featured.probB }}% {{ featured.b.abbr }}</span>
+                </div>
+                <div style="height: 6px; background: #E4E1D5; display: flex;">
+                  <div style="width: {{ featured.probAw }}; background: #0F9B6C;"></div>
+                  <div style="flex: 1; background: #C6C2B3;"></div>
+                </div>
+              </div>
+            </sc-if>
+            <div style="margin-top: 20px; display: flex; gap: 10px;">
+              <div sc-camel-on-click="{{ goLive }}" style="padding: 9px 16px; background: #16170F; color: #F6F6F3; font-size: 13px; font-weight: 600; cursor: pointer;" style-hover="background: #0F9B6C;">Open live match</div>
+              <div sc-camel-on-click="{{ goStandings }}" style="padding: 9px 16px; border: 1px solid #E2DFD3; font-size: 13px; font-weight: 600; cursor: pointer;" style-hover="border-color: #16170F;">Standings</div>
+            </div>
+          </div>
+          <div style="border-left: 1px solid #E2DFD3; padding-left: 26px;">
+            <div style="font-size: 10px; letter-spacing: 0.09em; text-transform: uppercase; color: #9A9B90; margin-bottom: 12px;">Net worth advantage</div>
+            <svg sc-camel-view-box="0 0 280 110" style="width: 100%; height: auto; display: block;">
+              <line x1="0" y1="55" x2="280" y2="55" stroke="#D6D2C4" stroke-width="1"></line>
+              <path d="{{ nwArea }}" fill="#0F9B6C" fill-opacity="0.12"></path>
+              <path d="{{ nwPath }}" fill="none" stroke="#0F9B6C" stroke-width="1.6"></path>
+            </svg>
+            <div style="display: flex; justify-content: space-between; font-size: 10px; color: #9A9B90; margin-top: 6px;">
+              <span>0:00</span><span>17:00</span><span>34:12</span>
+            </div>
+          </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-top: 16px;">
+          <div style="background: #FAF8F2; border: 1px solid #E2DFD3; padding: 18px 20px;">
+            <div style="font-size: 10px; letter-spacing: 0.09em; text-transform: uppercase; color: #9A9B90; margin-bottom: 14px;">Next up · today</div>
+            <sc-for list="{{ upcomingCompact }}" as="m" hint-placeholder-count="4">
+              <div sc-camel-on-click="{{ m.open }}" style="padding: 9px 0; border-bottom: 1px solid #EBE8DC; cursor: pointer; display: flex; align-items: center; gap: 10px;" style-hover="background: #F4F2E9;">
+                <span style="font-size: 12px; font-weight: 600; color: #6E6F63; width: 42px;">{{ m.time }}</span>
+                <span style="flex: 1; font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ m.a.abbr }} vs {{ m.b.abbr }}</span>
+                <sc-if value="{{ showH2H }}" hint-placeholder-val="{{ true }}">
+                  <span style="font-size: 11px; color: #9A9B90;">H2H {{ m.h2h }}</span>
+                </sc-if>
+              </div>
+            </sc-for>
+          </div>
+          <div style="background: #FAF8F2; border: 1px solid #E2DFD3; padding: 18px 20px;">
+            <div style="font-size: 10px; letter-spacing: 0.09em; text-transform: uppercase; color: #9A9B90; margin-bottom: 14px;">Group A standings</div>
+            <sc-for list="{{ miniStandings }}" as="r" hint-placeholder-count="6">
+              <div style="display: grid; grid-template-columns: 16px 1fr 34px 30px; gap: 8px; align-items: center; padding: 6px 0; border-bottom: 1px solid #EBE8DC; font-size: 13px;">
+                <span style="color: #9A9B90; font-size: 11px; font-weight: 600;">{{ r.pos }}</span>
+                <span style="font-weight: {{ r.weight }}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ r.name }}</span>
+                <span style="text-align: right; color: #6E6F63;">{{ r.wl }}</span>
+                <span style="text-align: right; font-weight: 600; color: {{ r.diffColor }};">{{ r.diff }}</span>
+              </div>
+            </sc-for>
+          </div>
+          <div style="background: #FAF8F2; border: 1px solid #E2DFD3; padding: 18px 20px;">
+            <div style="font-size: 10px; letter-spacing: 0.09em; text-transform: uppercase; color: #9A9B90; margin-bottom: 14px;">Results · last night</div>
+            <sc-for list="{{ recentResults }}" as="m" hint-placeholder-count="4">
+              <div sc-camel-on-click="{{ m.open }}" style="padding: 9px 0; border-bottom: 1px solid #EBE8DC; cursor: pointer; display: flex; align-items: center; gap: 10px;" style-hover="background: #F4F2E9;">
+                <span style="flex: 1; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"><span style="font-weight: 700;">{{ m.winner }}</span> <span style="color: #9A9B90;">def.</span> {{ m.loser }}</span>
+                <span style="font-size: 13px; font-weight: 700;">{{ m.score }}</span>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+
+        <div style="margin-top: 16px; background: #FAF8F2; border: 1px solid #E2DFD3; overflow-x: auto;">
+          <div style="padding: 14px 20px; border-bottom: 1px solid #E2DFD3; display: flex; align-items: center; justify-content: space-between; min-width: 680px;">
+            <div style="font-size: 15px; font-weight: 700; letter-spacing: -0.02em;">All matches · {{ todayLabel }}</div>
+            <div style="display: flex; gap: 0; border: 1px solid #E2DFD3;">
+              <sc-for list="{{ filters }}" as="f" hint-placeholder-count="3">
+                <div sc-camel-on-click="{{ f.go }}" style="padding: 5px 12px; font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap; border-left: 1px solid {{ f.sep }}; background: {{ f.bg }}; color: {{ f.fg }};">{{ f.label }}</div>
+              </sc-for>
+            </div>
+          </div>
+          <sc-for list="{{ allMatches }}" as="m" hint-placeholder-count="6">
+            <div sc-camel-on-click="{{ m.open }}" style="padding: 16px 20px; display: grid; grid-template-columns: 84px minmax(300px, 1fr) 112px 126px; gap: 14px; min-width: 680px; align-items: center; cursor: pointer; border-bottom: 1px solid #EBE8DC;" style-hover="background: #F4F2E9;">
+              <div>
+                <div style="font-size: 13px; font-weight: 600; color: {{ m.timeColor }};">{{ m.time }}</div>
+                <div style="font-size: 11px; color: #9A9B90; margin-top: 2px;">{{ m.format }}</div>
+              </div>
+              <div style="display: flex; align-items: center; gap: 14px;">
+                <div style="display: flex; align-items: center; gap: 9px; flex: 1; min-width: 96px;">
+                  <div style="width: 22px; height: 22px; border: 1px solid #E2DFD3; display: grid; place-items: center; font-size: 9px; font-weight: 700; color: #6E6F63;">{{ m.a.abbr }}</div>
+                  <span style="font-weight: {{ m.a.weight }}; color: {{ m.a.color }}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ m.a.name }}</span>
+                </div>
+                <div style="font-size: 15px; font-weight: 700; color: {{ m.scoreColor }}; white-space: nowrap;">{{ m.a.score }}<span style="color: #C6C2B3; margin: 0 4px;">–</span>{{ m.b.score }}</div>
+                <div style="display: flex; align-items: center; gap: 9px; flex: 1; min-width: 96px; justify-content: flex-end;">
+                  <span style="font-weight: {{ m.b.weight }}; color: {{ m.b.color }}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ m.b.name }}</span>
+                  <div style="width: 22px; height: 22px; border: 1px solid #E2DFD3; display: grid; place-items: center; font-size: 9px; font-weight: 700; color: #6E6F63;">{{ m.b.abbr }}</div>
+                </div>
+              </div>
+              <div></div>
+              <div style="text-align: right; font-size: 11px; color: #6E6F63;">
+                <sc-if value="{{ showH2H }}" hint-placeholder-val="{{ true }}">
+                  <div>H2H <span style="font-weight: 700; color: #16170F;">{{ m.h2h }}</span></div>
+                </sc-if>
+                <div style="margin-top: 2px; color: #9A9B90;">{{ m.tournamentShort }}</div>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ showLive }}" hint-placeholder-val="{{ false }}">
+      <div style="max-width: 1180px; margin: 0 auto; padding: 22px 24px;">
+        <div sc-camel-on-click="{{ goHome }}" style="font-size: 12px; color: #6E6F63; cursor: pointer; margin-bottom: 14px;">← All matches</div>
+        <div style="background: #FAF8F2; border: 1px solid #E2DFD3;">
+          <div style="padding: 20px 24px; border-bottom: 1px solid #E2DFD3;">
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 16px;">
+              <span style="width: 6px; height: 6px; background: #C43B2B; border-radius: 50%; animation: livepulse 1.6s ease-in-out infinite;"></span>
+              <span style="font-size: 10px; letter-spacing: 0.09em; text-transform: uppercase; font-weight: 700; color: #C43B2B;">Live · Game 3 · 34:12</span>
+              <span style="font-size: 11px; color: #9A9B90;">{{ featured.tournament }} · Upper Bracket QF · Bo3</span>
+            </div>
+            <div style="display: grid; grid-template-columns: minmax(0,1fr) auto minmax(0,1fr); gap: 24px; align-items: center;">
+              <div style="display: flex; align-items: center; gap: 12px;">
+                <div style="width: 44px; height: 44px; border: 1px solid #E2DFD3; display: grid; place-items: center; font-size: 13px; font-weight: 700; color: #6E6F63;">{{ featured.a.abbr }}</div>
+                <div>
+                  <div style="font-size: 20px; font-weight: 700; letter-spacing: -0.02em;">{{ featured.a.name }}</div>
+                  <div style="font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: #0F9B6C; font-weight: 700; margin-top: 2px;">Radiant</div>
+                </div>
+              </div>
+              <div style="text-align: center;">
+                <div style="font-size: 38px; font-weight: 700; letter-spacing: -0.03em; line-height: 1;">{{ featured.a.score }}<span style="color: #C6C2B3; margin: 0 10px; font-weight: 400;">–</span>{{ featured.b.score }}</div>
+                <div style="font-size: 11px; color: #9A9B90; margin-top: 6px;">series</div>
+              </div>
+              <div style="display: flex; align-items: center; gap: 12px; justify-content: flex-end; text-align: right;">
+                <div>
+                  <div style="font-size: 20px; font-weight: 700; letter-spacing: -0.02em;">{{ featured.b.name }}</div>
+                  <div style="font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: #C43B2B; font-weight: 700; margin-top: 2px;">Dire</div>
+                </div>
+                <div style="width: 44px; height: 44px; border: 1px solid #E2DFD3; display: grid; place-items: center; font-size: 13px; font-weight: 700; color: #6E6F63;">{{ featured.b.abbr }}</div>
+              </div>
+            </div>
+          </div>
+
+          <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border-bottom: 1px solid #E2DFD3;">
+            <sc-for list="{{ liveStats }}" as="s" hint-placeholder-count="4">
+              <div style="padding: 14px 20px; border-left: 1px solid {{ s.sep }};">
+                <div style="font-size: 10px; letter-spacing: 0.09em; text-transform: uppercase; color: #9A9B90;">{{ s.label }}</div>
+                <div style="display: flex; align-items: baseline; gap: 8px; margin-top: 6px;">
+                  <span style="font-size: 19px; font-weight: 700; letter-spacing: -0.02em; color: {{ s.color }};">{{ s.value }}</span>
+                  <span style="font-size: 12px; color: #6E6F63;">{{ s.sub }}</span>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+
+          <sc-if value="{{ showProb }}" hint-placeholder-val="{{ true }}">
+            <div style="padding: 18px 24px; border-bottom: 1px solid #E2DFD3;">
+              <div style="display: flex; justify-content: space-between; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: #9A9B90; margin-bottom: 6px;">
+                <span style="font-weight: 700; color: #0F9B6C;">{{ featured.probA }}% {{ featured.a.name }}</span>
+                <span>model win probability · updates every 30s</span>
+                <span style="font-weight: 700; color: #6E6F63;">{{ featured.probB }}% {{ featured.b.name }}</span>
+              </div>
+              <div style="height: 8px; background: #E4E1D5; display: flex;">
+                <div style="width: {{ featured.probAw }}; background: #0F9B6C;"></div>
+                <div style="flex: 1; background: #C6C2B3;"></div>
+              </div>
+            </div>
+          </sc-if>
+
+          <div style="padding: 20px 24px; border-bottom: 1px solid #E2DFD3;">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px;">
+              <div style="font-size: 10px; letter-spacing: 0.09em; text-transform: uppercase; color: #9A9B90;">Net worth advantage</div>
+              <div style="font-size: 12px; color: #6E6F63;">Peak <span style="font-weight: 700; color: #0F9B6C;">+11.2k</span> at 28:40</div>
+            </div>
+            <svg sc-camel-view-box="0 0 1000 220" style="width: 100%; height: auto; display: block;">
+              <line x1="0" y1="110" x2="1000" y2="110" stroke="#D6D2C4" stroke-width="1"></line>
+              <path d="{{ bigArea }}" fill="#0F9B6C" fill-opacity="0.1"></path>
+              <path d="{{ bigPath }}" fill="none" stroke="#0F9B6C" stroke-width="2"></path>
+            </svg>
+            <div style="display: flex; justify-content: space-between; font-size: 10px; color: #9A9B90; margin-top: 8px;">
+              <span>0:00</span><span>10:00</span><span>20:00</span><span>30:00</span><span>34:12</span>
+            </div>
+          </div>
+
+          <div style="padding: 0;">
+            <div style="padding: 14px 24px; border-bottom: 1px solid #E2DFD3; display: flex; align-items: center; gap: 10px;">
+              <span style="width: 8px; height: 8px; background: #0F9B6C;"></span>
+              <span style="font-size: 13px; font-weight: 700;">{{ featured.a.name }}</span>
+              <span style="font-size: 11px; color: #9A9B90;">Radiant · 5 heroes</span>
+            </div>
+            <div style="display: grid; grid-template-columns: minmax(160px,1fr) 56px 104px 96px 72px; padding: 10px 24px; border-bottom: 1px solid #E2DFD3; background: #F4F2E9; font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: #9A9B90;">
+              <span>Player / hero</span><span style="text-align: right;">Lvl</span><span style="text-align: right;">K / D / A</span><span style="text-align: right;">Net worth</span><span style="text-align: right;">GPM</span>
+            </div>
+            <sc-for list="{{ radiantPlayers }}" as="p" hint-placeholder-count="5">
+              <div style="display: grid; grid-template-columns: minmax(160px,1fr) 56px 104px 96px 72px; padding: 13px 24px; border-bottom: 1px solid #EBE8DC; align-items: center; font-size: 13px;" style-hover="background: #F4F2E9;">
+                <div style="display: flex; align-items: center; gap: 10px; min-width: 0;">
+                  <div style="width: 26px; height: 26px; background: #EAE7DB; border: 1px solid #E2DFD3; display: grid; place-items: center; font-size: 9px; font-weight: 700; color: #6E6F63;">{{ p.heroAbbr }}</div>
+                  <div style="min-width: 0;">
+                    <div style="font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ p.name }}</div>
+                    <div style="font-size: 11px; color: #9A9B90; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ p.hero }}</div>
+                  </div>
+                </div>
+                <span style="text-align: right; color: #6E6F63;">{{ p.lvl }}</span>
+                <span style="text-align: right; font-weight: 600;">{{ p.kda }}</span>
+                <span style="text-align: right; font-weight: 700;">{{ p.nw }}</span>
+                <span style="text-align: right; color: #6E6F63;">{{ p.gpm }}</span>
+              </div>
+            </sc-for>
+            <div style="padding: 14px 24px; border-bottom: 1px solid #E2DFD3; display: flex; align-items: center; gap: 10px; background: #F4F2E9;">
+              <span style="width: 8px; height: 8px; background: #C43B2B;"></span>
+              <span style="font-size: 13px; font-weight: 700;">{{ featured.b.name }}</span>
+              <span style="font-size: 11px; color: #9A9B90;">Dire · 5 heroes</span>
+            </div>
+            <sc-for list="{{ direPlayers }}" as="p" hint-placeholder-count="5">
+              <div style="display: grid; grid-template-columns: minmax(160px,1fr) 56px 104px 96px 72px; padding: 13px 24px; border-bottom: 1px solid #EBE8DC; align-items: center; font-size: 13px;" style-hover="background: #F4F2E9;">
+                <div style="display: flex; align-items: center; gap: 10px; min-width: 0;">
+                  <div style="width: 26px; height: 26px; background: #EAE7DB; border: 1px solid #E2DFD3; display: grid; place-items: center; font-size: 9px; font-weight: 700; color: #6E6F63;">{{ p.heroAbbr }}</div>
+                  <div style="min-width: 0;">
+                    <div style="font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ p.name }}</div>
+                    <div style="font-size: 11px; color: #9A9B90; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ p.hero }}</div>
+                  </div>
+                </div>
+                <span style="text-align: right; color: #6E6F63;">{{ p.lvl }}</span>
+                <span style="text-align: right; font-weight: 600;">{{ p.kda }}</span>
+                <span style="text-align: right; font-weight: 700;">{{ p.nw }}</span>
+                <span style="text-align: right; color: #6E6F63;">{{ p.gpm }}</span>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ showMatchA }}" hint-placeholder-val="{{ false }}">
+      <div style="max-width: 1180px; margin: 0 auto; padding: 22px 24px;">
+        <div sc-camel-on-click="{{ goHome }}" style="font-size: 12px; color: #6E6F63; cursor: pointer; margin-bottom: 14px;">← All matches</div>
+        <div style="background: #FAF8F2; border: 1px solid #E2DFD3;">
+          <div style="padding: 20px 24px; border-bottom: 1px solid #E2DFD3;">
+            <div style="font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: #9A9B90; margin-bottom: 14px;">{{ past.tournament }} · Upper Bracket R1 · Bo3 · Final</div>
+            <div style="display: grid; grid-template-columns: minmax(0,1fr) auto minmax(0,1fr); gap: 24px; align-items: center;">
+              <div style="display: flex; align-items: center; gap: 12px;">
+                <div style="width: 44px; height: 44px; border: 1px solid #E2DFD3; display: grid; place-items: center; font-size: 13px; font-weight: 700; color: #6E6F63;">{{ past.a.abbr }}</div>
+                <div>
+                  <div style="font-size: 20px; font-weight: 700; letter-spacing: -0.02em;">{{ past.a.name }}</div>
+                  <div style="font-size: 11px; color: #0F9B6C; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; margin-top: 2px;">Winner</div>
+                </div>
+              </div>
+              <div style="font-size: 38px; font-weight: 700; letter-spacing: -0.03em; line-height: 1;">2<span style="color: #C6C2B3; margin: 0 10px; font-weight: 400;">–</span>1</div>
+              <div style="display: flex; align-items: center; gap: 12px; justify-content: flex-end; text-align: right;">
+                <div>
+                  <div style="font-size: 20px; font-weight: 700; letter-spacing: -0.02em; color: #6E6F63;">{{ past.b.name }}</div>
+                  <div style="font-size: 11px; color: #9A9B90; margin-top: 2px;">to lower bracket</div>
+                </div>
+                <div style="width: 44px; height: 44px; border: 1px solid #E2DFD3; display: grid; place-items: center; font-size: 13px; font-weight: 700; color: #6E6F63;">{{ past.b.abbr }}</div>
+              </div>
+            </div>
+          </div>
+
+          <div style="display: flex; border-bottom: 1px solid #E2DFD3; padding: 0 24px; gap: 2px;">
+            <sc-for list="{{ tabs }}" as="t" hint-placeholder-count="3">
+              <div sc-camel-on-click="{{ t.go }}" style="padding: 12px 14px; font-size: 13px; font-weight: 600; cursor: pointer; border-bottom: 2px solid {{ t.underline }}; color: {{ t.fg }};" style-hover="color: #16170F;">{{ t.label }}</div>
+            </sc-for>
+          </div>
+
+          <sc-if value="{{ tabOverview }}" hint-placeholder-val="{{ true }}">
+            <div>
+              <div style="display: grid; grid-template-columns: repeat(3, minmax(0,1fr));">
+                <sc-for list="{{ gameCards }}" as="g" hint-placeholder-count="3">
+                  <div style="padding: 18px 22px; border-left: 1px solid {{ g.sep }}; border-bottom: 1px solid #E2DFD3;">
+                    <div style="display: flex; justify-content: space-between; align-items: baseline;">
+                      <span style="font-size: 10px; letter-spacing: 0.09em; text-transform: uppercase; color: #9A9B90;">{{ g.label }}</span>
+                      <span style="font-size: 11px; color: #9A9B90;">{{ g.duration }}</span>
+                    </div>
+                    <div style="margin-top: 10px; font-size: 16px; font-weight: 700; color: {{ g.color }};">{{ g.winner }}</div>
+                    <div style="font-size: 12px; color: #6E6F63; margin-top: 3px;">{{ g.kills }} · {{ g.side }}</div>
+                    <div style="margin-top: 12px; height: 4px; background: #E4E1D5;">
+                      <div style="width: {{ g.barW }}; height: 4px; background: {{ g.color }};"></div>
+                    </div>
+                  </div>
+                </sc-for>
+              </div>
+              <div style="padding: 22px 24px; border-bottom: 1px solid #E2DFD3;">
+                <div style="font-size: 10px; letter-spacing: 0.09em; text-transform: uppercase; color: #9A9B90; margin-bottom: 16px;">Head to head · last 8 meetings</div>
+                <div style="display: grid; grid-template-columns: 1fr auto 1fr; gap: 20px; align-items: center;">
+                  <div style="text-align: right;">
+                    <div style="font-size: 30px; font-weight: 700; letter-spacing: -0.03em; color: #0F9B6C;">5</div>
+                    <div style="font-size: 12px; color: #6E6F63; margin-top: 2px;">{{ past.a.name }}</div>
+                  </div>
+                  <div style="width: 280px;">
+                    <div style="height: 8px; background: #E4E1D5; display: flex;">
+                      <div style="width: 62.5%; background: #0F9B6C;"></div>
+                      <div style="flex: 1; background: #C6C2B3;"></div>
+                    </div>
+                    <div style="text-align: center; font-size: 11px; color: #9A9B90; margin-top: 6px;">series won since Feb 2025</div>
+                  </div>
+                  <div>
+                    <div style="font-size: 30px; font-weight: 700; letter-spacing: -0.03em; color: #6E6F63;">3</div>
+                    <div style="font-size: 12px; color: #6E6F63; margin-top: 2px;">{{ past.b.name }}</div>
+                  </div>
+                </div>
+                <div style="margin-top: 20px; display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 1px; background: #E2DFD3; border: 1px solid #E2DFD3;">
+                  <sc-for list="{{ h2hStats }}" as="s" hint-placeholder-count="4">
+                    <div style="background: #FAF8F2; padding: 14px 16px;">
+                      <div style="font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: #9A9B90;">{{ s.label }}</div>
+                      <div style="margin-top: 6px; display: flex; justify-content: space-between; font-size: 14px; font-weight: 700;">
+                        <span style="color: #0F9B6C;">{{ s.a }}</span>
+                        <span style="color: #6E6F63;">{{ s.b }}</span>
+                      </div>
+                    </div>
+                  </sc-for>
+                </div>
+              </div>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ tabDraft }}" hint-placeholder-val="{{ false }}">
+            <div style="padding: 22px 24px;">
+              <div style="font-size: 10px; letter-spacing: 0.09em; text-transform: uppercase; color: #9A9B90; margin-bottom: 16px;">Game 3 draft · picks in order</div>
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px;">
+                <div>
+                  <div style="font-size: 13px; font-weight: 700; color: #0F9B6C; margin-bottom: 10px;">{{ past.a.name }} · Radiant</div>
+                  <sc-for list="{{ draftA }}" as="d" hint-placeholder-count="5">
+                    <div style="display: flex; align-items: center; gap: 12px; padding: 9px 0; border-bottom: 1px solid #EBE8DC;">
+                      <span style="font-size: 10px; color: #9A9B90; width: 26px; font-weight: 600;">{{ d.slot }}</span>
+                      <div style="width: 26px; height: 26px; background: #EAE7DB; border: 1px solid #E2DFD3; display: grid; place-items: center; font-size: 9px; font-weight: 700; color: #6E6F63;">{{ d.abbr }}</div>
+                      <span style="flex: 1; font-weight: 500;">{{ d.hero }}</span>
+                      <span style="font-size: 12px; color: #6E6F63;">{{ d.wr }} WR</span>
+                    </div>
+                  </sc-for>
+                </div>
+                <div>
+                  <div style="font-size: 13px; font-weight: 700; color: #C43B2B; margin-bottom: 10px;">{{ past.b.name }} · Dire</div>
+                  <sc-for list="{{ draftB }}" as="d" hint-placeholder-count="5">
+                    <div style="display: flex; align-items: center; gap: 12px; padding: 9px 0; border-bottom: 1px solid #EBE8DC;">
+                      <span style="font-size: 10px; color: #9A9B90; width: 26px; font-weight: 600;">{{ d.slot }}</span>
+                      <div style="width: 26px; height: 26px; background: #EAE7DB; border: 1px solid #E2DFD3; display: grid; place-items: center; font-size: 9px; font-weight: 700; color: #6E6F63;">{{ d.abbr }}</div>
+                      <span style="flex: 1; font-weight: 500;">{{ d.hero }}</span>
+                      <span style="font-size: 12px; color: #6E6F63;">{{ d.wr }} WR</span>
+                    </div>
+                  </sc-for>
+                </div>
+              </div>
+              <div style="margin-top: 22px; padding-top: 18px; border-top: 1px solid #E2DFD3;">
+                <div style="font-size: 10px; letter-spacing: 0.09em; text-transform: uppercase; color: #9A9B90; margin-bottom: 12px;">Bans</div>
+                <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+                  <sc-for list="{{ bans }}" as="b" hint-placeholder-count="8">
+                    <span style="padding: 5px 10px; border: 1px solid #E2DFD3; font-size: 12px; color: #6E6F63; text-decoration: line-through;">{{ b.hero }}</span>
+                  </sc-for>
+                </div>
+              </div>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ tabGraphs }}" hint-placeholder-val="{{ false }}">
+            <div style="padding: 22px 24px;">
+              <div style="font-size: 10px; letter-spacing: 0.09em; text-transform: uppercase; color: #9A9B90; margin-bottom: 14px;">Game 3 · net worth advantage</div>
+              <svg sc-camel-view-box="0 0 1000 220" style="width: 100%; height: auto; display: block;">
+                <line x1="0" y1="110" x2="1000" y2="110" stroke="#D6D2C4" stroke-width="1"></line>
+                <path d="{{ bigArea }}" fill="#0F9B6C" fill-opacity="0.1"></path>
+                <path d="{{ bigPath }}" fill="none" stroke="#0F9B6C" stroke-width="2"></path>
+              </svg>
+              <div style="display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 1px; background: #E2DFD3; border: 1px solid #E2DFD3; margin-top: 22px;">
+                <sc-for list="{{ h2hStats }}" as="s" hint-placeholder-count="4">
+                  <div style="background: #FAF8F2; padding: 14px 16px;">
+                    <div style="font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: #9A9B90;">{{ s.label }}</div>
+                    <div style="margin-top: 6px; display: flex; justify-content: space-between; font-size: 14px; font-weight: 700;">
+                      <span style="color: #0F9B6C;">{{ s.a }}</span>
+                      <span style="color: #6E6F63;">{{ s.b }}</span>
+                    </div>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+          </sc-if>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ showMatchB }}" hint-placeholder-val="{{ false }}">
+      <div style="max-width: 1180px; margin: 0 auto; padding: 22px 24px; display: grid; grid-template-columns: minmax(0,1fr) 300px; gap: 16px; align-items: start;">
+        <div>
+          <div sc-camel-on-click="{{ goHome }}" style="font-size: 12px; color: #6E6F63; cursor: pointer; margin-bottom: 14px;">← All matches</div>
+          <div style="background: #FAF8F2; border: 1px solid #E2DFD3; padding: 20px 24px;">
+            <div style="font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: #9A9B90; margin-bottom: 14px;">{{ past.tournament }} · Upper Bracket R1 · Bo3 · Final</div>
+            <div style="display: grid; grid-template-columns: minmax(0,1fr) auto minmax(0,1fr); gap: 20px; align-items: center;">
+              <div style="display: flex; align-items: center; gap: 12px;">
+                <div style="width: 40px; height: 40px; border: 1px solid #E2DFD3; display: grid; place-items: center; font-size: 12px; font-weight: 700; color: #6E6F63;">{{ past.a.abbr }}</div>
+                <div>
+                  <div style="font-size: 18px; font-weight: 700; letter-spacing: -0.02em;">{{ past.a.name }}</div>
+                  <div style="font-size: 11px; color: #0F9B6C; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;">Winner</div>
+                </div>
+              </div>
+              <div style="font-size: 32px; font-weight: 700; letter-spacing: -0.03em;">2<span style="color: #C6C2B3; margin: 0 8px; font-weight: 400;">–</span>1</div>
+              <div style="display: flex; align-items: center; gap: 12px; justify-content: flex-end; text-align: right;">
+                <div style="font-size: 18px; font-weight: 700; letter-spacing: -0.02em; color: #6E6F63;">{{ past.b.name }}</div>
+                <div style="width: 40px; height: 40px; border: 1px solid #E2DFD3; display: grid; place-items: center; font-size: 12px; font-weight: 700; color: #6E6F63;">{{ past.b.abbr }}</div>
+              </div>
+            </div>
+          </div>
+
+          <div style="background: #FAF8F2; border: 1px solid #E2DFD3; border-top: none; padding: 20px 24px;">
+            <div style="font-size: 10px; letter-spacing: 0.09em; text-transform: uppercase; color: #9A9B90; margin-bottom: 14px;">Game 3 · net worth advantage</div>
+            <svg sc-camel-view-box="0 0 1000 200" style="width: 100%; height: auto; display: block;">
+              <line x1="0" y1="100" x2="1000" y2="100" stroke="#D6D2C4" stroke-width="1"></line>
+              <path d="{{ bigArea }}" fill="#0F9B6C" fill-opacity="0.1"></path>
+              <path d="{{ bigPath }}" fill="none" stroke="#0F9B6C" stroke-width="2"></path>
+            </svg>
+            <div style="display: flex; justify-content: space-between; font-size: 10px; color: #9A9B90; margin-top: 8px;">
+              <span>0:00</span><span>12:00</span><span>24:00</span><span>36:00</span><span>41:20</span>
+            </div>
+          </div>
+
+          <div style="background: #FAF8F2; border: 1px solid #E2DFD3; border-top: none;">
+            <div style="padding: 14px 24px; border-bottom: 1px solid #E2DFD3; font-size: 13px; font-weight: 700;">Game 3 scoreboard</div>
+            <div style="display: grid; grid-template-columns: minmax(150px,1fr) 50px 100px 90px 68px; padding: 10px 24px; border-bottom: 1px solid #E2DFD3; background: #F4F2E9; font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: #9A9B90;">
+              <span>Player / hero</span><span style="text-align: right;">Lvl</span><span style="text-align: right;">K / D / A</span><span style="text-align: right;">Net worth</span><span style="text-align: right;">GPM</span>
+            </div>
+            <sc-for list="{{ radiantPlayers }}" as="p" hint-placeholder-count="5">
+              <div style="display: grid; grid-template-columns: minmax(150px,1fr) 50px 100px 90px 68px; padding: 13px 24px; border-bottom: 1px solid #EBE8DC; align-items: center; font-size: 13px;" style-hover="background: #F4F2E9;">
+                <div style="display: flex; align-items: center; gap: 10px; min-width: 0;">
+                  <div style="width: 26px; height: 26px; background: #EAE7DB; border: 1px solid #E2DFD3; display: grid; place-items: center; font-size: 9px; font-weight: 700; color: #6E6F63;">{{ p.heroAbbr }}</div>
+                  <div style="min-width: 0;">
+                    <div style="font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ p.name }}</div>
+                    <div style="font-size: 11px; color: #9A9B90;">{{ p.hero }}</div>
+                  </div>
+                </div>
+                <span style="text-align: right; color: #6E6F63;">{{ p.lvl }}</span>
+                <span style="text-align: right; font-weight: 600;">{{ p.kda }}</span>
+                <span style="text-align: right; font-weight: 700;">{{ p.nw }}</span>
+                <span style="text-align: right; color: #6E6F63;">{{ p.gpm }}</span>
+              </div>
+            </sc-for>
+            <sc-for list="{{ direPlayers }}" as="p" hint-placeholder-count="5">
+              <div style="display: grid; grid-template-columns: minmax(150px,1fr) 50px 100px 90px 68px; padding: 13px 24px; border-bottom: 1px solid #EBE8DC; align-items: center; font-size: 13px;" style-hover="background: #F4F2E9;">
+                <div style="display: flex; align-items: center; gap: 10px; min-width: 0;">
+                  <div style="width: 26px; height: 26px; background: #EAE7DB; border: 1px solid #E2DFD3; display: grid; place-items: center; font-size: 9px; font-weight: 700; color: #6E6F63;">{{ p.heroAbbr }}</div>
+                  <div style="min-width: 0;">
+                    <div style="font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ p.name }}</div>
+                    <div style="font-size: 11px; color: #9A9B90;">{{ p.hero }}</div>
+                  </div>
+                </div>
+                <span style="text-align: right; color: #6E6F63;">{{ p.lvl }}</span>
+                <span style="text-align: right; font-weight: 600;">{{ p.kda }}</span>
+                <span style="text-align: right; font-weight: 700;">{{ p.nw }}</span>
+                <span style="text-align: right; color: #6E6F63;">{{ p.gpm }}</span>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 16px; position: sticky; top: 72px;">
+          <div style="background: #FAF8F2; border: 1px solid #E2DFD3; padding: 18px 20px;">
+            <div style="font-size: 10px; letter-spacing: 0.09em; text-transform: uppercase; color: #9A9B90; margin-bottom: 14px;">Head to head</div>
+            <div style="display: flex; align-items: baseline; justify-content: space-between;">
+              <span style="font-size: 26px; font-weight: 700; color: #0F9B6C; letter-spacing: -0.03em;">5</span>
+              <span style="font-size: 11px; color: #9A9B90;">last 8 series</span>
+              <span style="font-size: 26px; font-weight: 700; color: #6E6F63; letter-spacing: -0.03em;">3</span>
+            </div>
+            <div style="height: 6px; background: #E4E1D5; display: flex; margin-top: 10px;">
+              <div style="width: 62.5%; background: #0F9B6C;"></div>
+              <div style="flex: 1; background: #C6C2B3;"></div>
+            </div>
+            <div style="margin-top: 14px;">
+              <sc-for list="{{ h2hStats }}" as="s" hint-placeholder-count="4">
+                <div style="display: grid; grid-template-columns: 44px 1fr 44px; gap: 8px; padding: 7px 0; border-bottom: 1px solid #EBE8DC; font-size: 12px; align-items: center;">
+                  <span style="font-weight: 700; color: #0F9B6C;">{{ s.a }}</span>
+                  <span style="text-align: center; color: #9A9B90; font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase;">{{ s.label }}</span>
+                  <span style="text-align: right; font-weight: 700; color: #6E6F63;">{{ s.b }}</span>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+          <div style="background: #FAF8F2; border: 1px solid #E2DFD3; padding: 18px 20px;">
+            <div style="font-size: 10px; letter-spacing: 0.09em; text-transform: uppercase; color: #9A9B90; margin-bottom: 12px;">Games</div>
+            <sc-for list="{{ gameCards }}" as="g" hint-placeholder-count="3">
+              <div style="padding: 9px 0; border-bottom: 1px solid #EBE8DC; display: flex; align-items: center; gap: 10px; font-size: 13px;">
+                <span style="font-size: 11px; color: #9A9B90; width: 44px; font-weight: 600;">{{ g.label }}</span>
+                <span style="flex: 1; font-weight: 600; color: {{ g.color }};">{{ g.winner }}</span>
+                <span style="font-size: 11px; color: #6E6F63;">{{ g.duration }}</span>
+              </div>
+            </sc-for>
+          </div>
+          <div style="background: #FAF8F2; border: 1px solid #E2DFD3; padding: 18px 20px;">
+            <div style="font-size: 10px; letter-spacing: 0.09em; text-transform: uppercase; color: #9A9B90; margin-bottom: 12px;">Bans · game 3</div>
+            <div style="display: flex; flex-wrap: wrap; gap: 6px;">
+              <sc-for list="{{ bans }}" as="b" hint-placeholder-count="8">
+                <span style="padding: 4px 8px; border: 1px solid #E2DFD3; font-size: 11px; color: #6E6F63; text-decoration: line-through;">{{ b.hero }}</span>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ showStandings }}" hint-placeholder-val="{{ false }}">
+      <div style="max-width: 1180px; margin: 0 auto; padding: 24px;">
+        <div style="display: flex; align-items: flex-end; justify-content: space-between; margin-bottom: 18px;">
+          <div>
+            <h1 style="margin: 0; font-size: 24px; font-weight: 700; letter-spacing: -0.025em;">{{ event.name }}</h1>
+            <div style="margin-top: 5px; font-size: 13px; color: #6E6F63;">{{ event.meta }}</div>
+          </div>
+          <div style="display: flex; gap: 26px; text-align: right;">
+            <sc-for list="{{ eventStats }}" as="s" hint-placeholder-count="3">
+              <div>
+                <div style="font-size: 10px; letter-spacing: 0.09em; text-transform: uppercase; color: #9A9B90;">{{ s.label }}</div>
+                <div style="font-size: 17px; font-weight: 700; letter-spacing: -0.02em; margin-top: 3px;">{{ s.value }}</div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+
+        <div style="background: #FAF8F2; border: 1px solid #E2DFD3;">
+          <div style="padding: 14px 20px; border-bottom: 1px solid #E2DFD3; display: flex; align-items: center; justify-content: space-between;">
+            <div style="font-size: 15px; font-weight: 700; letter-spacing: -0.02em;">Group stage · Group A</div>
+            <div style="font-size: 11px; color: #9A9B90;">Top 4 to upper bracket · bottom 4 to lower</div>
+          </div>
+          <div style="display: grid; grid-template-columns: 34px minmax(200px,1fr) 70px 82px 74px 118px; padding: 10px 20px; background: #F4F2E9; border-bottom: 1px solid #E2DFD3; font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: #9A9B90;">
+            <span>#</span><span>Team</span><span style="text-align: right;">W–L</span><span style="text-align: right;">Games</span><span style="text-align: right;">Diff</span><span style="text-align: right;">Form</span>
+          </div>
+          <sc-for list="{{ standings }}" as="r" hint-placeholder-count="8">
+            <div style="display: grid; grid-template-columns: 34px minmax(200px,1fr) 70px 82px 74px 118px; padding: 14px 20px; border-bottom: 1px solid #EBE8DC; align-items: center; font-size: 14px; background: {{ r.rowBg }}; border-left: 3px solid {{ r.qual }};" style-hover="background: #F4F2E9;">
+              <span style="font-size: 12px; font-weight: 700; color: #9A9B90;">{{ r.pos }}</span>
+              <div style="display: flex; align-items: center; gap: 10px; min-width: 0;">
+                <div style="width: 24px; height: 24px; border: 1px solid #E2DFD3; display: grid; place-items: center; font-size: 9px; font-weight: 700; color: #6E6F63;">{{ r.abbr }}</div>
+                <span style="font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ r.name }}</span>
+                <span style="font-size: 11px; color: #9A9B90;">{{ r.region }}</span>
+              </div>
+              <span style="text-align: right; font-weight: 700;">{{ r.wl }}</span>
+              <span style="text-align: right; color: #6E6F63;">{{ r.games }}</span>
+              <span style="text-align: right; font-weight: 600; color: {{ r.diffColor }};">{{ r.diff }}</span>
+              <div style="display: flex; gap: 3px; justify-content: flex-end;">
+                <sc-for list="{{ r.form }}" as="f" hint-placeholder-count="5">
+                  <span style="width: 16px; height: 16px; font-size: 9px; font-weight: 700; display: grid; place-items: center; color: #FFFFFF; background: {{ f.bg }};">{{ f.r }}</span>
+                </sc-for>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+
+        <div style="background: #FAF8F2; border: 1px solid #E2DFD3; border-top: none; padding: 22px 20px;">
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;">
+            <div style="font-size: 15px; font-weight: 700; letter-spacing: -0.02em;">Playoffs · upper bracket</div>
+            <div style="font-size: 11px; color: #9A9B90;">All series Bo3 · grand final Bo5</div>
+          </div>
+          <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 26px; align-items: stretch;">
+            <sc-for list="{{ bracket }}" as="round" hint-placeholder-count="4">
+              <div style="display: flex; flex-direction: column; justify-content: space-around; gap: 14px;">
+                <div style="font-size: 10px; letter-spacing: 0.09em; text-transform: uppercase; color: #9A9B90;">{{ round.label }}</div>
+                <sc-for list="{{ round.series }}" as="s" hint-placeholder-count="2">
+                  <div sc-camel-on-click="{{ s.open }}" style="border: 1px solid #E2DFD3; position: relative; cursor: pointer; background: #FAF8F2;" style-hover="border-color: #16170F;">
+                    <div style="display: flex; align-items: center; justify-content: space-between; padding: 9px 11px; border-bottom: 1px solid #EBE8DC;">
+                      <div style="display: flex; align-items: center; gap: 8px; min-width: 0;">
+                        <div style="width: 20px; height: 20px; border: 1px solid #E2DFD3; display: grid; place-items: center; font-size: 8px; font-weight: 700; color: #6E6F63;">{{ s.a.abbr }}</div>
+                        <span style="font-size: 12px; font-weight: {{ s.a.weight }}; color: {{ s.a.color }}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ s.a.name }}</span>
+                      </div>
+                      <span style="font-size: 13px; font-weight: 700; color: {{ s.a.color }};">{{ s.a.score }}</span>
+                    </div>
+                    <div style="display: flex; align-items: center; justify-content: space-between; padding: 9px 11px;">
+                      <div style="display: flex; align-items: center; gap: 8px; min-width: 0;">
+                        <div style="width: 20px; height: 20px; border: 1px solid #E2DFD3; display: grid; place-items: center; font-size: 8px; font-weight: 700; color: #6E6F63;">{{ s.b.abbr }}</div>
+                        <span style="font-size: 12px; font-weight: {{ s.b.weight }}; color: {{ s.b.color }}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ s.b.name }}</span>
+                      </div>
+                      <span style="font-size: 13px; font-weight: 700; color: {{ s.b.color }};">{{ s.b.score }}</span>
+                    </div>
+                    <div style="position: absolute; left: 0; top: 0; bottom: 0; width: 2px; background: {{ s.accent }};"></div>
+                  </div>
+                </sc-for>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+  </div>
+
+  <div style="position: fixed; right: 20px; bottom: 20px; z-index: 40; background: #16170F; color: #F6F6F3; display: flex; align-items: center; gap: 10px; padding: 5px 6px 5px 11px; box-shadow: 0 4px 18px rgba(22,23,15,0.16);">
+    <span style="font-size: 9px; letter-spacing: 0.09em; text-transform: uppercase; color: #9A9B90;">Layout</span>
+    <div sc-camel-on-click="{{ setA }}" style="padding: 4px 9px; font-size: 11px; font-weight: 700; cursor: pointer; background: {{ tglABg }}; color: {{ tglAFg }};">Sidebar</div>
+    <div sc-camel-on-click="{{ setB }}" style="padding: 4px 9px; font-size: 11px; font-weight: 700; cursor: pointer; background: {{ tglBBg }}; color: {{ tglBFg }};">Top nav</div>
+  </div>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script="" data-props="{&quot;defaultLayout&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;Top nav&quot;,&quot;Sidebar&quot;],&quot;default&quot;:&quot;Top nav&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Layout&quot;},&quot;showWinProbability&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Bettor tools&quot;},&quot;showHeadToHead&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Bettor tools&quot;}}">
+const ACC = '#0F9B6C', DIRE = '#C43B2B', INK = '#16170F', MUT = '#6E6F63', FAINT = '#9A9B90';
+
+const T = {
+  spirit: { name: 'Team Spirit', abbr: 'TS', region: 'EEU' },
+  falcons: { name: 'Team Falcons', abbr: 'FLC', region: 'MENA' },
+  gg: { name: 'Gaimin Gladiators', abbr: 'GG', region: 'WEU' },
+  xtreme: { name: 'Xtreme Gaming', abbr: 'XG', region: 'CN' },
+  pari: { name: 'PARIVISION', abbr: 'PVN', region: 'EEU' },
+  tundra: { name: 'Tundra Esports', abbr: 'TUN', region: 'WEU' },
+  bb: { name: 'BetBoom Team', abbr: 'BB', region: 'EEU' },
+  liquid: { name: 'Team Liquid', abbr: 'TL', region: 'WEU' },
+  aurora: { name: 'Aurora Gaming', abbr: 'AUR', region: 'EEU' },
+  heroic: { name: 'Heroic', abbr: 'HRC', region: 'SA' },
+  talon: { name: 'Talon Esports', abbr: 'TLN', region: 'SEA' },
+  nigma: { name: 'Nigma Galaxy', abbr: 'NGX', region: 'MENA' }
+};
+
+function form(str) {
+  return str.split('').map(r => ({ r: r, bg: r === 'W' ? ACC : '#C6C2B3' }));
+}
+
+class Component extends DCLogic {
+  state = { layout: null, route: 'home', tab: 'overview', filter: 'All' };
+
+  get layout() { return this.state.layout || (this.props.defaultLayout === 'Sidebar' ? 'A' : 'B'); }
+
+  go(route) { return () => this.setState({ route: route }); }
+
+  series(a, b, sa, sb) {
+    const win = sa > sb;
+    return {
+      a: { name: a.name, abbr: a.abbr, score: sa, weight: win ? 700 : 500, color: win ? INK : MUT },
+      b: { name: b.name, abbr: b.abbr, score: sb, weight: !win ? 700 : 500, color: !win ? INK : MUT },
+      accent: win ? ACC : ACC,
+      open: this.go('match')
+    };
+  }
+
+  curve(pts, w, h, amp) {
+    const mid = h / 2;
+    const step = w / (pts.length - 1);
+    const line = pts.map((v, i) => (i === 0 ? 'M' : 'L') + (i * step).toFixed(1) + ' ' + (mid - v * amp).toFixed(1)).join(' ');
+    return { line: line, area: line + ' L' + w + ' ' + mid + ' L0 ' + mid + ' Z' };
+  }
+
+  renderVals() {
+    const L = this.layout;
+    const r = this.state.route;
+    const showProb = this.props.showWinProbability !== false;
+    const showH2H = this.props.showHeadToHead !== false;
+
+    const nw = [0, .05, .02, .12, .2, .14, .28, .36, .3, .44, .52, .46, .6, .68, .74, .66, .78, .86, .92, .84, .9, .96, 1, .93, .88, .95];
+    const xp = nw.map((v, i) => v * 0.72 + Math.sin(i / 3) * 0.06);
+    const small = this.curve(nw, 280, 110, 48);
+    const big = this.curve(nw, 1000, 220, 96);
+    const bigXp = this.curve(xp, 1000, 220, 96);
+
+    const navDefs = [
+      { label: 'Matches', route: 'home', meta: '14' },
+      { label: 'Live', route: 'live', meta: '2' },
+      { label: 'Results', route: 'match', meta: '' },
+      { label: 'Standings', route: 'standings', meta: '' }
+    ];
+    const navItems = navDefs.map(n => {
+      const on = r === n.route || (n.route === 'home' && r === 'home');
+      return {
+        label: n.label, meta: n.meta, go: this.go(n.route),
+        bg: on ? '#EAE7DB' : 'transparent',
+        fg: on ? INK : MUT,
+        underline: on ? INK : 'transparent'
+      };
+    });
+
+    const filters = ['All', 'Tier 1', 'Following'].map((f, i) => ({
+      label: f, go: () => this.setState({ filter: f }),
+      bg: this.state.filter === f ? INK : '#FAF8F2',
+      fg: this.state.filter === f ? '#F6F6F3' : MUT,
+      sep: i === 0 ? 'transparent' : '#E2DFD3'
+    }));
+
+    const liveMatches = [
+      { clock: '34:12', game: 'Game 3', format: 'Bo3', a: { name: T.spirit.name, abbr: T.spirit.abbr, score: 1 }, b: { name: T.falcons.name, abbr: T.falcons.abbr, score: 1 }, probA: 63, probB: 37, probAw: '63%', h2h: '5–3', tournamentShort: 'TI · UB QF', open: this.go('live') },
+      { clock: '12:44', game: 'Game 1', format: 'Bo3', a: { name: T.xtreme.name, abbr: T.xtreme.abbr, score: 0 }, b: { name: T.tundra.name, abbr: T.tundra.abbr, score: 0 }, probA: 48, probB: 52, probAw: '48%', h2h: '2–2', tournamentShort: 'TI · UB QF', open: this.go('live') }
+    ];
+
+    const mk = (a, b, time, sa, sb, status, f, h2h, tour) => {
+      const done = status === 'Final';
+      const win = sa > sb;
+      return {
+        time: time, format: 'Bo3', timeColor: done ? MUT : INK, status: status,
+        scoreColor: done ? INK : '#C6C2B3', h2h: h2h, tournamentShort: tour,
+        a: { name: a.name, abbr: a.abbr, score: done ? sa : '–', weight: done && win ? 700 : 500, color: done && !win ? MUT : INK },
+        b: { name: b.name, abbr: b.abbr, score: done ? sb : '–', weight: done && !win ? 700 : 500, color: done && win ? MUT : INK },
+        form: form(f), open: this.go('match')
+      };
+    };
+
+    const groups = [
+      { name: 'The International · Playoffs', stage: 'Upper bracket quarterfinals', prize: '$2.4M pool', matches: [
+        mk(T.gg, T.pari, '19:00', 0, 0, 'Upcoming', 'WWLWW', '4–1', 'TI'),
+        mk(T.bb, T.liquid, '21:30', 0, 0, 'Upcoming', 'LWWLW', '3–3', 'TI'),
+        mk(T.aurora, T.heroic, '14:00', 2, 0, 'Final', 'WWWLW', '6–2', 'TI')
+      ] },
+      { name: 'ESL Pro Tour · DreamLeague S27', stage: 'Group B', prize: '$1M pool', matches: [
+        mk(T.talon, T.nigma, '16:00', 2, 1, 'Final', 'WLWWL', '2–4', 'DL27'),
+        mk(T.tundra, T.bb, '18:00', 0, 0, 'Upcoming', 'WWLLW', '5–5', 'DL27')
+      ] }
+    ];
+
+    const allMatches = groups[0].matches.concat(groups[1].matches);
+    const upcomingCompact = allMatches.filter(m => m.status === 'Upcoming');
+    const recentResults = [
+      { winner: T.aurora.name, loser: T.heroic.name, score: '2–0', open: this.go('match') },
+      { winner: T.talon.name, loser: T.nigma.name, score: '2–1', open: this.go('match') },
+      { winner: T.spirit.name, loser: T.gg.name, score: '2–1', open: this.go('match') },
+      { winner: T.falcons.name, loser: T.xtreme.name, score: '2–0', open: this.go('match') }
+    ];
+
+    const standingsRaw = [
+      [T.spirit, '6–1', '13–5', '+8', 'WWLWW', 1412],
+      [T.falcons, '6–1', '12–4', '+8', 'WWWWL', 1398],
+      [T.xtreme, '5–2', '11–7', '+4', 'LWWWW', 1341],
+      [T.gg, '4–3', '10–8', '+2', 'WWLWL', 1290],
+      [T.pari, '3–4', '8–9', '−1', 'LWLWW', 1244],
+      [T.tundra, '2–5', '7–11', '−4', 'LLWLW', 1198],
+      [T.bb, '2–5', '6–11', '−5', 'WLLLL', 1176],
+      [T.liquid, '0–7', '3–14', '−11', 'LLLLL', 1102]
+    ];
+    const standings = standingsRaw.map((row, i) => ({
+      pos: i + 1, name: row[0].name, abbr: row[0].abbr, region: row[0].region,
+      wl: row[1], games: row[2], diff: row[3], rating: row[5],
+      diffColor: row[3][0] === '+' ? ACC : DIRE,
+      form: form(row[4]),
+      qual: i < 4 ? ACC : (i > 5 ? DIRE : 'transparent'),
+      rowBg: i < 4 ? '#F5F4EA' : '#FAF8F2'
+    }));
+
+    const miniStandings = standingsRaw.slice(0, 6).map((row, i) => ({
+      pos: i + 1, name: row[0].name, wl: row[1], diff: row[3],
+      weight: i < 4 ? 600 : 500,
+      diffColor: row[3][0] === '+' ? ACC : DIRE
+    }));
+
+    const bracket = [
+      { label: 'Quarterfinals', series: [
+        this.series(T.spirit, T.falcons, 1, 1),
+        this.series(T.xtreme, T.tundra, 0, 0),
+        this.series(T.gg, T.pari, 2, 1),
+        this.series(T.bb, T.liquid, 2, 0)
+      ] },
+      { label: 'Semifinals', series: [
+        this.series(T.gg, T.bb, 1, 0),
+        this.series({ name: 'TBD', abbr: '—' }, { name: 'TBD', abbr: '—' }, 0, 0)
+      ] },
+      { label: 'Final', series: [ this.series({ name: 'TBD', abbr: '—' }, { name: 'TBD', abbr: '—' }, 0, 0) ] },
+      { label: 'Champion', series: [ this.series({ name: 'TBD', abbr: '—' }, { name: '$1.2M', abbr: '$' }, 0, 0) ] }
+    ];
+
+    const rp = [
+      ['Yatoro', 'Terrorblade', 'TB', 27, '11 / 2 / 6', '28.4k', 742, 412, 94],
+      ['Larl', 'Invoker', 'INV', 25, '7 / 3 / 12', '21.8k', 604, 268, 81],
+      ['Collapse', 'Magnus', 'MAG', 24, '4 / 4 / 15', '17.2k', 512, 176, 76],
+      ['Mira', 'Hoodwink', 'HW', 21, '5 / 5 / 18', '12.6k', 398, 88, 62],
+      ['Miposhka', 'Chen', 'CHN', 20, '1 / 6 / 21', '10.4k', 331, 42, 55]
+    ];
+    const dp = [
+      ['skiter', 'Faceless Void', 'FV', 25, '6 / 6 / 4', '22.1k', 611, 356, 71],
+      ['Malr1ne', 'Puck', 'PCK', 24, '5 / 5 / 9', '18.9k', 552, 241, 68],
+      ['ATF', 'Dawnbreaker', 'DB', 23, '3 / 6 / 11', '15.4k', 468, 162, 59],
+      ['Cr1t-', 'Rubick', 'RBK', 20, '2 / 7 / 14', '11.2k', 362, 74, 48],
+      ['Sneyking', 'Warlock', 'WL', 19, '1 / 8 / 16', '9.6k', 305, 36, 41]
+    ];
+    const toPlayer = p => ({ name: p[0], hero: p[1], heroAbbr: p[2], lvl: p[3], kda: p[4], nw: p[5], gpm: p[6], lh: p[7], impact: p[8], impactW: p[8] + '%' });
+
+    const liveStats = [
+      { label: 'Net worth', value: '+8.4k', sub: T.spirit.abbr, color: ACC, sep: 'transparent' },
+      { label: 'Kills', value: '28 – 17', sub: '', color: INK, sep: '#E2DFD3' },
+      { label: 'Towers', value: '9 – 4', sub: '', color: INK, sep: '#E2DFD3' },
+      { label: 'Roshan', value: '2 – 0', sub: 'next 46:10', color: INK, sep: '#E2DFD3' }
+    ];
+
+    const tabs = [
+      { key: 'overview', label: 'Overview' },
+      { key: 'draft', label: 'Draft' },
+      { key: 'graphs', label: 'Graphs' }
+    ].map(t => ({
+      label: t.label, go: () => this.setState({ tab: t.key }),
+      underline: this.state.tab === t.key ? INK : 'transparent',
+      fg: this.state.tab === t.key ? INK : MUT
+    }));
+
+    const gameCards = [
+      { label: 'Game 1', duration: '38:14', winner: T.spirit.name, kills: '31–18 kills', side: 'Radiant', color: ACC, barW: '63%', sep: 'transparent' },
+      { label: 'Game 2', duration: '46:02', winner: T.falcons.name, kills: '24–29 kills', side: 'Dire', color: DIRE, barW: '55%', sep: '#E2DFD3' },
+      { label: 'Game 3', duration: '41:20', winner: T.spirit.name, kills: '34–21 kills', side: 'Radiant', color: ACC, barW: '71%', sep: '#E2DFD3' }
+    ];
+
+    const h2hStats = [
+      { label: 'Avg game length', a: '39:12', b: '41:48' },
+      { label: 'First blood %', a: '61%', b: '39%' },
+      { label: 'Radiant win %', a: '68%', b: '52%' },
+      { label: 'Avg kills', a: '29.4', b: '23.1' }
+    ];
+
+    const draftA = [
+      { slot: 'P1', hero: 'Magnus', abbr: 'MAG', wr: '54%' },
+      { slot: 'P2', hero: 'Chen', abbr: 'CHN', wr: '51%' },
+      { slot: 'P3', hero: 'Invoker', abbr: 'INV', wr: '49%' },
+      { slot: 'P4', hero: 'Terrorblade', abbr: 'TB', wr: '57%' },
+      { slot: 'P5', hero: 'Hoodwink', abbr: 'HW', wr: '48%' }
+    ];
+    const draftB = [
+      { slot: 'P1', hero: 'Puck', abbr: 'PCK', wr: '52%' },
+      { slot: 'P2', hero: 'Warlock', abbr: 'WL', wr: '55%' },
+      { slot: 'P3', hero: 'Dawnbreaker', abbr: 'DB', wr: '47%' },
+      { slot: 'P4', hero: 'Faceless Void', abbr: 'FV', wr: '53%' },
+      { slot: 'P5', hero: 'Rubick', abbr: 'RBK', wr: '50%' }
+    ];
+    const bans = ['Primal Beast', 'Muerta', 'Ringmaster', 'Kez', 'Templar Assassin', 'Enigma', 'Nature\u2019s Prophet', 'Lion'].map(h => ({ hero: h }));
+
+    const heroMovers = [
+      { name: 'Kez', wr: '53.1%', delta: '+6.2', color: ACC },
+      { name: 'Ringmaster', wr: '49.8%', delta: '+4.1', color: ACC },
+      { name: 'Terrorblade', wr: '57.4%', delta: '+2.8', color: ACC },
+      { name: 'Primal Beast', wr: '46.2%', delta: '−3.4', color: DIRE },
+      { name: 'Muerta', wr: '48.0%', delta: '−5.1', color: DIRE }
+    ];
+
+    return {
+      isA: L === 'A', isB: L === 'B',
+      shellLeft: L === 'A' ? '208px' : '0px',
+      shellTop: L === 'B' ? '56px' : '0px',
+      showHomeA: r === 'home' && L === 'A',
+      showHomeB: r === 'home' && L === 'B',
+      showLive: r === 'live',
+      showMatchA: r === 'match' && L === 'A',
+      showMatchB: r === 'match' && L === 'B',
+      showStandings: r === 'standings',
+      tabOverview: this.state.tab === 'overview',
+      tabDraft: this.state.tab === 'draft',
+      tabGraphs: this.state.tab === 'graphs',
+      showProb: showProb, showH2H: showH2H,
+      navItems: navItems, filters: filters, tabs: tabs,
+      todayLabel: 'Tue 25 Aug',
+      liveMatches: liveMatches, groups: groups, allMatches: allMatches,
+      upcomingCompact: upcomingCompact, recentResults: recentResults,
+      miniStandings: miniStandings, standings: standings, bracket: bracket,
+      heroMovers: heroMovers, liveStats: liveStats, gameCards: gameCards,
+      h2hStats: h2hStats, draftA: draftA, draftB: draftB, bans: bans,
+      radiantPlayers: rp.map(toPlayer), direPlayers: dp.map(toPlayer),
+      featured: {
+        tournament: 'The International · Playoffs',
+        a: { name: T.spirit.name, abbr: T.spirit.abbr, score: 1 },
+        b: { name: T.falcons.name, abbr: T.falcons.abbr, score: 1 },
+        probA: 63, probB: 37, probAw: '63%', nwLead: '8,400'
+      },
+      past: { tournament: 'The International', a: T.spirit, b: T.falcons },
+      event: { name: 'The International', meta: 'Group stage · day 4 of 6 · Hamburg, Germany' },
+      eventStats: [
+        { label: 'Prize pool', value: '$2,400,000' },
+        { label: 'Teams', value: '16' },
+        { label: 'Series played', value: '48 / 84' }
+      ],
+      following: [
+        { name: T.spirit.name, abbr: T.spirit.abbr, next: 'LIVE', color: DIRE },
+        { name: T.gg.name, abbr: T.gg.abbr, next: '19:00', color: MUT },
+        { name: T.liquid.name, abbr: T.liquid.abbr, next: '21:30', color: MUT }
+      ],
+      nwPath: small.line, nwArea: small.area,
+      bigPath: big.line, bigArea: big.area, xpPath: bigXp.line,
+      goHome: this.go('home'), goLive: this.go('live'), goStandings: this.go('standings'),
+      setA: () => this.setState({ layout: 'A' }), setB: () => this.setState({ layout: 'B' }),
+      tglABg: L === 'A' ? ACC : 'transparent', tglAFg: L === 'A' ? '#FAF8F2' : FAINT,
+      tglBBg: L === 'B' ? ACC : 'transparent', tglBFg: L === 'B' ? '#FAF8F2' : FAINT
+    };
+  }
+}
+
+</script>
+
+</body></html>
