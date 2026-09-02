@@ -1176,7 +1176,7 @@ is reserved for static assets; it contains no `_redirects`, `_routes.json`, or d
 runtime configuration.
 
 **Theme system - step 18 complete.** The site keeps the original ten token names and defines
-these two complete sets on `html[data-theme]`:
+these two complete sets:
 
 | Token | Light | Dark |
 |---|---|---|
@@ -1191,10 +1191,25 @@ these two complete sets on `html[data-theme]`:
 | `--color-focus` | `#1F5FBF` | `#7DD3FC` |
 | `--color-error` | `#B33325` | `#FF9E90` |
 
+The light tokens live on plain `:root` as the no-JavaScript default. A
+`prefers-color-scheme: dark` media rule overrides every token on plain `:root`, and the
+explicit `:root[data-theme='light']` and `:root[data-theme='dark']` sets follow the media rule
+so the persisted toggle remains authoritative. This corrects the initially shipped step 18
+cascade, which defined colours only on the two attribute selectors: in that version, disabling
+JavaScript left `data-theme` unset and all ten custom properties unresolved.
+
 The accessibility audit reads these values from the emitted Astro stylesheet rather than a
-hardcoded palette copy and checks all thirteen step 16 pairs independently in both themes.
-The tightest light pair is border against background at **3.189:1** (3:1 required); the
-tightest dark pair is border against surface at **4.235:1** (3:1 required).
+hardcoded palette copy. It now resolves the emitted cascade with no `data-theme` attribute in
+both the default and `prefers-color-scheme: dark` paths, requires every media override, and
+asserts that those palettes match the corresponding emitted explicit theme before checking all
+thirteen step 16 pairs. The tightest light pair is border against background at **3.189:1**
+(3:1 required); the tightest dark pair is border against surface at **4.235:1** (3:1 required).
+
+The corrected production output was rendered in headless Chrome with script execution disabled
+before navigation. Chrome emulated light and dark `prefers-color-scheme` values independently;
+in both renders `<html>` retained no `data-theme` attribute, all ten computed custom properties
+were present, and the computed body background/text pairs were `rgb(239, 237, 229)` /
+`rgb(22, 23, 15)` for light and `rgb(20, 22, 15)` / `rgb(242, 241, 232)` for dark.
 
 A blocking inline script in `<head>` reads the explicit `dotainfo-theme` local-storage value
 and synchronously sets the effective `data-theme` before the first stylesheet. With no valid

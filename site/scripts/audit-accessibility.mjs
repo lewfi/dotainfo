@@ -120,16 +120,100 @@ function contrastRatio(foreground, background) {
   return (values[0] + 0.05) / (values[1] + 0.05);
 }
 
-function themePalette(css, theme) {
-  const tokens = new Map();
-  const themeSelector = new RegExp(`data-theme\\s*=\\s*['"]?${theme}['"]?`, 'i');
-  for (const rule of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
-    if (!themeSelector.test(rule[1])) continue;
-    for (const declaration of rule[2].matchAll(/(--color-[\w-]+)\s*:\s*(#[0-9a-f]{6})\s*;?/gi)) {
-      tokens.set(declaration[1], declaration[2].toLowerCase());
+function cssRules(css) {
+  const rules = [];
+
+  function walk(source, media = []) {
+    let cursor = 0;
+    while (cursor < source.length) {
+      const open = source.indexOf('{', cursor);
+      if (open === -1) break;
+
+      let prelude = source.slice(cursor, open).trim();
+      const atRuleEnd = prelude.lastIndexOf(';');
+      if (atRuleEnd !== -1) prelude = prelude.slice(atRuleEnd + 1).trim();
+
+      let depth = 1;
+      let close = open + 1;
+      while (close < source.length && depth > 0) {
+        if (source[close] === '{') depth += 1;
+        else if (source[close] === '}') depth -= 1;
+        close += 1;
+      }
+      assert.equal(depth, 0, `unclosed emitted CSS rule: ${prelude}`);
+
+      const body = source.slice(open + 1, close - 1);
+      if (/^@media\b/i.test(prelude)) {
+        walk(body, [...media, prelude.replace(/^@media\s*/i, '')]);
+      } else if (prelude.startsWith('@')) {
+        walk(body, media);
+      } else {
+        rules.push(Object.freeze({ selector: prelude, body, media }));
+      }
+      cursor = close;
     }
   }
+
+  walk(css.replaceAll(/\/\*[\s\S]*?\*\//g, ''));
+  return rules;
+}
+
+function declarations(body) {
+  const tokens = new Map();
+  for (const declaration of body.matchAll(/(--color-[\w-]+)\s*:\s*(#[0-9a-f]{6})\s*;?/gi)) {
+    tokens.set(declaration[1], declaration[2].toLowerCase());
+  }
   return tokens;
+}
+
+function selectorIncludes(selector, expected) {
+  return selector.split(',').some((part) => part.trim() === expected);
+}
+
+function selectorIncludesTheme(selector, theme) {
+  const themeSelector = new RegExp(
+    `^:root\\[data-theme\\s*=\\s*(?:['"]${theme}['"]|${theme})\\]$`,
+    'i',
+  );
+  return selector.split(',').some((part) => themeSelector.test(part.trim()));
+}
+
+function paletteFromRules(rules, applies) {
+  const tokens = new Map();
+  for (const rule of rules) {
+    if (!applies(rule)) continue;
+    for (const [token, value] of declarations(rule.body)) tokens.set(token, value);
+  }
+  return tokens;
+}
+
+function themePalette(rules, theme) {
+  return paletteFromRules(rules, (rule) => (
+    rule.media.length === 0
+    && selectorIncludesTheme(rule.selector, theme)
+  ));
+}
+
+function noAttributePalette(rules, prefersDark) {
+  return paletteFromRules(rules, (rule) => {
+    if (!selectorIncludes(rule.selector, ':root')) return false;
+    if (rule.media.length === 0) return true;
+    return prefersDark && rule.media.every(
+      (condition) => /prefers-color-scheme\s*:\s*dark/i.test(condition),
+    );
+  });
+}
+
+function darkPreferenceOverrides(rules) {
+  return paletteFromRules(rules, (rule) => (
+    selectorIncludes(rule.selector, ':root')
+    && rule.media.length > 0
+    && rule.media.every((condition) => /prefers-color-scheme\s*:\s*dark/i.test(condition))
+  ));
+}
+
+function palettesEqual(left, right, requiredTokens) {
+  return [...requiredTokens].every((token) => left.get(token) === right.get(token));
 }
 
 async function emittedCss(html, outputRoot) {
@@ -263,13 +347,27 @@ const themeBootstrapFailures = themeBootstrapResults.filter(
 );
 
 const css = await emittedCss(homeHtml, outputRoot);
+const rules = cssRules(css);
 const requiredThemeTokens = new Set(
   CONTRAST_PAIRS.flatMap(([, foreground, background]) => [foreground, background]),
 );
-const themeContrasts = ['light', 'dark'].map((theme) => {
-  const tokens = themePalette(css, theme);
+const explicitPalettes = new Map(['light', 'dark'].map((theme) => {
+  const tokens = themePalette(rules, theme);
   for (const token of requiredThemeTokens) {
     assert.ok(tokens.has(token), `missing ${theme} palette token ${token}`);
+  }
+  return [theme, tokens];
+}));
+const noAttributeDefault = noAttributePalette(rules, false);
+const noAttributeDark = noAttributePalette(rules, true);
+const darkOverrides = darkPreferenceOverrides(rules);
+const noAttributePalettes = new Map([
+  ['light', noAttributeDefault],
+  ['dark', noAttributeDark],
+]);
+const themeContrasts = [...noAttributePalettes].map(([theme, tokens]) => {
+  for (const token of requiredThemeTokens) {
+    assert.ok(tokens.has(token), `missing no-attribute ${theme} palette token ${token}`);
   }
   const pairs = CONTRAST_PAIRS.map(([name, foreground, background, minimum]) => {
     const ratio = contrastRatio(tokens.get(foreground), tokens.get(background));
@@ -293,6 +391,23 @@ const themeContrasts = ['light', 'dark'].map((theme) => {
   });
 });
 
+const hasEveryToken = (tokens) => [...requiredThemeTokens].every((token) => tokens.has(token));
+const noJavaScriptThemeAssertions = Object.freeze({
+  defaultDeclaresEveryTokenOnPlainRoot: hasEveryToken(noAttributeDefault),
+  darkPreferenceOverridesEveryTokenOnPlainRoot: hasEveryToken(darkOverrides),
+  darkPreferenceResolvesEveryToken: hasEveryToken(noAttributeDark),
+  defaultMatchesExplicitLight: palettesEqual(
+    noAttributeDefault,
+    explicitPalettes.get('light'),
+    requiredThemeTokens,
+  ),
+  darkPreferenceMatchesExplicitDark: palettesEqual(
+    noAttributeDark,
+    explicitPalettes.get('dark'),
+    requiredThemeTokens,
+  ),
+});
+
 const assertions = Object.freeze({
   everyPagePassesStructure: pageFailures.length === 0,
   titlesAreUnique: duplicateTitles.length === 0,
@@ -302,6 +417,7 @@ const assertions = Object.freeze({
   tierControlIsKeyboardAndAtAccessible: Object.values(tierAssertions).every(Boolean),
   themeControlIsKeyboardAndAccessible: Object.values(themeControlAssertions).every(Boolean),
   themeIsAppliedBeforeFirstPaint: themeBootstrapFailures.length === 0,
+  colorsResolveWithoutJavaScript: Object.values(noJavaScriptThemeAssertions).every(Boolean),
   notFoundIsRendered: Object.values(notFoundAssertions).every(Boolean),
   everyContrastPairPasses: themeContrasts.every(
     ({ pairs }) => pairs.every((entry) => entry.pass),
@@ -319,6 +435,11 @@ console.log(`STEP18_THEME_CONTROL=${JSON.stringify(themeControlAssertions)}`);
 console.log(`STEP18_THEME_BOOTSTRAP=${JSON.stringify({
   pages: themeBootstrapResults.length,
   failures: themeBootstrapFailures,
+})}`);
+console.log(`STEP18_NO_JS_CASCADE=${JSON.stringify({
+  assertions: noJavaScriptThemeAssertions,
+  defaultTokens: Object.fromEntries(noAttributeDefault),
+  darkPreferenceTokens: Object.fromEntries(noAttributeDark),
 })}`);
 console.log(`STEP18_CONTRAST=${JSON.stringify(themeContrasts)}`);
 console.log(`STEP16_ASSERTIONS=${JSON.stringify(assertions)}`);
