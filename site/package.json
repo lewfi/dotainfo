@@ -11,7 +11,8 @@
     "audit:data": "node scripts/audit-data.mjs",
     "audit:references": "node scripts/audit-references.mjs",
     "audit:home": "node scripts/audit-home.mjs",
-    "audit:recent": "node scripts/audit-recent.mjs"
+    "audit:recent": "node scripts/audit-recent.mjs",
+    "audit:historical": "node scripts/audit-historical.mjs"
   },
   "engines": {
     "node": ">=22.12.0 <23"

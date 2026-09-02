@@ -365,6 +365,13 @@ null across `radiant_win`, both score fields, `first_blood_time`, `game_mode`, `
 and all four tower/barracks status fields. Hard rule 3 still applies: retain these matches,
 and the site must render them without crashing.
 
+Those same seven matches are also null across all four team fields: `radiant_team_id`,
+`dire_team_id`, `radiant_team_name`, and `dire_team_name`. They have zero draft rows. Among
+the shared summary fields, only duration, patch, `start_time`, and `leagueid` survive. All
+seven nevertheless carry `is_parsed = true`, so `is_parsed` is not a data-completeness
+predicate. Their IDs are 7445599470, 7468132951, 7477639498, 7480980391, 7484575133,
+7485890286, and 7488997459.
+
 **Team names.** No historical team name exists in any source. OpenDota's
 `matches.radiant_team_name` and `matches.dire_team_name` are NULL for 100% of the measured
 2021+ pro dataset (verified 147,493/147,493 at measurement time). REST `$.radiant_name` and
@@ -1183,6 +1190,10 @@ REST rows populate both arrays. The seven rows null across `radiant_win`, both s
 7485890286, 7488997459
 ```
 
+All seven are also null across both team IDs and both team names, have zero draft rows, and
+carry `is_parsed = true`. Only duration, patch, `start_time`, and `leagueid` survive among
+the shared summary inputs; `is_parsed` therefore cannot be used as a completeness predicate.
+
 ### Reference-join readiness
 
 The match shards use 8,918 distinct non-null team IDs, while `teams.parquet` contains 22,019
@@ -1470,9 +1481,11 @@ These steps continue the canonical numbering in `AGENTS.md`.
     render the client-side summary for older IDs. Approval gate: generated payload count
     equals the committed monthly match-shard count at gate time; payloads exclude both
     advantage arrays; raw and gzipped byte totals are derived across all committed monthly
-    match shards at gate time; known old IDs—including
-    7485890286—render correct teams, result, score, league, duration, patch, and date; unknown
-    and range-gap IDs produce a clean not-found state; overlapping future ranges check every
+    match shards at gate time; 7485890286 renders its surviving league, duration, patch, and
+    date correctly and its null teams, result, and score as explicit unknown states, never as
+    blanks, zeros, or errors; at least one of the other six equally incomplete IDs does the
+    same; a known ordinary old ID renders all shared summary fields correctly; unknown and
+    range-gap IDs produce a clean not-found state; overlapping future ranges check every
     candidate. Step 14 and step 15 remain separate because the former owns pre-rendered
     full-detail pages and a moving 90-day route set, while the latter owns persistent monthly
     summary artifacts and client-side routing. Their shared summary UI contract is established

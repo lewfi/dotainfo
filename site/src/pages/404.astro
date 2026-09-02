@@ -1,0 +1,88 @@
+---
+import SiteLayout from '../layouts/SiteLayout.astro';
+import { historicalSummaryReferenceRows } from '../data/historical-artifacts.mjs';
+
+const references = await historicalSummaryReferenceRows();
+const serializedReferences = JSON.stringify(references).replaceAll('<', '\\u003c');
+---
+
+<SiteLayout
+  title="Match lookup — Dota 2 Pro Stats"
+  description="Historical professional Dota 2 match summary lookup."
+>
+  <article class="historical-route" data-historical-route data-route-state="loading">
+    <p class="eyebrow">Historical match</p>
+    <h1 data-historical-title>Loading match…</h1>
+    <div data-historical-content>
+      <p>Checking the committed match archive.</p>
+    </div>
+  </article>
+  <script
+    id="historical-reference-data"
+    type="application/json"
+    set:html={serializedReferences}
+  />
+</SiteLayout>
+
+<script>
+  import {
+    historicalRouteView,
+    matchIdFromPathname,
+    resolveHistoricalMatch,
+  } from '../presentation/historical-route.mjs';
+  import { ReferenceResolver } from '../presentation/reference-model.mjs';
+
+  const route = document.querySelector('[data-historical-route]');
+  const title = route?.querySelector('[data-historical-title]');
+  const content = route?.querySelector('[data-historical-content]');
+  const matchId = matchIdFromPathname(window.location.pathname);
+
+  function setNotFound(message) {
+    route.dataset.routeState = 'not-found';
+    title.textContent = 'Match not found';
+    content.replaceChildren(Object.assign(document.createElement('p'), { textContent: message }));
+  }
+
+  if (!matchId) {
+    setNotFound('The requested page does not exist.');
+  } else {
+    try {
+      const manifestResponse = await fetch('/data/matches/manifest.json');
+      if (!manifestResponse.ok) throw new Error('Unable to load the historical manifest.');
+      const manifest = await manifestResponse.json();
+      const resolved = await resolveHistoricalMatch(matchId, {
+        manifest,
+        async loadMonth(month) {
+          const response = await fetch(`/data/matches/${month}.json`);
+          if (!response.ok) throw new Error(`Unable to load historical month ${month}.`);
+          return response.json();
+        },
+      });
+
+      if (resolved.status === 'not-found') {
+        const view = historicalRouteView(matchId, resolved, new ReferenceResolver());
+        route.dataset.routeState = view.status;
+        title.textContent = view.title;
+        content.innerHTML = view.markup;
+      } else {
+        const referenceData = JSON.parse(
+          document.querySelector('#historical-reference-data')?.textContent ?? '{}',
+        );
+        const view = historicalRouteView(
+          matchId,
+          resolved,
+          new ReferenceResolver(referenceData),
+        );
+        route.dataset.routeState = view.status;
+        title.textContent = view.title;
+        content.innerHTML = view.markup;
+      }
+    } catch (error) {
+      route.dataset.routeState = 'error';
+      title.textContent = 'Match unavailable';
+      content.replaceChildren(Object.assign(document.createElement('p'), {
+        textContent: 'The historical match archive could not be loaded.',
+      }));
+    }
+  }
+</script>

@@ -160,6 +160,18 @@ p {
   padding-block: 2rem;
 }
 
+.historical-route {
+  padding-block: 3rem;
+}
+
+.historical-route > h1 {
+  font-size: clamp(2rem, 6vw, 3.5rem);
+}
+
+.historical-summary {
+  margin-top: 1.5rem;
+}
+
 .match-detail-summary {
   margin-bottom: 1rem;
 }

@@ -1,61 +1,13 @@
 ---
+import { renderMatchSummaryMarkup } from '../presentation/match-summary-markup.mjs';
+
 const {
   summary,
   headingId,
   headingLevel = 'h2',
   showPatch = false,
 } = Astro.props;
-const Heading = headingLevel;
-
-function durationLabel(duration) {
-  if (duration.status !== 'available') return 'Duration unavailable';
-  const minutes = Math.floor(duration.value / 60);
-  const seconds = duration.value % 60;
-  return `${minutes}:${String(seconds).padStart(2, '0')}`;
-}
-
-function scoreLabel(score) {
-  return score.status === 'available'
-    ? `${score.radiant}–${score.dire}`
-    : 'Score unavailable';
-}
+const markup = renderMatchSummaryMarkup(summary, { headingId, headingLevel, showPatch });
 ---
 
-<header class="match-heading">
-  <Heading id={headingId}>{summary.league.name.display}</Heading>
-  <span>{summary.league.tier.display}</span>
-</header>
-<div class="teams">
-  <p
-    class:list={{ winner: summary.result.winner === 'radiant' }}
-    data-team-id={summary.teams.radiant.teamId ?? undefined}
-    data-team-display={summary.teams.radiant.name.display}
-  >
-    <span>
-      {summary.teams.radiant.name.display}
-      {summary.result.winner === 'radiant' && <small>Winner</small>}
-    </span>
-    <strong>{summary.score.radiant ?? '—'}</strong>
-  </p>
-  <p
-    class:list={{ winner: summary.result.winner === 'dire' }}
-    data-team-id={summary.teams.dire.teamId ?? undefined}
-    data-team-display={summary.teams.dire.name.display}
-  >
-    <span>
-      {summary.teams.dire.name.display}
-      {summary.result.winner === 'dire' && <small>Winner</small>}
-    </span>
-    <strong>{summary.score.dire ?? '—'}</strong>
-  </p>
-</div>
-<footer class="match-meta">
-  <span>{scoreLabel(summary.score)}</span>
-  <span>{durationLabel(summary.duration)}</span>
-  {showPatch && <span>{summary.patch.display}</span>}
-  {summary.date.status === 'available' ? (
-    <time datetime={summary.date.isoUtc} data-relative-time>{summary.date.isoUtc}</time>
-  ) : (
-    <span>Time unavailable</span>
-  )}
-</footer>
+<Fragment set:html={markup} />
