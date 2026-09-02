@@ -114,6 +114,12 @@ if (!distArgument) {
 
 const outputRoot = path.resolve(distArgument);
 const artifactRoot = path.join(outputRoot, 'data', 'matches');
+const archiveHtml = await readFile(path.join(outputRoot, '404.html'), 'utf8');
+const archiveModuleHref = /<script type="module" src="([^"]+)"><\/script>/.exec(archiveHtml)?.[1]
+  ?? null;
+const archiveClientBundle = archiveModuleHref
+  ? await readFile(path.join(outputRoot, ...archiveModuleHref.split('/').filter(Boolean)), 'utf8')
+  : '';
 const expectedShards = await historicalMatchShards();
 const entries = await readdir(artifactRoot, { withFileTypes: true });
 const payloadEntries = entries
@@ -160,9 +166,21 @@ const references = await loadReferences();
 const loadMonth = async (month) => payloads.get(month);
 
 const incompleteResults = [];
+let renderedHistoricalDate = null;
 for (const matchId of INCOMPLETE_IDS) {
   const resolved = await resolveHistoricalMatch(matchId, { manifest, loadMonth });
   const view = historicalRouteView(matchId, resolved, references);
+  if (matchId === 7485890286 && resolved.status === 'found') {
+    const renderedTime = /<time datetime="([^"]+)" data-date-display="absolute">([^<]+)<\/time>/
+      .exec(view.markup);
+    renderedHistoricalDate = Object.freeze({
+      datetime: renderedTime?.[1] ?? null,
+      expectedDatetime: new Date(resolved.match.start_time * 1_000).toISOString(),
+      text: renderedTime?.[2] ?? null,
+      relativeMarker: view.markup.includes('data-relative-time'),
+      rawIsoVisible: view.markup.includes(`>${view.summary.date.isoUtc}</time>`),
+    });
+  }
   incompleteResults.push({
     matchId,
     status: resolved.status,
@@ -217,6 +235,13 @@ const assertions = Object.freeze({
   ordinaryOldMatchRendersCorrectSummary: ordinaryPassed,
   rangeGapAndOutsideIdsRenderCleanNotFound: notFoundPassed,
   overlappingFutureRangesCheckEveryCandidate: overlappingCandidatesChecked,
+  emittedArchiveLoadsAbsoluteDateRenderer:
+    archiveModuleHref !== null && archiveClientBundle.includes('data-date-display="absolute"'),
+  historicalClientOutputUsesReadableAbsoluteDate:
+    renderedHistoricalDate?.datetime === renderedHistoricalDate?.expectedDatetime
+      && renderedHistoricalDate?.text === 'December 13, 2023'
+      && renderedHistoricalDate?.relativeMarker === false
+      && renderedHistoricalDate?.rawIsoVisible === false,
   largestPayloadFitsAssetLimit: largest.bytes < ASSET_LIMIT_BYTES,
   totalFilesFitFreePlanLimit: totalFiles < FILE_LIMIT,
 });
@@ -252,6 +277,10 @@ console.log(`STEP15_NOT_FOUND=${JSON.stringify({
   rangeGapState: gapView.status,
   outsideId,
   outsideState: outsideView.status,
+})}`);
+console.log(`STEP15_HISTORICAL_DATE=${JSON.stringify({
+  emittedArchiveModule: archiveModuleHref,
+  ...renderedHistoricalDate,
 })}`);
 console.log(`STEP15_ASSERTIONS=${JSON.stringify(assertions)}`);
 assert.ok(Object.values(assertions).every(Boolean), 'Step 15 assertions failed');

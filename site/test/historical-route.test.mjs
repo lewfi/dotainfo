@@ -92,5 +92,11 @@ test('historical summary renders explicit unknown teams, result, and score', () 
   assert.match(view.markup, /Team name unavailable/);
   assert.match(view.markup, /Result unavailable/);
   assert.match(view.markup, /Score unavailable/);
+  assert.match(
+    view.markup,
+    /<time datetime="2023-12-13T09:31:02\.000Z" data-date-display="absolute">December 13, 2023<\/time>/,
+  );
+  assert.doesNotMatch(view.markup, /data-relative-time/);
+  assert.doesNotMatch(view.markup, />2023-12-13T09:31:02\.000Z<\/time>/);
   assert.doesNotMatch(view.markup, />undefined</);
 });

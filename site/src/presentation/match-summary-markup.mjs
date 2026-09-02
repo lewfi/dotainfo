@@ -25,6 +25,24 @@ function resultLabel(result) {
   return result.winner === 'radiant' ? 'Radiant won' : 'Dire won';
 }
 
+const ABSOLUTE_DATE_FORMATTER = new Intl.DateTimeFormat('en-US', {
+  day: 'numeric',
+  month: 'long',
+  timeZone: 'UTC',
+  year: 'numeric',
+});
+
+function dateMarkup(date, display) {
+  if (date.status !== 'available') return '<span>Time unavailable</span>';
+  const datetime = escapeHtml(date.isoUtc);
+  if (display === 'absolute') {
+    const label = ABSOLUTE_DATE_FORMATTER.format(new Date(date.isoUtc));
+    return `<time datetime="${datetime}" data-date-display="absolute">`
+      + `${escapeHtml(label)}</time>`;
+  }
+  return `<time datetime="${datetime}" data-relative-time>${datetime}</time>`;
+}
+
 function teamMarkup(team, score, winner) {
   const winnerMarkup = winner ? '<small>Winner</small>' : '';
   const idAttribute = team.teamId === null ? '' : ` data-team-id="${team.teamId}"`;
@@ -35,6 +53,7 @@ function teamMarkup(team, score, winner) {
 }
 
 export function renderMatchSummaryMarkup(summary, {
+  dateDisplay = 'relative',
   headingId,
   headingLevel = 'h2',
   showPatch = false,
@@ -45,15 +64,15 @@ export function renderMatchSummaryMarkup(summary, {
   if (!/^h[1-6]$/.test(headingLevel)) {
     throw new TypeError('headingLevel must be h1 through h6');
   }
+  if (!['absolute', 'relative'].includes(dateDisplay)) {
+    throw new TypeError('dateDisplay must be absolute or relative');
+  }
 
   const headingAttribute = headingId ? ` id="${escapeHtml(headingId)}"` : '';
   const result = resultLabel(summary.result);
   const resultState = summary.result.status;
   const patch = showPatch ? `<span>${escapeHtml(summary.patch.display)}</span>` : '';
-  const date = summary.date.status === 'available'
-    ? `<time datetime="${escapeHtml(summary.date.isoUtc)}" data-relative-time>`
-      + `${escapeHtml(summary.date.isoUtc)}</time>`
-    : '<span>Time unavailable</span>';
+  const date = dateMarkup(summary.date, dateDisplay);
 
   return `<header class="match-heading">`
     + `<${headingLevel}${headingAttribute}>${escapeHtml(summary.league.name.display)}</${headingLevel}>`

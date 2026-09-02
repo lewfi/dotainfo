@@ -1047,7 +1047,9 @@ Observable Plot for charts, plain CSS. No React, no Tailwind, no UI framework.
   - **Historical summary page:** rendered client-side for older matches from the selected
     per-month JSON payload. It shows teams, result, score, league, duration, patch, and date,
     with no draft, boxscores, or advantage graph. This meaningful summary is what “reachable”
-    means for an older match in v1; it is not a full-detail page.
+    means for an older match in v1; it is not a full-detail page. Historical dates use a
+    readable absolute UTC date rather than relative age; the `time` element retains the exact
+    ISO UTC value in its `datetime` attribute.
 
 Both page types apply the same absent-name rule. The committed data contains 7,058 matches
 with at least one null team ID and 655 match-side appearances whose non-null team ID has an
@@ -1112,6 +1114,33 @@ expected and valid. The observed counts remain build output rather than pinned f
 
 Production builds retain Astro's route log. Ten minutes is reported as a warning threshold,
 while Cloudflare's twenty-minute cap is the build gate and thrown-error threshold.
+
+The deployed Cloudflare production build is the planning baseline because it is materially
+slower than either local machine:
+
+| Platform | Mean ms/page | Total wall ms |
+|---|---:|---:|
+| Windows | 21.899 | 37,019 |
+| Linux | 18.387 | 33,238 |
+| Cloudflare | 33.920 | 60,499 |
+
+At the verified 8,673-match peak, the Cloudflare measurement projects 299,945 ms total,
+superseding the roughly 163,000 ms implied by the Linux measurement for cap planning. It
+leaves 900,055 ms, or about 75%, against Cloudflare's 20-minute cap. Against the ten-minute
+warning threshold it leaves 300,055 ms, reported as 50.009% headroom. Thus 299,945 ms is
+55 ms below the five-minute midpoint, not 55 ms below the ten-minute threshold; a marginal
+slowdown will not make `projectedPeakExceedsTenMinutes` true. That warning begins firing only
+if the projection reaches ten minutes, and remains advisory rather than a build failure.
+
+Cloudflare correctly read `site/.node-version`: the production log reported
+`Installing nodejs 22.20.0`. Cloudflare also warns that Node 22.20.0 is in LTS maintenance
+and nearing end of life; changing the pinned runtime remains a separate toolchain decision.
+
+Known v1 limitation: player items render as raw integer item IDs because
+`data/reference/` has no item reference source. Adding `/constants/items` to
+`reference.py`, following the heroes reference pattern, is the natural fix. It would change
+the reference-data contract and therefore requires explicit spec approval; do not infer it
+as ordinary presentation work.
 
 The historical route embeds only team and league rows whose IDs occur in the regular
 committed match shards, projecting teams to `team_id`, `name`, and `tag` and leagues to

@@ -62,6 +62,7 @@ export function historicalRouteView(matchId, resolved, references) {
     markup: '<section class="match-card historical-summary" '
       + `data-historical-match-id="${matchId}">`
       + renderMatchSummaryMarkup(summary, {
+        dateDisplay: 'absolute',
         headingId: 'historical-match-heading',
         headingLevel: 'h2',
         showPatch: true,
