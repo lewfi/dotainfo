@@ -24,6 +24,7 @@ function playerModel(row, references) {
     goldPerMinute: row.gold_per_min,
     xpPerMinute: row.xp_per_min,
     netWorth: row.net_worth,
+    level: row.level,
     items: Object.freeze(
       ITEM_COLUMNS.map((column) => row[column]).filter(
         (itemId) => Number.isSafeInteger(itemId) && itemId > 0,

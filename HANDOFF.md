@@ -9,8 +9,9 @@
 
 A zero-cost static website for **Dota 2 professional match data**: results, drafts, and
 box scores. Data comes from the public OpenDota API, is slimmed and stored as Parquet in
-this repo, and is rendered to static HTML by Astro at build time. No servers, no database,
-no runtime API calls from the browser.
+this repo, and is rendered to static HTML by Astro at build time. There is no deployed server
+or database and no runtime data API call from the browser. Recent detail pages do run a client
+script that imports Observable Plot; the chart is not build-time-only.
 
 **v0** — ingest pipeline only. Scheduled GitHub Actions fetch new pro matches and reference
 data and commit data files. No website.
@@ -1268,6 +1269,46 @@ the card geometry stayed intact. The reference's search, following/accounts, liv
 team/player pages, standings, brackets, head-to-head, and win probability remain deferred or
 unbuilt exactly as section 8 requires.
 
+**Match detail page styling - step 20 complete.** The recent-page draft, boxscores, and
+advantage graph now use the reference's existing visual language without adopting its mock
+features or hex palette. Detail surfaces are flat token-backed panels with one-pixel square
+borders and 10px uppercase section labels. Draft entries retain their single committed `ord`
+sequence, rendering a two-digit order, 26px hero image, team/action text, and one-pixel row
+dividers. Boxscores use raised 10px uppercase column headers, 13px rows, right-aligned numeric
+cells, and the existing explicit em dash for missing numeric values. The player presentation
+model now exposes the existing schema `level`, and each table renders it as the `Lvl` column.
+
+At narrow width, the pre-step-20 emitted page did not contain its overflow: a headless Chrome
+render requested at 380px measured a 741px document, and each nominal scroll region expanded
+to its full 697px table width. The regions had `overflow-x: auto` but `tabIndex` was -1 and
+there was no role or accessible name. After step 20, the same 380px render measured a 380px
+document. Each seven-column table is 1,088px within a 328px `overflow-x: auto` region; the
+region has `role="region"`, `tabindex="0"`, an `aria-labelledby` reference to its Radiant or
+Dire heading, an `aria-describedby` reference to the visible narrow-screen scroll hint, and
+the global focus indicator. Horizontal overflow is therefore contained, keyboard reachable,
+and explicitly labelled rather than silently widening the page.
+
+The graph reads `--color-text`, `--color-surface`, `--color-border`, `--color-accent`, and
+`--color-focus` from the computed theme for its axes, background, zero rule, Gold line, and
+Experience line. A `MutationObserver` re-renders the Plot when `<html data-theme>` changes.
+In one headless Chrome session, the light render used border/accent/focus strokes
+`rgb(132, 133, 122)`, `rgb(9, 112, 73)`, and `rgb(31, 95, 191)`; clicking the existing Dark
+button without navigation changed them to `rgb(126, 130, 114)`, `rgb(79, 203, 152)`, and
+`rgb(125, 211, 252)`. Both rendered screenshots remained legible and the graph's recorded
+theme changed from `light` to `dark` without a reload.
+
+Observable Plot is a browser dependency on recent match pages, not a build-time-only
+dependency. Before step 20, all 1,590 then-emitted recent pages referenced the same
+264,855-byte raw / 87,568-byte GNU-gzip-9 client bundle. Step 20 intentionally does not remove
+or replace it. After the theme-aware rendering code, all 1,588 recent pages in the moving
+build window reference one 265,659-byte raw / 87,897-byte GNU-gzip-9 bundle, a change of
++804 raw and +329 gzip bytes. The differing page counts reflect the trailing-90-day boundary,
+not conditional dependency delivery.
+
+The final local build generated 1,590 HTML pages in 39,271.625 ms total at 23.009 ms/page.
+The immediately preceding run on the same machine measured 23.527 ms/page; the 2.2% decrease
+is ordinary run-to-run variation, not a material build-performance change.
+
 ### v1 acceptance criteria
 
 - [ ] `npm run build` reports a warning at 10 minutes and fails before Cloudflare's 20-minute cap
@@ -1707,3 +1748,10 @@ These steps continue the canonical numbering in `AGENTS.md`.
     reference-only feature. Approval gate: inventory the exact five-view build window, render
     a real committed match or fixture for every degraded state, keep the historical-card gate
     passing, and measure both `dist/index.html` and `dist/404.html` before and after.
+20. **Match detail page styling.** Apply the reference's table treatment to the existing
+    draft list and recent-page boxscores, expose the schema's existing `level` field as `Lvl`,
+    and derive all Observable Plot colours from the active theme tokens. Re-render the graph
+    when the existing theme control changes without reloading. Approval gate: render both
+    themes and an in-page toggle in a browser; contain the seven-column table at roughly
+    380px in a labelled, keyboard-focusable horizontal scroll region; and measure the shared
+    recent-page client bundle before and after without removing Observable Plot.

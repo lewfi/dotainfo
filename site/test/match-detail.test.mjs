@@ -45,6 +45,8 @@ test('normal and edge-case fixtures produce complete detail models without ten-p
 
   assert.equal(models.normal.boxscores.radiant.length, 1);
   assert.equal(models.normal.boxscores.dire.length, 1);
+  assert.equal(models.normal.boxscores.radiant[0].level, 25);
+  assert.equal(models.normal.boxscores.dire[0].level, 19);
   assert.equal(models.normal.draft.length, 2);
   assert.ok(models.normal.advantage);
   assert.equal(models['no-draft'].draft.length, 0);
@@ -82,6 +84,9 @@ test('Astro renders all Step 14 fixtures with defined team displays and conditio
 
   assert.match(pages.normal, /data-draft-state="available"/);
   assert.match(pages.normal, /data-advantage-graph/);
+  assert.match(pages.normal, /<th scope="col">Lvl<\/th>/);
+  assert.match(pages.normal, /<td>25<\/td>/);
+  assert.match(pages.normal, /role="region" tabindex="0" aria-labelledby="boxscore-radiant"/);
   assert.match(pages['no-draft'], /data-draft-state="unavailable"/);
   assert.match(pages['no-draft'], /Draft data is not available for this match/);
   assert.doesNotMatch(pages['null-advantage'], /data-advantage-graph/);

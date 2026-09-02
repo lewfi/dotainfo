@@ -117,6 +117,10 @@ a:hover {
   grid-template-rows: auto 1fr auto;
 }
 
+main {
+  min-width: 0;
+}
+
 .site-header,
 .site-footer {
   padding-block: 1.25rem;
@@ -314,9 +318,9 @@ img {
 
 .detail-section {
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-medium);
+  border-radius: 0;
   background: var(--color-surface);
-  box-shadow: var(--shadow-card);
+  box-shadow: none;
 }
 
 .match-card {
@@ -436,6 +440,7 @@ img {
 }
 
 .match-detail {
+  min-width: 0;
   padding-block: 2rem;
 }
 
@@ -460,22 +465,28 @@ img {
 }
 
 .detail-section {
+  min-width: 0;
   margin-block: 1rem;
   padding: 1.25rem;
 }
 
-.detail-section > h2,
-.boxscore h3 {
-  margin-top: 0;
+.detail-section > h2 {
+  margin: 0 0 0.875rem;
+  color: var(--color-muted);
+  font-size: 10px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
 }
 
 .advantage-graph {
   margin: 0;
+  max-width: 100%;
   overflow-x: auto;
 }
 
 .advantage-graph svg {
   display: block;
+  max-width: 100%;
   color: var(--color-text);
   background: var(--color-surface);
 }
@@ -487,57 +498,144 @@ img {
 }
 
 .draft-order {
-  display: grid;
-  gap: 0.5rem;
-  padding-left: 2rem;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--color-border);
+  counter-reset: draft-order;
+  list-style: none;
 }
 
-.draft-order li,
-.boxscore th[scope="row"] {
+.draft-order li {
+  display: grid;
+  grid-template-columns: 2rem 26px minmax(0, 1fr);
   align-items: center;
   gap: 0.75rem;
+  min-height: 3rem;
+  padding: 0.55rem 0.75rem;
+  border-bottom: 1px solid var(--color-border);
+  counter-increment: draft-order;
+  font-size: 13px;
 }
 
-.draft-order li,
-.boxscore th[scope="row"],
-.boxscore th[scope="row"] span {
-  display: flex;
+.draft-order li:last-child {
+  border-bottom: 0;
+}
+
+.draft-order li::before {
+  color: var(--color-muted);
+  content: counter(draft-order, decimal-leading-zero);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+}
+
+.draft-order img,
+.boxscore th[scope="row"] img {
+  width: 26px;
+  height: 26px;
+  border: 1px solid var(--color-border);
+  object-fit: cover;
 }
 
 .boxscore + .boxscore {
   margin-top: 2rem;
 }
 
-.boxscore-scroll {
-  overflow-x: auto;
+.boxscore {
+  min-width: 0;
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-small);
+}
+
+.boxscore h3 {
+  margin: 0;
+  padding: 0.875rem 1rem;
+  border-bottom: 1px solid var(--color-border);
+  font-size: 13px;
+  letter-spacing: -0.01em;
+}
+
+.boxscore-scroll-hint {
+  display: none;
+  margin: 0;
+  padding: 0.55rem 1rem;
+  border-bottom: 1px solid var(--color-border);
+  color: var(--color-muted);
+  font-size: 10px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.boxscore-scroll {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  border: 0;
+  border-radius: 0;
+  overscroll-behavior-inline: contain;
 }
 
 .boxscore table {
   width: 100%;
+  min-width: 68rem;
   border-collapse: collapse;
+  font-size: 13px;
   text-align: left;
 }
 
 .boxscore th,
 .boxscore td {
-  padding: 0.65rem;
+  padding: 0.8rem 1rem;
   border-bottom: 1px solid var(--color-border);
   white-space: nowrap;
+}
+
+.boxscore thead {
+  color: var(--color-muted);
+  background: var(--color-surface-raised);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.boxscore thead th {
+  padding-block: 0.625rem;
+}
+
+.boxscore tr > :not(:first-child) {
+  text-align: right;
 }
 
 .boxscore tbody tr:last-child > * {
   border-bottom: 0;
 }
 
+.boxscore tbody tr:hover {
+  background: var(--color-surface-raised);
+}
+
+.boxscore th[scope="row"] {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  min-width: 12rem;
+}
+
 .boxscore th[scope="row"] span {
+  display: flex;
   flex-direction: column;
+  min-width: 0;
+  font-weight: 600;
 }
 
 .boxscore th small {
   color: var(--color-muted);
+  font-size: 11px;
   font-weight: 400;
+}
+
+.boxscore th:last-child,
+.boxscore td:last-child {
+  min-width: 18rem;
 }
 
 .site-footer {
@@ -593,12 +691,12 @@ img {
     gap: 0.5rem 0.75rem;
   }
 
-  .draft-order {
-    padding-left: 1.5rem;
+  .boxscore-scroll-hint {
+    display: block;
   }
 
   .boxscore table {
-    font-size: 0.875rem;
+    font-size: 13px;
   }
 }
 

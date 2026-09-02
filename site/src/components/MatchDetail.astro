@@ -83,11 +83,21 @@ const boxscores = [
     {boxscores.map(([side, players]) => (
       <section class="boxscore" aria-labelledby={`boxscore-${side.toLowerCase()}`}>
         <h3 id={`boxscore-${side.toLowerCase()}`}>{side}</h3>
-        <div class="boxscore-scroll">
+        <p class="boxscore-scroll-hint" id={`boxscore-${side.toLowerCase()}-hint`}>
+          Scroll horizontally to see all columns.
+        </p>
+        <div
+          class="boxscore-scroll"
+          role="region"
+          tabindex="0"
+          aria-labelledby={`boxscore-${side.toLowerCase()}`}
+          aria-describedby={`boxscore-${side.toLowerCase()}-hint`}
+        >
           <table>
             <thead>
               <tr>
                 <th scope="col">Player / hero</th>
+                <th scope="col">Lvl</th>
                 <th scope="col">K / D / A</th>
                 <th scope="col">LH / DN</th>
                 <th scope="col">GPM / XPM</th>
@@ -104,6 +114,7 @@ const boxscores = [
                     )}
                     <span>{player.player.name.display}<small>{player.hero.name.display}</small></span>
                   </th>
+                  <td>{stat(player.level)}</td>
                   <td>{stat(player.kills)} / {stat(player.deaths)} / {stat(player.assists)}</td>
                   <td>{stat(player.lastHits)} / {stat(player.denies)}</td>
                   <td>{stat(player.goldPerMinute)} / {stat(player.xpPerMinute)}</td>
@@ -122,26 +133,65 @@ const boxscores = [
 <script>
   import * as Plot from '@observablehq/plot';
 
-  for (const figure of document.querySelectorAll('[data-advantage-graph]')) {
+  const root = document.documentElement;
+  const figures = [...document.querySelectorAll('[data-advantage-graph]')];
+
+  function themeColors() {
+    const styles = getComputedStyle(root);
+    const token = (name) => styles.getPropertyValue(name).trim();
+    return {
+      text: token('--color-text'),
+      surface: token('--color-surface'),
+      border: token('--color-border'),
+      gold: token('--color-accent'),
+      experience: token('--color-focus'),
+    };
+  }
+
+  function renderAdvantage(figure) {
     const series = [];
     const gold = JSON.parse(figure.dataset.goldValues ?? '[]');
     const xp = JSON.parse(figure.dataset.xpValues ?? '[]');
     gold.forEach((value, minute) => series.push({ minute, value, type: 'Gold' }));
     xp.forEach((value, minute) => series.push({ minute, value, type: 'Experience' }));
+    const colors = themeColors();
+    const width = Math.max(240, Math.min(800, Math.floor(figure.clientWidth)));
     const plot = Plot.plot({
-      width: 800,
-      height: 360,
+      width,
+      height: Math.max(240, Math.round(width * 0.45)),
       marginLeft: 64,
+      style: { color: colors.text, background: colors.surface },
       x: { label: 'Minute' },
       y: { grid: true, label: 'Radiant advantage' },
-      color: { legend: true },
+      color: {
+        domain: ['Gold', 'Experience'],
+        range: [colors.gold, colors.experience],
+        legend: true,
+      },
       marks: [
-        Plot.ruleY([0], { stroke: '#a9adb5' }),
-        Plot.lineY(series, { x: 'minute', y: 'value', stroke: 'type' }),
+        Plot.ruleY([0], { stroke: colors.border }),
+        Plot.lineY(series, { x: 'minute', y: 'value', stroke: 'type', strokeWidth: 2 }),
       ],
     });
+    plot.dataset.advantagePlot = '';
     plot.setAttribute('aria-hidden', 'true');
     plot.setAttribute('focusable', 'false');
+    figure.querySelector('[data-advantage-plot]')?.remove();
     figure.insertBefore(plot, figure.firstChild);
+    figure.dataset.renderedTheme = root.dataset.theme ?? '';
+  }
+
+  const renderAll = () => figures.forEach(renderAdvantage);
+  renderAll();
+
+  if (figures.length > 0) {
+    let frame = null;
+    new MutationObserver(() => {
+      if (frame !== null) cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        renderAll();
+        frame = null;
+      });
+    }).observe(root, { attributes: true, attributeFilter: ['data-theme'] });
   }
 </script>
