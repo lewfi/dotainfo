@@ -347,7 +347,7 @@ const expectedHeaders = Object.freeze(columnContract
   .split(/,\s*(?:and\s+)?/)
   .map((label) => label.trim())
   .filter(Boolean));
-const expansionContract = /have visible expansions[^â€”]*â€”([^,]+), ([^,]+), and ([^â€”]+)â€”in/.exec(handoff);
+const expansionContract = /have visible expansions[^—]*—([^,]+), ([^,]+), and ([^—]+)—in/.exec(handoff);
 const expectedExpansions = Object.freeze(expansionContract?.slice(1).map((label) => label.trim()) ?? []);
 const widthContract = /every required viewport: ([\d,\sand]+)px/.exec(handoff)?.[1] ?? '';
 const widths = Object.freeze([...widthContract.matchAll(/\d+/g)].map((match) => Number(match[0])));

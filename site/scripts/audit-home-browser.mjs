@@ -19,7 +19,7 @@ const CHROME_PATHS = [
   'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe',
 ];
 const VIEWPORT_WIDTHS = Object.freeze([
-  320, 360, 380, 414, 480, 600, 672, 700, 760, 900, 1280,
+  320, 360, 380, 414, 480, 600, 672, 700, 760, 900, 1200, 1280, 1440,
 ]);
 
 function argument(name) {

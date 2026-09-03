@@ -1434,8 +1434,10 @@ The emitted CSS keeps every decorative home divider inside `.home-view`, whose o
 uses `--line-strong`; selectors for day headings, league headings, and rows literally begin
 with `.home-view ` before using `--line`, satisfying the step 21 syntactic and semantic gate.
 No new colour was introduced. Headless Chrome's device emulation measured both
-`clientWidth` and `scrollWidth` as equal at every swept viewport: 320, 360, 380, 414, 480,
-600, 672, 700, 760, 900, and 1280px. The home view is now an inline-size container: rows
+`clientWidth` and `scrollWidth` as equal at every swept viewport. Step 22 originally swept
+320, 360, 380, 480, 600, 672, 700, 760, 900, 1200, and 1440px; during the step 23 cleanup,
+the continuing gate was widened to its current thirteen widths: 320, 360, 380, 414, 480,
+600, 672, 700, 760, 900, 1200, 1280, and 1440px. The home view is now an inline-size container: rows
 use their stacked form while the component is narrower than 45rem and the five-column form
 only when the component itself can contain its 44.7rem minimum, instead of switching on the
 old 42rem viewport breakpoint. Separate script-disabled
@@ -1477,8 +1479,8 @@ payload, and inspects the rendered result rather than grepping static HTML.
 
 Each Radiant and Dire scoreboard has exactly seven columns, in this order: Player / hero,
 Lvl, K / D / A, LH / DN, GPM / XPM, Net worth, and Items. `Lvl`, `LH / DN`, and `GPM / XPM`
-have visible expansionsâ€”Level, Last hits / Denies, and Gold per minute / Experience per
-minuteâ€”in the table header. Narrow scoreboard cards repeat the full labels next to their
+have visible expansions—Level, Last hits / Denies, and Gold per minute / Experience per
+minute—in the table header. Narrow scoreboard cards repeat the full labels next to their
 values while retaining the semantic table headers, so the expansions are available without
 hover to touch and keyboard users. A `title`-only explanation is rejected; scoreboard
 headers contain no `title`, and the redundant tier-button `title` was removed because the
@@ -1505,21 +1507,23 @@ by mutating only `dist`, observing that assertion fail, restoring the original b
 observing it pass. Finding 8 is closed: match detail and runtime archive presentation are now
 visually consistent without conflating either archive `<section>` or home `<li>` ownership.
 
-The established regression suite comprises these nine audits (not seven), invoked from
-`site/`. `CLOCK` is an ISO UTC value in `YYYY-MM-DDTHH:mm:ssZ` form. The browser audit uses a
-real installed Chrome or Edge executable from its explicit Windows paths.
+The established regression suite comprises these ten audits (not seven), invoked from
+`site/`. `CLOCK` is an ISO UTC value in `YYYY-MM-DDTHH:mm:ssZ` form. Home browser and Detail
+require a real installed Chrome or Edge executable from their explicit Windows paths; both
+are unrunnable on Linux and in CI.
 
-| Audit | Invocation |
-|---|---|
-| Data | `npm run audit:data -- --clock CLOCK` |
-| References | `npm run audit:references` |
-| Home | `npm run audit:home -- --clock CLOCK --dist dist` |
-| Home card states | `npm run audit:home-card-states -- --dist dist` |
-| Home browser | `npm run audit:home-browser -- --dist dist` |
-| Recent | `npm run audit:recent -- --clock CLOCK --dist dist` |
-| Historical | `npm run audit:historical -- --dist dist` |
-| Accessibility | `npm run audit:a11y -- --dist dist` |
-| Links | `npm run audit:links -- --dist dist` |
+| Audit | Invocation | Runtime requirement |
+|---|---|---|
+| Data | `npm run audit:data -- --clock CLOCK` | — |
+| References | `npm run audit:references` | — |
+| Home | `npm run audit:home -- --clock CLOCK --dist dist` | — |
+| Home card states | `npm run audit:home-card-states -- --dist dist` | — |
+| Home browser | `npm run audit:home-browser -- --dist dist` | Real installed Chrome or Edge; Windows only, not CI |
+| Recent | `npm run audit:recent -- --clock CLOCK --dist dist` | — |
+| Historical | `npm run audit:historical -- --dist dist` | — |
+| Accessibility | `npm run audit:a11y -- --dist dist` | — |
+| Links | `npm run audit:links -- --dist dist` | — |
+| Detail | `npm run audit:detail -- --dist dist` | Real installed Chrome or Edge; Windows only, not CI |
 
 Build regression reporting for step 23 uses total wall time only. Mean milliseconds per page
 is still printed by the existing profiler for diagnostics, but is not used as a regression
