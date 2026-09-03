@@ -1,5 +1,6 @@
 ---
 import MatchSummary from './MatchSummary.astro';
+import { SCOREBOARD_COLUMNS } from '../presentation/match-detail.mjs';
 
 const { model } = Astro.props;
 
@@ -25,6 +26,7 @@ const boxscores = [
   ['Radiant', model.boxscores.radiant],
   ['Dire', model.boxscores.dire],
 ];
+const columns = Object.fromEntries(SCOREBOARD_COLUMNS.map((column) => [column.key, column]));
 ---
 
 <article class="match-detail" aria-labelledby="match-title" data-match-detail={model.summary.matchId}>
@@ -81,10 +83,14 @@ const boxscores = [
   <section class="detail-section" aria-labelledby="boxscores-title">
     <h2 id="boxscores-title">Boxscores</h2>
     {boxscores.map(([side, players]) => (
-      <section class="boxscore" aria-labelledby={`boxscore-${side.toLowerCase()}`}>
+      <section
+        class="boxscore"
+        aria-labelledby={`boxscore-${side.toLowerCase()}`}
+        data-boxscore-side={side.toLowerCase()}
+      >
         <h3 id={`boxscore-${side.toLowerCase()}`}>{side}</h3>
         <p class="boxscore-scroll-hint" id={`boxscore-${side.toLowerCase()}-hint`}>
-          Scroll horizontally to see all columns.
+          Player statistics are grouped into labelled cards on narrow screens.
         </p>
         <div
           class="boxscore-scroll"
@@ -93,16 +99,25 @@ const boxscores = [
           aria-labelledby={`boxscore-${side.toLowerCase()}`}
           aria-describedby={`boxscore-${side.toLowerCase()}-hint`}
         >
-          <table>
+          <table data-scoreboard-table>
             <thead>
               <tr>
-                <th scope="col">Player / hero</th>
-                <th scope="col">Lvl</th>
-                <th scope="col">K / D / A</th>
-                <th scope="col">LH / DN</th>
-                <th scope="col">GPM / XPM</th>
-                <th scope="col">Net worth</th>
-                <th scope="col">Items</th>
+                <th scope="col" data-column-key="player">{columns.player.short}</th>
+                <th scope="col" data-column-key="level">
+                  <span class="column-abbreviation">{columns.level.short}</span>
+                  <span class="column-expansion">{columns.level.long}</span>
+                </th>
+                <th scope="col" data-column-key="combat">{columns.combat.short}</th>
+                <th scope="col" data-column-key="farm">
+                  <span class="column-abbreviation">{columns.farm.short}</span>
+                  <span class="column-expansion">{columns.farm.long}</span>
+                </th>
+                <th scope="col" data-column-key="economy">
+                  <span class="column-abbreviation">{columns.economy.short}</span>
+                  <span class="column-expansion">{columns.economy.long}</span>
+                </th>
+                <th scope="col" data-column-key="net-worth">{columns['net-worth'].short}</th>
+                <th scope="col" data-column-key="items">{columns.items.short}</th>
               </tr>
             </thead>
             <tbody>
@@ -114,12 +129,18 @@ const boxscores = [
                     )}
                     <span>{player.player.name.display}<small>{player.hero.name.display}</small></span>
                   </th>
-                  <td>{stat(player.level)}</td>
-                  <td>{stat(player.kills)} / {stat(player.deaths)} / {stat(player.assists)}</td>
-                  <td>{stat(player.lastHits)} / {stat(player.denies)}</td>
-                  <td>{stat(player.goldPerMinute)} / {stat(player.xpPerMinute)}</td>
-                  <td>{stat(player.netWorth)}</td>
-                  <td>
+                  <td data-column-label={columns.level.long}>{stat(player.level)}</td>
+                  <td data-column-label={columns.combat.long}>
+                    {stat(player.kills)} / {stat(player.deaths)} / {stat(player.assists)}
+                  </td>
+                  <td data-column-label={columns.farm.long}>
+                    {stat(player.lastHits)} / {stat(player.denies)}
+                  </td>
+                  <td data-column-label={columns.economy.long}>
+                    {stat(player.goldPerMinute)} / {stat(player.xpPerMinute)}
+                  </td>
+                  <td data-column-label={columns['net-worth'].long}>{stat(player.netWorth)}</td>
+                  <td data-column-label={columns.items.long}>
                     {player.items.length > 0 ? player.items.map((item, index) => (
                       <>
                         <span data-item-state={item.name.status}>{item.name.display}</span>

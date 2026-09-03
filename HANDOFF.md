@@ -1434,8 +1434,8 @@ The emitted CSS keeps every decorative home divider inside `.home-view`, whose o
 uses `--line-strong`; selectors for day headings, league headings, and rows literally begin
 with `.home-view ` before using `--line`, satisfying the step 21 syntactic and semantic gate.
 No new colour was introduced. Headless Chrome's device emulation measured both
-`clientWidth` and `scrollWidth` as equal at every swept viewport: 320, 360, 380, 480, 600,
-672, 700, 760, 900, 1200, and 1440px. The home view is now an inline-size container: rows
+`clientWidth` and `scrollWidth` as equal at every swept viewport: 320, 360, 380, 414, 480,
+600, 672, 700, 760, 900, and 1280px. The home view is now an inline-size container: rows
 use their stacked form while the component is narrower than 45rem and the five-column form
 only when the component itself can contain its 44.7rem minimum, instead of switching on the
 old 42rem viewport breakpoint. Separate script-disabled
@@ -1465,6 +1465,67 @@ without weakening the degraded states. The final verified build produced 1,534 H
 in 40,357.173 ms total; both build
 assertions passed. No ms/page comparison is made because the measured machine variance is
 not useful for this step.
+
+**Match detail and archive visual consistency - step 23 complete.** Recent match detail and
+the runtime historical summary now use the step 21/22 visual language: flat `--surface`
+panels, separately strong `--line-strong` boundaries, square corners, compact type, raised
+section headers, and token-derived graph colours. Home `<li class="match-card">` markup and
+its `.home-view .match-card` rules remain unchanged. The archive client instead emits
+`<section class="archive-summary">`; because `404.html` contains no match summary at build
+time, archive verification executes its inline client, loads the committed manifest/month
+payload, and inspects the rendered result rather than grepping static HTML.
+
+Each Radiant and Dire scoreboard has exactly seven columns, in this order: Player / hero,
+Lvl, K / D / A, LH / DN, GPM / XPM, Net worth, and Items. `Lvl`, `LH / DN`, and `GPM / XPM`
+have visible expansionsâ€”Level, Last hits / Denies, and Gold per minute / Experience per
+minuteâ€”in the table header. Narrow scoreboard cards repeat the full labels next to their
+values while retaining the semantic table headers, so the expansions are available without
+hover to touch and keyboard users. A `title`-only explanation is rejected; scoreboard
+headers contain no `title`, and the redundant tier-button `title` was removed because the
+same explanations are already visible in `#tier-hints`.
+
+The scoreboards are inline-size containers. Their emitted `44.99rem` query changes each
+player row from a table row to a three-column labelled metric card when the scoreboard itself
+is narrow. Browser measurements found the card layout from 320 through 760px and the table
+layout at 900 and 1280px. On home, recent detail, and the executed archive route,
+`scrollWidth` equalled `clientWidth` at every required viewport: 320, 360, 380, 414, 480,
+600, 672, 700, 760, 900, and 1280px. Thus the document never scrolls horizontally; the old
+step 20 narrow horizontal-table treatment is superseded. The approved no-JavaScript home
+default remains Top tier + Pro (`premium` plus `professional`), and all six pre-rendered
+views remain in the static document with only that default initially visible.
+
+`npm run audit:detail -- --dist dist` is the independent step 23 gate. It discovers a recent
+detail page and stylesheet from `dist`, parses the light surface and strong-line colours and
+the scoreboard threshold from emitted CSS, and independently compares those values with
+computed browser output. It does not import the presentation model's column contract. Its
+six assertions cover runtime archive class isolation, seven-column/expanded-label output,
+computed token colours, container-query switching, the complete three-route width sweep,
+and the home no-JavaScript/title contract. Each assertion was negative-tested in one command
+by mutating only `dist`, observing that assertion fail, restoring the original bytes, and
+observing it pass. Finding 8 is closed: match detail and runtime archive presentation are now
+visually consistent without conflating either archive `<section>` or home `<li>` ownership.
+
+The established regression suite comprises these nine audits (not seven), invoked from
+`site/`. `CLOCK` is an ISO UTC value in `YYYY-MM-DDTHH:mm:ssZ` form. The browser audit uses a
+real installed Chrome or Edge executable from its explicit Windows paths.
+
+| Audit | Invocation |
+|---|---|
+| Data | `npm run audit:data -- --clock CLOCK` |
+| References | `npm run audit:references` |
+| Home | `npm run audit:home -- --clock CLOCK --dist dist` |
+| Home card states | `npm run audit:home-card-states -- --dist dist` |
+| Home browser | `npm run audit:home-browser -- --dist dist` |
+| Recent | `npm run audit:recent -- --clock CLOCK --dist dist` |
+| Historical | `npm run audit:historical -- --dist dist` |
+| Accessibility | `npm run audit:a11y -- --dist dist` |
+| Links | `npm run audit:links -- --dist dist` |
+
+Build regression reporting for step 23 uses total wall time only. Mean milliseconds per page
+is still printed by the existing profiler for diagnostics, but is not used as a regression
+metric because page counts and local timing vary between runs. The final local build emitted
+1,474 pages in 36,029.415 ms total, reported 66.796% ten-minute headroom, and passed the
+Cloudflare twenty-minute cap assertion.
 
 ### v1 acceptance criteria
 
@@ -1937,3 +1998,13 @@ These steps continue the canonical numbering in `AGENTS.md`.
     fixture maps to Other, current degraded states render against real committed IDs, every card retains
     one resolving accessible link, 380px and 320px headless renders have no document overflow,
     and the home artifact growth is measured and explained.
+23. **Match detail and archive visual consistency.** Apply the second visual language to the
+    existing recent detail summary, draft, seven-column scoreboards, and advantage graph, and
+    to the client-rendered historical summary without changing home `.match-card` ownership.
+    Use visible full expansions for Lvl, LH / DN, and GPM / XPM rather than `title`; switch
+    narrow scoreboards to labelled metric cards with a container query. Approval gate:
+    execute the runtime archive, derive colour and breakpoint expectations independently from
+    emitted CSS, verify no document overflow at all eleven required widths, prove every new
+    assertion fails under an isolated emitted-output mutation, and retain all nine prior
+    audits, link integrity, the six-view no-JavaScript home cascade, and the Cloudflare build
+    cap.

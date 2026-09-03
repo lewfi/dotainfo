@@ -10,6 +10,20 @@ const ITEM_COLUMNS = Object.freeze([
   'item_neutral',
 ]);
 
+export const SCOREBOARD_COLUMNS = Object.freeze([
+  Object.freeze({ key: 'player', short: 'Player / hero', long: 'Player / hero' }),
+  Object.freeze({ key: 'level', short: 'Lvl', long: 'Level' }),
+  Object.freeze({ key: 'combat', short: 'K / D / A', long: 'Kills / Deaths / Assists' }),
+  Object.freeze({ key: 'farm', short: 'LH / DN', long: 'Last hits / Denies' }),
+  Object.freeze({
+    key: 'economy',
+    short: 'GPM / XPM',
+    long: 'Gold per minute / Experience per minute',
+  }),
+  Object.freeze({ key: 'net-worth', short: 'Net worth', long: 'Net worth' }),
+  Object.freeze({ key: 'items', short: 'Items', long: 'Items' }),
+]);
+
 function playerModel(row, references) {
   return Object.freeze({
     accountId: row.account_id,

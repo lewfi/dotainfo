@@ -6,7 +6,10 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 
-import { createMatchDetailModel } from '../src/presentation/match-detail.mjs';
+import {
+  createMatchDetailModel,
+  SCOREBOARD_COLUMNS,
+} from '../src/presentation/match-detail.mjs';
 import {
   DETAIL_FIXTURE_CASES,
   fixtureReferences,
@@ -38,6 +41,18 @@ function fixtureBuild(outputRoot) {
 }
 
 test('normal and edge-case fixtures produce complete detail models without ten-player assumptions', () => {
+  assert.deepEqual(
+    SCOREBOARD_COLUMNS.map(({ key, short }) => [key, short]),
+    [
+      ['player', 'Player / hero'],
+      ['level', 'Lvl'],
+      ['combat', 'K / D / A'],
+      ['farm', 'LH / DN'],
+      ['economy', 'GPM / XPM'],
+      ['net-worth', 'Net worth'],
+      ['items', 'Items'],
+    ],
+  );
   const models = Object.fromEntries(DETAIL_FIXTURE_CASES.map((fixture) => [
     fixture.id,
     createMatchDetailModel(fixture.detail, fixtureReferences()),
@@ -87,8 +102,14 @@ test('Astro renders all Step 14 fixtures with defined team displays and conditio
 
   assert.match(pages.normal, /data-draft-state="available"/);
   assert.match(pages.normal, /data-advantage-graph/);
-  assert.match(pages.normal, /<th scope="col">Lvl<\/th>/);
-  assert.match(pages.normal, /<td>25<\/td>/);
+  assert.match(
+    pages.normal,
+    /data-column-key="level">\s*<span class="column-abbreviation">Lvl<\/span>\s*<span class="column-expansion">Level<\/span>/,
+  );
+  assert.match(pages.normal, /Last hits \/ Denies/);
+  assert.match(pages.normal, /Gold per minute \/ Experience per minute/);
+  assert.doesNotMatch(pages.normal, /<th[^>]*\btitle=/);
+  assert.match(pages.normal, /<td data-column-label="Level">25<\/td>/);
   assert.match(pages.normal, /data-item-state="available">Blink Dagger<\/span>/);
   assert.match(pages.normal, /data-item-state="missing">Item name unavailable<\/span>/);
   assert.doesNotMatch(pages.normal, /<td>1, 2, 3, 11<\/td>/);

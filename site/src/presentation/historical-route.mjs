@@ -59,7 +59,7 @@ export function historicalRouteView(matchId, resolved, references) {
   return Object.freeze({
     status: 'found',
     title: `Match ${matchId}`,
-    markup: '<section class="match-card historical-summary" '
+    markup: '<section class="archive-summary" '
       + `data-historical-match-id="${matchId}">`
       + renderMatchSummaryMarkup(summary, {
         dateDisplay: 'absolute',

@@ -433,8 +433,9 @@ img {
 }
 
 .match-detail-summary,
-.historical-summary {
-  padding: 1rem 1.25rem;
+.archive-summary {
+  container-type: inline-size;
+  padding: 0;
   border: 1px solid var(--line-strong);
   background: var(--surface);
 }
@@ -742,7 +743,7 @@ img {
   color: var(--accent-b);
 }
 
-.historical-summary {
+.archive-summary {
   margin-top: 1.5rem;
 }
 
@@ -750,23 +751,87 @@ img {
   margin-bottom: 1rem;
 }
 
+.match-detail-summary .match-heading,
+.archive-summary .match-heading {
+  align-items: center;
+  padding: 0.8rem 1.25rem;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface-2);
+}
+
+.match-detail-summary .match-heading h1,
+.archive-summary .match-heading h2 {
+  margin: 0;
+  font-size: 13px;
+  letter-spacing: -0.01em;
+  line-height: 1.25;
+}
+
+.match-detail-summary .teams,
+.archive-summary .teams {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin: 0;
+  padding: 1rem 1.25rem;
+}
+
+.match-detail-summary .teams p,
+.archive-summary .teams p {
+  min-width: 0;
+  padding: 0.75rem;
+  border: 1px solid var(--line-strong);
+  background: var(--bg);
+}
+
+.match-detail-summary .teams p > span,
+.archive-summary .teams p > span {
+  min-width: 0;
+}
+
+.match-detail-summary .teams strong,
+.archive-summary .teams strong {
+  font-family: var(--mono);
+  font-size: 20px;
+}
+
+.match-detail-summary .match-meta,
+.archive-summary .match-meta {
+  margin: 0;
+  padding: 0.75rem 1.25rem;
+  border-top: 1px solid var(--line);
+  color: var(--fg-3);
+  font-family: var(--mono);
+  font-size: 9px;
+}
+
 .detail-section {
   min-width: 0;
   margin-block: 1rem;
-  padding: 1.25rem;
+  padding: 0;
 }
 
-.detail-section > h2 {
-  margin: 0 0 0.875rem;
+.detail-section h2 {
+  margin: 0;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--line);
   color: var(--fg-2);
+  background: var(--surface-2);
   font-size: 10px;
   letter-spacing: 0.09em;
   text-transform: uppercase;
 }
 
+.detail-section > p {
+  margin: 0;
+  padding: 1rem;
+  color: var(--fg-2);
+}
+
 .advantage-graph {
   margin: 0;
   max-width: 100%;
+  padding: 1rem;
   overflow-x: auto;
 }
 
@@ -784,7 +849,7 @@ img {
 }
 
 .draft-order {
-  margin: 0;
+  margin: 1rem;
   padding: 0;
   border: 1px solid var(--line-strong);
   counter-reset: draft-order;
@@ -824,18 +889,23 @@ img {
 }
 
 .boxscore + .boxscore {
-  margin-top: 2rem;
+  margin-top: 1rem;
 }
 
 .boxscore {
+  container-name: scoreboard;
+  container-type: inline-size;
   min-width: 0;
+  margin: 1rem;
   border: 1px solid var(--line-strong);
+  background: var(--surface);
 }
 
 .boxscore h3 {
   margin: 0;
-  padding: 0.875rem 1rem;
+  padding: 0.65rem 0.8rem;
   border-bottom: 1px solid var(--line);
+  background: var(--surface-2);
   font-size: 13px;
   letter-spacing: -0.01em;
 }
@@ -862,15 +932,16 @@ img {
 
 .boxscore table {
   width: 100%;
-  min-width: 68rem;
+  min-width: 64rem;
   border-collapse: collapse;
-  font-size: 13px;
+  font-family: var(--mono);
+  font-size: 11px;
   text-align: left;
 }
 
 .boxscore th,
 .boxscore td {
-  padding: 0.8rem 1rem;
+  padding: 0.65rem 0.75rem;
   border-bottom: 1px solid var(--line);
   white-space: nowrap;
 }
@@ -884,7 +955,7 @@ img {
 }
 
 .boxscore thead th {
-  padding-block: 0.625rem;
+  padding-block: 0.5rem;
 }
 
 .boxscore tr > :not(:first-child) {
@@ -902,8 +973,9 @@ img {
 .boxscore th[scope="row"] {
   display: flex;
   align-items: center;
-  gap: 0.625rem;
+  gap: 0.55rem;
   min-width: 12rem;
+  font-family: var(--sans);
 }
 
 .boxscore th[scope="row"] span {
@@ -921,7 +993,23 @@ img {
 
 .boxscore th:last-child,
 .boxscore td:last-child {
-  min-width: 18rem;
+  min-width: 16rem;
+  white-space: normal;
+}
+
+.column-abbreviation,
+.column-expansion {
+  display: block;
+}
+
+.column-expansion {
+  margin-top: 0.15rem;
+  color: var(--fg-3);
+  font-size: 8px;
+  font-weight: 500;
+  letter-spacing: 0;
+  line-height: 1.2;
+  text-transform: none;
 }
 
 .site-footer {
@@ -1017,6 +1105,97 @@ img {
   }
 }
 
+@container scoreboard (max-width: 44.99rem) {
+  .boxscore .boxscore-scroll-hint {
+    display: block;
+  }
+
+  .boxscore .boxscore-scroll {
+    overflow-x: visible;
+  }
+
+  .boxscore table,
+  .boxscore tbody {
+    display: block;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .boxscore thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .boxscore tbody {
+    padding: 0.6rem;
+  }
+
+  .boxscore tbody tr {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0;
+    margin-bottom: 0.6rem;
+    border: 1px solid var(--line-strong);
+    background: var(--surface);
+  }
+
+  .boxscore tbody tr:last-child {
+    margin-bottom: 0;
+  }
+
+  .boxscore tbody tr > * {
+    min-width: 0;
+    padding: 0.6rem;
+    border-bottom: 1px solid var(--line);
+    white-space: normal;
+  }
+
+  .boxscore tbody tr > :not(:first-child) {
+    display: grid;
+    gap: 0.2rem;
+    text-align: left;
+  }
+
+  .boxscore tbody tr > :not(:first-child)::before {
+    color: var(--fg-3);
+    content: attr(data-column-label);
+    font-family: var(--sans);
+    font-size: 8px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    line-height: 1.2;
+    text-transform: uppercase;
+  }
+
+  .boxscore th[scope="row"] {
+    grid-column: 1 / -1;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .boxscore tbody tr > :last-child {
+    grid-column: 1 / -1;
+    border-bottom: 0;
+  }
+}
+
+@container (max-width: 34rem) {
+  .match-detail-summary .teams,
+  .archive-summary .teams {
+    grid-template-columns: 1fr;
+  }
+
+  .match-detail-summary .match-heading,
+  .archive-summary .match-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+
 @media (max-width: 42rem) {
   .site-shell {
     width: min(100% - 1rem, 72rem);
@@ -1082,10 +1261,6 @@ img {
     white-space: normal;
   }
 
-  .detail-section {
-    padding: 1rem;
-  }
-
   .match-heading,
   .teams p {
     gap: 0.5rem;
@@ -1104,12 +1279,9 @@ img {
     gap: 0.5rem 0.75rem;
   }
 
-  .boxscore .boxscore-scroll-hint {
-    display: block;
-  }
-
-  .boxscore table {
-    font-size: 13px;
+  .boxscore,
+  .draft-order {
+    margin: 0.75rem;
   }
 }
 

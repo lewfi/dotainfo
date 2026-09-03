@@ -56,7 +56,6 @@ function isoFromEpoch(epoch) {
           data-view-label={view.label}
           aria-pressed={index === 0 ? 'true' : 'false'}
           aria-controls={`home-view-${view.id}`}
-          title={view.hint}
           data-hidden-count={view.hiddenCount}
           data-range-start={isoFromEpoch(view.range.startEpoch)}
           data-range-end={isoFromEpoch(view.range.endEpoch)}
