@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import http.client
 import json
 import os
 import tempfile
@@ -13,7 +14,7 @@ from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
 from pathlib import Path
 from typing import Any
-from urllib.error import HTTPError
+from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
@@ -31,6 +32,7 @@ HTTP_TIMEOUT_SECONDS = 60
 BOOTSTRAP_DAYS = 7
 FAILURE_LIMIT = 5
 RATE_LIMIT_RETRIES = 5
+TRANSIENT_RETRIES = 3
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DATA_DIR = REPO_ROOT / "data"
@@ -62,6 +64,7 @@ class RunSummary:
     retries_attempted: int = 0
     retries_succeeded: int = 0
     retries_permanent: int = 0
+    transient_retries: int = 0
     api_calls: int = 0
     unknown_patch_indices: list[int] = field(default_factory=list)
     shards_written: list[str] = field(default_factory=list)
@@ -114,6 +117,7 @@ def retry_after_seconds(error: HTTPError, retry_number: int) -> float:
 class ApiClient:
     def __init__(self) -> None:
         self.calls = 0
+        self.transient_retries = 0
         self._last_call_finished: float | None = None
 
     def get_json(self, path: str, params: dict[str, Any] | None = None) -> Any:
@@ -126,7 +130,9 @@ class ApiClient:
             f"{API_BASE_URL}{path}{query}",
             headers={"User-Agent": "dotainfo-v0-ingest"},
         )
-        for retry_number in range(RATE_LIMIT_RETRIES + 1):
+        rate_limit_retries = 0
+        transient_retries = 0
+        while True:
             if self._last_call_finished is not None:
                 elapsed = time.monotonic() - self._last_call_finished
                 if elapsed < REST_INTERVAL_SECONDS:
@@ -137,17 +143,29 @@ class ApiClient:
                 with urlopen(request, timeout=HTTP_TIMEOUT_SECONDS) as response:
                     return json.load(response)
             except HTTPError as error:
-                if error.code != 429:
+                if error.code == 429:
+                    if rate_limit_retries >= RATE_LIMIT_RETRIES:
+                        raise RateLimitError(
+                            f"HTTP 429 persisted after {RATE_LIMIT_RETRIES} in-run retries"
+                        ) from error
+                    rate_limit_retries += 1
+                    time.sleep(retry_after_seconds(error, rate_limit_retries))
+                    continue
+                if error.code < 500:
                     raise
-                if retry_number >= RATE_LIMIT_RETRIES:
-                    raise RateLimitError(
-                        f"HTTP 429 persisted after {RATE_LIMIT_RETRIES} in-run retries"
-                    ) from error
-                time.sleep(retry_after_seconds(error, retry_number + 1))
+                if transient_retries >= TRANSIENT_RETRIES:
+                    raise
+                transient_retries += 1
+                self.transient_retries += 1
+                time.sleep(REST_INTERVAL_SECONDS * (2 ** (transient_retries - 1)))
+            except (URLError, TimeoutError, http.client.RemoteDisconnected):
+                if transient_retries >= TRANSIENT_RETRIES:
+                    raise
+                transient_retries += 1
+                self.transient_retries += 1
+                time.sleep(REST_INTERVAL_SECONDS * (2 ** (transient_retries - 1)))
             finally:
                 self._last_call_finished = time.monotonic()
-
-        raise AssertionError("unreachable")
 
 
 def positive_int(value: str) -> int:
@@ -521,6 +539,7 @@ def run(args: argparse.Namespace) -> RunSummary:
     summary.unknown_patch_indices = sorted(unknown_patch_indices)
     summary.shards_written = sorted(hot_months)
     summary.api_calls = client.calls
+    summary.transient_retries = getattr(client, "transient_retries", 0)
 
     if not args.dry_run:
         for path in sorted(pending_rows, key=str):

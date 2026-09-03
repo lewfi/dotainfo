@@ -88,8 +88,12 @@ These are the constraints that make the project viable. Violating any one of the
    `Retry-After` when present; otherwise retry the same request with exponential backoff from
    1.1s. Retry at most five times within the run. Those in-run 429 retries do not increment the
    match's failure-queue attempt count. If all five are exhausted, record one failure whose
-   `last_error` identifies persistent rate-limiting. Sleep ≥5s between `/explorer` calls — that
-   endpoint queries their production Postgres directly.
+   `last_error` identifies persistent rate-limiting. Separately, retry HTTP 5xx responses,
+   `URLError`, `TimeoutError`, and `RemoteDisconnected` at most three times within the run,
+   with exponential backoff from 1.1s. This transient-error budget is independent of the 429
+   budget, and its in-run retries likewise do not increment the match's failure-queue attempt
+   count. Sleep ≥5s between `/explorer` calls — that endpoint queries their production
+   Postgres directly.
 
 ---
 
@@ -637,7 +641,8 @@ for each id (ascending):
     select one shard month from match start_time and apply it to all three tables
     if the start_time month is already compacted, use the late-arrival path
     on success, remove the id from the retry queue
-    on HTTP 429, retry in-run per hard rule 6 without incrementing failure attempts
+    on HTTP 429 or a transient HTTP/connection failure, retry in-run per hard rule 6
+      using separate budgets and without incrementing failure attempts
     on failure, update failed.ndjson; after attempt 5 move it to failed_permanent.ndjson
     sleep 1.1s
 write state.json (highest new match_id processed)
@@ -664,6 +669,7 @@ is:
   "retries_attempted": 0,
   "retries_succeeded": 0,
   "retries_permanent": 0,
+  "transient_retries": 0,
   "api_calls": 0,
   "unknown_patch_indices": [],
   "shards_written": [],
@@ -673,6 +679,12 @@ is:
   "duration_seconds": 0.0
 }
 ```
+
+Scheduled ingest run #14 on 2026-09-03 observed HTTP 522 on the run's first request,
+`/constants/patch`. Cloudflare's edge could not reach OpenDota's origin; no match was fetched,
+no file was written, and `state.json` did not advance. That observation motivated the bounded
+transient policy above. Exhausting retries on this preflight request still preserves the
+required abort-before-write behavior.
 
 `--dry-run` guarantees no filesystem or Git writes: no shards, state, failure queues,
 compaction, run summary, commit, or push. It prints what it would do and exits. `--limit N`

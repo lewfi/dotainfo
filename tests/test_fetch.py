@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+import http.client
 import io
 import json
 import tempfile
@@ -8,7 +9,7 @@ import unittest
 from argparse import Namespace
 from contextlib import redirect_stdout
 from pathlib import Path
-from urllib.error import HTTPError
+from urllib.error import HTTPError, URLError
 from unittest.mock import patch
 
 import pyarrow as pa
@@ -274,9 +275,163 @@ class FetchTests(unittest.TestCase):
 
         self.assertEqual({"ok": True}, response)
         self.assertEqual(2, client.calls)
+        self.assertEqual(0, client.transient_retries)
         self.assertIn(3.0, sleeps)
         self.assertFalse(self.paths["FAILED_PATH"].exists())
         rate_limited.close()
+
+    def test_522_retries_once_then_returns_payload(self):
+        unavailable = HTTPError("test", 522, "origin unavailable", {}, None)
+        responses = [unavailable, io.BytesIO(b'{"ok": true}')]
+
+        def mocked_urlopen(request, timeout):
+            result = responses.pop(0)
+            if isinstance(result, Exception):
+                raise result
+            return result
+
+        sleeps = []
+        with (
+            patch.object(fetch, "urlopen", side_effect=mocked_urlopen) as urlopen,
+            patch.object(fetch.time, "sleep", side_effect=sleeps.append),
+            patch.dict(fetch.os.environ, {}, clear=True),
+        ):
+            client = fetch.ApiClient()
+            response = client.get_json("/test")
+
+        self.assertEqual({"ok": True}, response)
+        self.assertEqual(2, urlopen.call_count)
+        self.assertEqual(2, client.calls)
+        self.assertEqual(1, client.transient_retries)
+        self.assertEqual(fetch.REST_INTERVAL_SECONDS, sleeps[0])
+        unavailable.close()
+
+    def test_522_raises_after_transient_retry_budget(self):
+        errors = [
+            HTTPError("test", 522, "origin unavailable", {}, None)
+            for _ in range(fetch.TRANSIENT_RETRIES + 1)
+        ]
+
+        with (
+            patch.object(fetch, "urlopen", side_effect=errors) as urlopen,
+            patch.object(fetch.time, "sleep"),
+            patch.dict(fetch.os.environ, {}, clear=True),
+            self.assertRaises(HTTPError) as raised,
+        ):
+            client = fetch.ApiClient()
+            client.get_json("/test")
+
+        self.assertEqual(522, raised.exception.code)
+        self.assertEqual(fetch.TRANSIENT_RETRIES + 1, urlopen.call_count)
+        self.assertEqual(fetch.TRANSIENT_RETRIES + 1, client.calls)
+        self.assertEqual(fetch.TRANSIENT_RETRIES, client.transient_retries)
+        for error in errors:
+            error.close()
+
+    def test_transient_retries_count_once_in_failure_queue_and_run_summary(self):
+        self.write_state(100)
+        errors = [
+            HTTPError("test", 522, "origin unavailable", {}, None)
+            for _ in range(fetch.TRANSIENT_RETRIES + 1)
+        ]
+        responses = [
+            io.BytesIO(b'[{"id": 60, "name": "7.41"}]'),
+            io.BytesIO(
+                b'[{"match_id": 101, "start_time": 1788065955},'
+                b'{"match_id": 100, "start_time": 1788065954}]'
+            ),
+            *errors,
+        ]
+
+        with (
+            patch.object(fetch, "urlopen", side_effect=responses),
+            patch.object(fetch.time, "sleep"),
+            redirect_stdout(io.StringIO()),
+        ):
+            summary = fetch.run(Namespace(dry_run=False, limit=1))
+
+        failure = fetch.read_failure_queue(self.paths["FAILED_PATH"])[101]
+        emitted_summary = json.loads(
+            self.paths["RUN_SUMMARY_PATH"].read_text(encoding="utf-8")
+        )
+        self.assertEqual(1, failure["attempts"])
+        self.assertEqual(fetch.TRANSIENT_RETRIES, summary.transient_retries)
+        self.assertEqual(fetch.TRANSIENT_RETRIES, emitted_summary["transient_retries"])
+        for error in errors:
+            error.close()
+
+    def test_404_raises_without_retry(self):
+        missing = HTTPError("test", 404, "not found", {}, None)
+
+        with (
+            patch.object(fetch, "urlopen", side_effect=missing) as urlopen,
+            patch.object(fetch.time, "sleep") as sleep,
+            patch.dict(fetch.os.environ, {}, clear=True),
+            self.assertRaises(HTTPError) as raised,
+        ):
+            client = fetch.ApiClient()
+            client.get_json("/matches/123")
+
+        self.assertEqual(404, raised.exception.code)
+        self.assertEqual(1, urlopen.call_count)
+        self.assertEqual(1, client.calls)
+        self.assertEqual(0, client.transient_retries)
+        sleep.assert_not_called()
+        missing.close()
+
+    def test_429_uses_its_own_retry_budget(self):
+        transient = HTTPError("test", 522, "origin unavailable", {}, None)
+        rate_limits = [
+            HTTPError("test", 429, "too many requests", {}, None)
+            for _ in range(fetch.RATE_LIMIT_RETRIES)
+        ]
+        responses = [transient, *rate_limits, io.BytesIO(b'{"ok": true}')]
+
+        def mocked_urlopen(request, timeout):
+            result = responses.pop(0)
+            if isinstance(result, Exception):
+                raise result
+            return result
+
+        with (
+            patch.object(fetch, "urlopen", side_effect=mocked_urlopen) as urlopen,
+            patch.object(fetch.time, "sleep"),
+            patch.dict(fetch.os.environ, {}, clear=True),
+        ):
+            client = fetch.ApiClient()
+            response = client.get_json("/test")
+
+        self.assertEqual({"ok": True}, response)
+        self.assertEqual(fetch.RATE_LIMIT_RETRIES + 2, urlopen.call_count)
+        self.assertEqual(fetch.RATE_LIMIT_RETRIES + 2, client.calls)
+        self.assertEqual(1, client.transient_retries)
+        transient.close()
+        for error in rate_limits:
+            error.close()
+
+    def test_connection_failures_are_transient(self):
+        errors = (
+            URLError("connection failed"),
+            TimeoutError("read timed out"),
+            http.client.RemoteDisconnected("connection closed"),
+        )
+        for error in errors:
+            with self.subTest(error_type=type(error).__name__):
+                with (
+                    patch.object(
+                        fetch,
+                        "urlopen",
+                        side_effect=[error, io.BytesIO(b'{"ok": true}')],
+                    ) as urlopen,
+                    patch.object(fetch.time, "sleep"),
+                    patch.dict(fetch.os.environ, {}, clear=True),
+                ):
+                    client = fetch.ApiClient()
+                    response = client.get_json("/test")
+
+                    self.assertEqual({"ok": True}, response)
+                    self.assertEqual(2, urlopen.call_count)
+                    self.assertEqual(1, client.transient_retries)
 
     def test_unknown_patch_is_reported_and_persisted_as_null(self):
         self.write_state(100)
