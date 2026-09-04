@@ -93,6 +93,33 @@ class FetchTests(unittest.TestCase):
             summary = fetch.run(args)
         return summary, output.getvalue()
 
+    def generated_client(self, pro_matches):
+        test_case = self
+
+        class GeneratedApiClient:
+            def __init__(self):
+                self.calls = 0
+                self.transient_retries = 0
+                self.fetched_match_ids = []
+
+            def get_json(self, path, params=None):
+                self.calls += 1
+                if path == "/constants/patch":
+                    return [{"id": 60, "name": "7.41"}]
+                if path == "/proMatches":
+                    return copy.deepcopy(pro_matches)
+                if path.startswith("/matches/"):
+                    match_id = int(path.rsplit("/", 1)[1])
+                    self.fetched_match_ids.append(match_id)
+                    return {
+                        "match_id": match_id,
+                        "start_time": test_case.pro_row(match_id)["start_time"],
+                        "patch": 60,
+                    }
+                raise AssertionError(f"unexpected API path: {path}")
+
+        return GeneratedApiClient()
+
     def snapshot(self):
         return {
             path.relative_to(self.root).as_posix(): path.read_bytes()
@@ -184,6 +211,99 @@ class FetchTests(unittest.TestCase):
         self.assertEqual(104, max(row["match_id"] for row in pro_matches))
         self.assertEqual(102, summary.cursor_after)
         self.assertEqual(102, state["last_match_id"])
+
+    def test_default_cap_preserves_remainder_for_next_run_and_reports_limit(self):
+        self.write_state(100)
+        discovered_ids = list(
+            range(101, 101 + fetch.MAX_MATCHES_PER_RUN + 50)
+        )
+        pro_matches = [
+            self.pro_row(match_id)
+            for match_id in [*reversed(discovered_ids), 100]
+        ]
+
+        def slim_generated(response, patch_lookup):
+            return (
+                {
+                    "match_id": response["match_id"],
+                    "start_time": response["start_time"],
+                    "patch": patch_lookup[response["patch"]],
+                },
+                [],
+                [],
+            )
+
+        with (
+            patch.object(fetch, "slim_match_response", side_effect=slim_generated),
+            patch.object(fetch, "validate_rows"),
+        ):
+            first_client = self.generated_client(pro_matches)
+            first_summary, _ = self.execute(first_client)
+            first_emitted = json.loads(
+                self.paths["RUN_SUMMARY_PATH"].read_text(encoding="utf-8")
+            )
+
+            self.assertEqual(fetch.MAX_MATCHES_PER_RUN, first_summary.matches_fetched)
+            self.assertEqual(discovered_ids[: fetch.MAX_MATCHES_PER_RUN], first_client.fetched_match_ids)
+            self.assertEqual(len(discovered_ids), first_summary.matches_discovered)
+            self.assertEqual(fetch.MAX_MATCHES_PER_RUN, first_summary.matches_selected)
+            self.assertTrue(first_summary.run_limit_reached)
+            self.assertEqual(len(discovered_ids), first_emitted["matches_discovered"])
+            self.assertEqual(fetch.MAX_MATCHES_PER_RUN, first_emitted["matches_selected"])
+            self.assertTrue(first_emitted["run_limit_reached"])
+            self.assertEqual(
+                discovered_ids[fetch.MAX_MATCHES_PER_RUN - 1],
+                first_summary.cursor_after,
+            )
+
+            first_state = json.loads(
+                self.paths["STATE_PATH"].read_text(encoding="utf-8")
+            )
+            self.assertEqual(first_summary.cursor_after, first_state["last_match_id"])
+            self.assertNotEqual(discovered_ids[-1], first_state["last_match_id"])
+
+            second_client = self.generated_client(pro_matches)
+            second_summary, _ = self.execute(second_client)
+
+        remaining_ids = discovered_ids[fetch.MAX_MATCHES_PER_RUN :]
+        self.assertEqual(remaining_ids, second_client.fetched_match_ids)
+        self.assertEqual(50, second_summary.matches_discovered)
+        self.assertEqual(50, second_summary.matches_selected)
+        self.assertFalse(second_summary.run_limit_reached)
+        self.assertEqual(discovered_ids[-1], second_summary.cursor_after)
+        self.assertEqual(discovered_ids, first_client.fetched_match_ids + second_client.fetched_match_ids)
+
+    def test_explicit_limit_above_default_cap_is_honoured(self):
+        self.write_state(100)
+        explicit_limit = fetch.MAX_MATCHES_PER_RUN + 1
+        discovered_ids = list(range(101, 101 + explicit_limit))
+        pro_matches = [
+            self.pro_row(match_id)
+            for match_id in [*reversed(discovered_ids), 100]
+        ]
+
+        def slim_generated(response, patch_lookup):
+            return (
+                {
+                    "match_id": response["match_id"],
+                    "start_time": response["start_time"],
+                    "patch": patch_lookup[response["patch"]],
+                },
+                [],
+                [],
+            )
+
+        with (
+            patch.object(fetch, "slim_match_response", side_effect=slim_generated),
+            patch.object(fetch, "validate_rows"),
+        ):
+            client = self.generated_client(pro_matches)
+            summary, _ = self.execute(client, dry_run=True, limit=explicit_limit)
+
+        self.assertEqual(discovered_ids, client.fetched_match_ids)
+        self.assertEqual(explicit_limit, summary.matches_discovered)
+        self.assertEqual(explicit_limit, summary.matches_selected)
+        self.assertFalse(summary.run_limit_reached)
 
     def test_closed_month_routes_all_rows_to_late_ndjson(self):
         self.write_state(100)

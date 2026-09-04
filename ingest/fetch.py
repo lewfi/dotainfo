@@ -33,6 +33,7 @@ BOOTSTRAP_DAYS = 7
 FAILURE_LIMIT = 5
 RATE_LIMIT_RETRIES = 5
 TRANSIENT_RETRIES = 3
+MAX_MATCHES_PER_RUN = 300
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DATA_DIR = REPO_ROOT / "data"
@@ -59,6 +60,9 @@ def json_line(value: JsonObject) -> str:
 @dataclass
 class RunSummary:
     run_utc: str
+    matches_discovered: int = 0
+    matches_selected: int = 0
+    run_limit_reached: bool = False
     matches_fetched: int = 0
     matches_failed: int = 0
     retries_attempted: int = 0
@@ -185,7 +189,10 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--limit",
         type=positive_int,
-        help="maximum combined new and retry matches attempted this run",
+        help=(
+            "maximum combined new and retry matches attempted this run "
+            f"(default: {MAX_MATCHES_PER_RUN})"
+        ),
     )
     return parser.parse_args(argv)
 
@@ -449,7 +456,11 @@ def run(args: argparse.Namespace) -> RunSummary:
 
     retry_ids = sorted(failures)
     combined_ids = sorted(set(discovery.new_ids) | set(retry_ids))
-    selected_ids = combined_ids[: args.limit] if args.limit is not None else combined_ids
+    effective_limit = args.limit if args.limit is not None else MAX_MATCHES_PER_RUN
+    selected_ids = combined_ids[:effective_limit]
+    summary.matches_discovered = len(combined_ids)
+    summary.matches_selected = len(selected_ids)
+    summary.run_limit_reached = len(selected_ids) < len(combined_ids)
     detailed_output = len(selected_ids) <= 20
     print_discovery_plan(discovery, retry_ids, selected_ids, args.dry_run)
 

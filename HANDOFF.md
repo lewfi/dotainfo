@@ -634,7 +634,9 @@ GET /proMatches                                  # 100 newest, descending
 collect ids > last_match_id
   if all 100 are new, page back with ?less_than_match_id= until overlap is found
 combine genuinely new ids with retryable failed ids
-for each id (ascending):
+select the oldest ids (ascending), using explicit --limit N or the default 300-match ceiling
+record discovered count, selected count, and whether the run ceiling was reached
+for each selected id (ascending):
     GET /matches/{id}
     slim(response, patch_lookup) -> append rows to matches/, players/, draft/
     if patch index is unknown: persist null and add index to run summary
@@ -664,6 +666,9 @@ is:
 ```json
 {
   "run_utc": "ISO-8601 UTC",
+  "matches_discovered": 0,
+  "matches_selected": 0,
+  "run_limit_reached": false,
   "matches_fetched": 0,
   "matches_failed": 0,
   "retries_attempted": 0,
@@ -684,13 +689,29 @@ Scheduled ingest run #14 on 2026-09-03 observed HTTP 522 on the run's first requ
 `/constants/patch`. Cloudflare's edge could not reach OpenDota's origin; no match was fetched,
 no file was written, and `state.json` did not advance. That observation motivated the bounded
 transient policy above. Exhausting retries on this preflight request still preserves the
-required abort-before-write behavior.
+required abort-before-write behavior. OpenDota was unavailable for roughly eight hours that
+day and, after recovery, `/proMatches` remained approximately 7.5 hours behind real time as
+OpenDota backfilled its own data. The likely catch-up burst made the previously theoretical
+per-run ceiling an immediate operational requirement.
+
+**Run ceiling — closed.** Incremental ingest processes at most
+`MAX_MATCHES_PER_RUN = 300` combined new and retryable match IDs by default. The existing
+ascending selection keeps the oldest IDs, and `state.json` advances only through new IDs in
+that selected batch, so later runs resume the remainder without skipping it. An explicit
+`--limit N` overrides the default even when `N` exceeds 300; the bounded live-run prompt
+pattern depends on that override. At the required 1.1-second REST spacing, 300 match calls
+take about 5.5 minutes, with roughly 30 seconds of setup, keeping the normal run below the
+project's ten-minute threshold. This capacity also drains a multi-day backlog in two or three
+six-hourly runs against the observed peak of about 190 professional matches per day.
+`matches_discovered`, `matches_selected`, and `run_limit_reached` make a capped run explicit
+in the Actions log; consecutive `run_limit_reached: true` results signal that the backlog is
+not draining.
 
 `--dry-run` guarantees no filesystem or Git writes: no shards, state, failure queues,
 compaction, run summary, commit, or push. It prints what it would do and exits. `--limit N`
-limits the number of real matches processed so a five-match dry run is observable. The cursor
-advances only to the highest contiguous new ID actually attempted in that limited batch, never
-to the highest ID merely discovered.
+explicitly limits the number of real matches processed so a five-match dry run is observable;
+without it, the 300-match default applies. The cursor advances only to the highest contiguous
+new ID actually attempted in that limited batch, never to the highest ID merely discovered.
 
 `fetch.py` never performs Git operations. The workflow stages, commits, and pushes only when
 tracked data changed. If there is nothing new, it exits without a commit, avoiding a needless
@@ -759,6 +780,8 @@ writes nothing.
 - `on: schedule: cron: "0 */6 * * *"` plus `workflow_dispatch`
 - `concurrency: group: ingest, cancel-in-progress: false` — overlapping runs would corrupt
   `state.json`
+- `timeout-minutes: 15` on the ingest job prevents a wedged run from holding the concurrency
+  group until GitHub's 360-minute default and blocking the next six-hourly schedule
 - `permissions: contents: write`
 - Commit with the `github-actions[bot]` identity
 - Run `fetch.py`, then print `data/.run-summary.json` to the Actions log. The summary is
