@@ -16,8 +16,8 @@ script that imports Observable Plot; the chart is not build-time-only.
 **v0** — ingest pipeline only. Scheduled GitHub Actions fetch new pro matches and reference
 data and commit data files. No website.
 
-**v1** — an Astro site reading those Parquet files at build time. Two page types: a home
-feed of recent matches, and a match detail page. Deployed to Cloudflare Pages.
+**v1** — an Astro site reading those Parquet files at build time. It has a home feed, match
+detail pages, a tournament index, and paginated tournament pages. Deployed to Cloudflare Pages.
 
 ---
 
@@ -1230,6 +1230,55 @@ window. The implementation and fixture coverage are not yet exercised against re
 the explicitly bounded September 12 backfill is expected to make `late.ndjson` non-empty for
 the first time.
 
+**Tournament index and pages - step 25 complete.** `/tournaments/` lists every league that
+occurs in committed match data, grouped by the existing Top tier, Pro, Amateur, and Other
+mapping. Unknown, future, empty, and otherwise unrecognised tier values remain in the open
+domain and map to Other rather than being dropped. `/tournaments/:leagueid/` is page 1 and
+`/tournaments/:leagueid/2/` onward are later pages. Every route is pre-rendered, with exactly
+200 matches per page except the final page; there is no client-side fallback.
+
+Tournament pages are newest-first and grouped first by UTC day, then into consecutive runs
+with the same non-null `series_id`. Consecutive runs preserve strict match ordering when
+several series interleave on the same day. `series_type` remains open: observed values 0, 1,
+and 2 display as Best of 1, Best of 3, and Best of 5; observed 3 and any future unknown value
+display neutrally as Other; null displays `Series format unavailable`. Tournament headings
+and participating-team lists use current reference names, while match rows prefer the
+denormalized match-write-time team name and retain `team_id` as the durable identity. Null
+team, score, and result values remain listed with explicit unavailable labels; no
+`is_parsed`-style completeness predicate is applied.
+
+The title cascade is computed across the full tournament set and asserted collision-free at
+build time. A unique name uses `<name> — DotaInfo`; a duplicate name adds the year of that
+league ID's first match; if name plus year still collides, it uses `<name> (<leagueid>) —
+DotaInfo`. Page 2 onward inserts `— Page N` before the brand suffix. The visible `h1` remains
+the plain tournament name. This disambiguation is required because 25 names are shared and
+`Dota 2 Space League` occurs on ten IDs; the site-wide accessibility audit requires every
+emitted title to be unique.
+
+The planning snapshot contained 959 league IDs in reference Parquet and 964 after hot match
+data was included. At 200 matches per page, its 147,238 matches produced 1,394 league pages;
+103 leagues exceeded one page and contained 95,516 of those matches, while the largest league
+required 39 pages. The page size keeps the measured build near 35 seconds while avoiding one
+unbounded 7,645-row document. Current gates derive their changing counts from committed data
+rather than pinning this snapshot.
+
+`npm run audit:tournaments -- --dist dist` scans the committed Parquet and NDJSON match shards
+directly, without importing the tournament query or presentation modules. It checks league
+coverage, independent per-league counts, exact pagination unions and ordering, title
+uniqueness, and lossless tier grouping. It also parses the emitted stylesheet for contrast
+and for the decorative-line ownership rule: each tournament `--line` selector must literally
+begin with its `--line-strong` boundary selector followed by a descendant space. Finally it
+sweeps the index and the largest tournament page at 320, 360, 380, 414, 480, 600, 672, 700,
+760, 900, 1200, 1280, and 1440px in an installed browser.
+
+The final step 25 verification used build clock `2026-09-04T08:00:00Z`. The independent scan
+found 147,241 matches and 964 league IDs; the build emitted 1,400 league pages plus the index,
+for 1,401 new tournament HTML pages and 2,862 HTML pages overall. All eight tournament
+assertions and the tournament-link assertion were negative-tested by mutating only `dist`,
+observing the targeted failure, restoring the original bytes, and observing the pass. All
+eleven audits then passed. Total build wall time was 53,072.905 ms, safely below Cloudflare's
+1,200,000 ms cap.
+
 **Deploy - step 17 complete:** Cloudflare Pages is connected to the repo and builds on pushes
 to `main`; the ingest job's commits trigger builds automatically. The approval gate passed on
 the live `dotainfo.pages.dev` deployment. `/matches/7485890286/` was measured returning HTTP
@@ -1553,10 +1602,10 @@ by mutating only `dist`, observing that assertion fail, restoring the original b
 observing it pass. Finding 8 is closed: match detail and runtime archive presentation are now
 visually consistent without conflating either archive `<section>` or home `<li>` ownership.
 
-The established regression suite comprises these ten audits (not seven), invoked from
-`site/`. `CLOCK` is an ISO UTC value in `YYYY-MM-DDTHH:mm:ssZ` form. Home browser and Detail
-require a real installed Chrome or Edge executable from their explicit Windows paths; both
-are unrunnable on Linux and in CI.
+The established regression suite comprises these eleven audits (not seven), invoked from
+`site/`. `CLOCK` is an ISO UTC value in `YYYY-MM-DDTHH:mm:ssZ` form. Home browser, Detail, and
+Tournaments require a real installed Chrome or Edge executable from their explicit Windows
+paths; all three are unrunnable on Linux and in CI.
 
 | Audit | Invocation | Runtime requirement |
 |---|---|---|
@@ -1570,6 +1619,7 @@ are unrunnable on Linux and in CI.
 | Accessibility | `npm run audit:a11y -- --dist dist` | — |
 | Links | `npm run audit:links -- --dist dist` | — |
 | Detail | `npm run audit:detail -- --dist dist` | Real installed Chrome or Edge; Windows only, not CI |
+| Tournaments | `npm run audit:tournaments -- --dist dist` | Real installed Chrome or Edge; Windows only, not CI |
 
 Build regression reporting for step 23 uses total wall time only. Mean milliseconds per page
 is still printed by the existing profiler for diagnostics, but is not used as a regression
@@ -1594,7 +1644,7 @@ Cloudflare twenty-minute cap assertion.
 
 ## 8. Deferred — do not build
 
-v2 full historical backfill in CI · v3 team/player/league pages · v4 hero meta dashboard ·
+v2 full historical backfill in CI · v3 team/player pages · v4 hero meta dashboard ·
 DuckDB-WASM in the browser · live match ticker · search · user accounts · any paid service.
 
 If a v0/v1 decision would foreclose one of these, note it in the PR description rather than
@@ -2067,3 +2117,14 @@ These steps continue the canonical numbering in `AGENTS.md`.
     deduplication, regular out-of-month retention, and the orphan-month failure; the historical
     audit independently groups the late file by `start_time` month and each new assertion is
     negative-tested before all ten established audits are rerun.
+25. **Tournament index and tournament pages.** Pre-render the tier-grouped `/tournaments/`
+    index and every `/tournaments/:leagueid/` route, paginating newest-first matches at 200 per
+    page with numbered path segments after page 1. Use current reference names for tournament
+    headings and participating-team lists, match-write-time names for match rows, explicit
+    unavailable states, and the full-set name/year/league-ID title cascade. Treat
+    `series_type` as open and group only consecutive same-series rows so strict newest-first
+    order survives interleaved series. Approval gate: independently scan every committed
+    match shard, prove complete league/count/pagination/tier placement and unique titles,
+    resolve tournament links, parse emitted CSS for colour contrast and line ownership, sweep
+    all thirteen required browser widths, and negative-test every new assertion before all
+    eleven audits are rerun.

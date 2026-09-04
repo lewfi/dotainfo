@@ -1,0 +1,38 @@
+---
+import SiteLayout from '../../layouts/SiteLayout.astro';
+import { tournamentCollection } from '../../data/tournaments.mjs';
+import { TOURNAMENT_INDEX_TITLE } from '../../presentation/tournaments.mjs';
+
+const collection = await tournamentCollection();
+---
+
+<SiteLayout title={TOURNAMENT_INDEX_TITLE} description="All professional Dota 2 tournaments in the DotaInfo match archive.">
+  <article
+    class="tournament-index"
+    data-tournament-index
+    data-total-leagues={collection.tournaments.length}
+    data-total-matches={collection.matchCount}
+  >
+    <p class="eyebrow">Match archive</p>
+    <h1>Tournaments</h1>
+    <p>Browse {collection.tournaments.length} tournaments covering {collection.matchCount} matches.</p>
+    {collection.groups.map((group) => (
+      <section class="tournament-index-group" data-tier-group={group.id} aria-labelledby={`tier-${group.id}`}>
+        <header>
+          <h2 id={`tier-${group.id}`}>{group.label}</h2>
+          <p>{group.tournaments.length} tournaments · {group.matchCount} matches</p>
+        </header>
+        <ul>
+          {group.tournaments.map((tournament) => (
+            <li data-index-league-id={tournament.leagueId} data-match-count={tournament.matchCount}>
+              <a href={`/tournaments/${tournament.leagueId}/`}>
+                <strong>{tournament.name}</strong>
+                <span>{tournament.matchCount} {tournament.matchCount === 1 ? 'match' : 'matches'}</span>
+              </a>
+            </li>
+          ))}
+        </ul>
+      </section>
+    ))}
+  </article>
+</SiteLayout>

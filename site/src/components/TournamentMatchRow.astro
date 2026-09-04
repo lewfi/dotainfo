@@ -1,0 +1,40 @@
+---
+const { match } = Astro.props;
+const time = match.isoUtc
+  ? new Intl.DateTimeFormat('en-US', {
+      hour: '2-digit',
+      hour12: false,
+      minute: '2-digit',
+      timeZone: 'UTC',
+    }).format(new Date(match.isoUtc))
+  : 'Time unavailable';
+const result = match.result.status === 'available'
+  ? `${match.teams[match.result.winner].name.display} won`
+  : 'Result unavailable';
+const accessibleScore = match.score.status === 'available'
+  ? `${match.score.radiant} to ${match.score.dire}`
+  : 'Score unavailable';
+---
+
+<a
+  class="tournament-match-row"
+  href={`/matches/${match.matchId}/`}
+  data-match-id={match.matchId}
+  aria-label={`${match.teams.radiant.name.display} ${accessibleScore} ${match.teams.dire.name.display}, ${result}, view match details`}
+>
+  {match.isoUtc ? <time datetime={match.isoUtc}>{time}</time> : <span>{time}</span>}
+  <span class="tournament-team tournament-team--radiant">
+    <strong>{match.teams.radiant.name.display}</strong>
+    {match.teams.radiant.teamId !== null && <small>Team {match.teams.radiant.teamId}</small>}
+  </span>
+  <span class="tournament-score" data-score-state={match.score.status}>
+    {match.score.status === 'available'
+      ? <strong>{match.score.radiant}<span aria-hidden="true">–</span>{match.score.dire}</strong>
+      : <strong>Score unavailable</strong>}
+  </span>
+  <span class="tournament-team">
+    <strong>{match.teams.dire.name.display}</strong>
+    {match.teams.dire.teamId !== null && <small>Team {match.teams.dire.teamId}</small>}
+  </span>
+  <span class="tournament-result" data-result-state={match.result.status}>{result}</span>
+</a>

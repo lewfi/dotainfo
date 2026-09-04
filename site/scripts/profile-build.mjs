@@ -99,9 +99,10 @@ try {
   if (exitCode !== 0) process.exitCode = exitCode;
   else {
     const outputRoot = path.join(SITE_ROOT, 'dist');
-    const [pagesBuilt, recentMatches] = await Promise.all([
+    const [pagesBuilt, recentMatches, tournamentPages] = await Promise.all([
       countHtml(outputRoot),
       countRecentMatchPages(outputRoot),
+      countHtml(path.join(outputRoot, 'tournaments')),
     ]);
     const totalWallMs = performance.now() - totalStarted;
     const meanMsPerPage = pageGenerationMs / pagesBuilt;
@@ -111,7 +112,7 @@ try {
     const projectedPeakTotalMs = payloadGenerationMs + projectedPeakPageMs;
     const assertions = Object.freeze({
       currentBuildUnderCloudflareTwentyMinutes: totalWallMs < TWENTY_MINUTES_MS,
-      htmlPageCountConsistent: pagesBuilt === recentMatches + 2,
+      htmlPageCountConsistent: pagesBuilt === recentMatches + tournamentPages + 2,
     });
     const warnings = Object.freeze({
       currentBuildExceedsTenMinutes: totalWallMs >= TEN_MINUTES_MS,
@@ -123,6 +124,7 @@ try {
     console.log(`STEP16_PAGE_GENERATION_MS=${pageGenerationMs.toFixed(3)}`);
     console.log(`STEP16_TOTAL_WALL_MS=${totalWallMs.toFixed(3)}`);
     console.log(`STEP16_PAGES_BUILT=${pagesBuilt}`);
+    console.log(`STEP25_TOURNAMENT_PAGES_BUILT=${tournamentPages}`);
     console.log(`STEP16_MEAN_MS_PER_PAGE=${meanMsPerPage.toFixed(3)}`);
     console.log(`STEP16_PEAK_PROJECTION=${JSON.stringify({
       peakRecentMatches: PEAK_RECENT_MATCHES,

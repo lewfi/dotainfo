@@ -1,0 +1,84 @@
+---
+import SiteLayout from '../layouts/SiteLayout.astro';
+import TournamentMatchRow from './TournamentMatchRow.astro';
+
+const { tournament } = Astro.props;
+const dateFormatter = new Intl.DateTimeFormat('en-US', {
+  day: 'numeric',
+  month: 'short',
+  timeZone: 'UTC',
+  year: 'numeric',
+});
+const dateRange = `${dateFormatter.format(new Date(tournament.firstStartTime * 1_000))}–${dateFormatter.format(new Date(tournament.lastStartTime * 1_000))}`;
+---
+
+<SiteLayout title={tournament.title} description={`${tournament.name} professional Dota 2 match results.`}>
+  <article
+    class="tournament-page"
+    data-tournament-page
+    data-league-id={tournament.leagueId}
+    data-page-number={tournament.pageNumber}
+    data-page-count={tournament.pageCount}
+    data-total-matches={tournament.matchCount}
+  >
+    <p class="eyebrow"><a href="/tournaments/">Tournaments</a> / {tournament.category.label}</p>
+    <h1>{tournament.name}</h1>
+    <dl class="tournament-facts">
+      <div><dt>Matches</dt><dd>{tournament.matchCount}</dd></div>
+      <div><dt>Date range</dt><dd>{dateRange}</dd></div>
+      <div><dt>Participating teams</dt><dd>{tournament.teams.length}</dd></div>
+    </dl>
+
+    <section class="tournament-team-list" aria-labelledby="participating-teams-heading">
+      <h2 id="participating-teams-heading">Participating teams</h2>
+      {tournament.teams.length > 0 ? (
+        <ul>
+          {tournament.teams.map((team) => (
+            <li data-team-id={team.teamId}>{team.name.display}</li>
+          ))}
+        </ul>
+      ) : <p>Team information unavailable.</p>}
+    </section>
+
+    <header class="tournament-page-heading">
+      <h2>Match results</h2>
+      <p>Page {tournament.pageNumber} of {tournament.pageCount}</p>
+    </header>
+
+    <div class="tournament-panel">
+      {tournament.days.map((day, dayIndex) => (
+        <section class="tournament-day" aria-labelledby={`tournament-day-${dayIndex}`}>
+          <header class="tournament-day-heading">
+            <h3 id={`tournament-day-${dayIndex}`}>{day.label}</h3>
+            <p>{day.count} {day.count === 1 ? 'match' : 'matches'}</p>
+          </header>
+          {day.series.map((series, seriesIndex) => (
+            <section class="tournament-series" aria-labelledby={`tournament-series-${dayIndex}-${seriesIndex}`}>
+              <header class="tournament-series-heading">
+                <h4 id={`tournament-series-${dayIndex}-${seriesIndex}`}>
+                  {series.seriesId === null ? 'Series unavailable' : `Series ${series.seriesId}`}
+                </h4>
+                <p data-series-type={series.seriesType ?? 'unavailable'}>{series.label}</p>
+              </header>
+              <ol class="tournament-match-list">
+                {series.matches.map((match) => (
+                  <li><TournamentMatchRow match={match} /></li>
+                ))}
+              </ol>
+            </section>
+          ))}
+        </section>
+      ))}
+    </div>
+
+    <nav class="tournament-pagination" aria-label="Tournament match pages">
+      {tournament.previousHref
+        ? <a rel="prev" href={tournament.previousHref}>Previous page</a>
+        : <span>Previous page</span>}
+      <span>Page {tournament.pageNumber} of {tournament.pageCount}</span>
+      {tournament.nextHref
+        ? <a rel="next" href={tournament.nextHref}>Next page</a>
+        : <span>Next page</span>}
+    </nav>
+  </article>
+</SiteLayout>

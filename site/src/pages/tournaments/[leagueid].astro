@@ -1,0 +1,15 @@
+---
+import TournamentPage from '../../components/TournamentPage.astro';
+import { tournamentCollection } from '../../data/tournaments.mjs';
+
+export async function getStaticPaths() {
+  const collection = await tournamentCollection();
+  return collection.pages
+    .filter((page) => page.pageNumber === 1)
+    .map((page) => ({ params: { leagueid: String(page.leagueId) }, props: { tournament: page } }));
+}
+
+const { tournament } = Astro.props;
+---
+
+<TournamentPage tournament={tournament} />

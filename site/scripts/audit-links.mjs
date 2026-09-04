@@ -208,8 +208,13 @@ const resolutionCounts = Object.fromEntries(
     links.filter((link) => link.resolution === resolution).length,
   ]),
 );
+const tournamentLinks = links.filter((link) => (
+  link.source.startsWith('/tournaments/') || link.href.startsWith('/tournaments/')
+));
 const assertions = Object.freeze({
   everyInternalHrefResolves: resolutionCounts.unresolved === 0,
+  everyTournamentHrefResolves:
+    tournamentLinks.length > 0 && tournamentLinks.every((link) => link.resolution !== 'unresolved'),
   homeViewsWereFound: homeViews.length > 0,
   everyHomeViewHasOneLinkPerCard: homeViews.every((view) => view.links === view.cards),
   everyHomeViewLinkResolves: homeViews.every((view) => view.unresolved === 0),
@@ -237,6 +242,10 @@ console.log(`STEP17_INTERNAL_HREFS=${JSON.stringify({
   payloadMatchIds: payloadMatches.size,
   internalHrefs: links.length,
   resolutionCounts,
+})}`);
+console.log(`STEP25_TOURNAMENT_HREFS=${JSON.stringify({
+  links: tournamentLinks.length,
+  unresolved: tournamentLinks.filter((link) => link.resolution === 'unresolved'),
 })}`);
 console.log(`STEP17_ICONS=${JSON.stringify({
   htmlFiles: htmlFiles.length,
