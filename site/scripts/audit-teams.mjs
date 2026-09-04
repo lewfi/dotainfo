@@ -188,7 +188,7 @@ async function emittedTeamPages(outputRoot) {
           });
         });
         const heroes = tags(html, 'li').filter((tag) => (
-          attributes(tag).get('class')?.split(/\s+/).includes('team-hero-row')
+          attributes(tag).get('class')?.split(/\s+/).includes('squad-appearance-row')
         )).map((tag) => {
           const parsed = attributes(tag);
           return Object.freeze({

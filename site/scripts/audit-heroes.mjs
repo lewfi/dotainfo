@@ -509,11 +509,10 @@ const colorContrast = contrast(colors.surface.parts, colors.foreground.parts);
 const cssRules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((match) => ({
   selectors: match[1].split(',').map((selector) => selector.trim()), body: match[2],
 }));
-const isHeroSelector = (selector) => selector.includes('.hero-index') || selector.includes('.hero-page');
 const strongSelectors = cssRules.flatMap((rule) => /border[^:]*:[^;]*var\(--line-strong\)/.test(rule.body)
-  ? rule.selectors.filter(isHeroSelector) : []);
+  ? rule.selectors.filter((selector) => selector.includes('hero')) : []);
 const lineRules = cssRules.flatMap((rule) => /border[^:]*:[^;]*var\(--line\)(?:;|$)/.test(rule.body)
-  ? rule.selectors.filter(isHeroSelector).map((selector) => ({ selector, body: rule.body })) : []);
+  ? rule.selectors.filter((selector) => selector.includes('hero')).map((selector) => ({ selector, body: rule.body })) : []);
 
 let measurements = [];
 if (needs('exactWidthSweepHasNoHorizontalOverflow') || needs('emittedHeroColorsPassContrastAndControlSurfaces')) {

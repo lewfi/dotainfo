@@ -1,0 +1,26 @@
+---
+import SearchBox from '../../components/SearchBox.astro';
+import SiteLayout from '../../layouts/SiteLayout.astro';
+
+const initialValue = Astro.url.searchParams.get('q') ?? '';
+---
+
+<SiteLayout title="Search — DotaInfo" description="Search DotaInfo teams, tournaments, and heroes.">
+  <article class="search-page" data-search-page>
+    <p class="eyebrow">Archive directory</p>
+    <h1>Search</h1>
+    <p>Search team names and tags, tournament names, and hero names.</p>
+    <SearchBox id="page-search" label="Search teams, tournaments, and heroes" {initialValue} prominent />
+    <noscript>
+      <section class="search-browse" aria-labelledby="search-browse-heading">
+        <h2 id="search-browse-heading">Browse without JavaScript</h2>
+        <p>Live search requires JavaScript. These complete directories remain available:</p>
+        <ul>
+          <li><a href="/teams/">Browse teams</a></li>
+          <li><a href="/tournaments/">Browse tournaments</a></li>
+          <li><a href="/heroes/">Browse heroes</a></li>
+        </ul>
+      </section>
+    </noscript>
+  </article>
+</SiteLayout>

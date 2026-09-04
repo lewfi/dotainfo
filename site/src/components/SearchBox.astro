@@ -1,0 +1,41 @@
+---
+interface Props {
+  id: string;
+  label: string;
+  initialValue?: string;
+  prominent?: boolean;
+}
+
+const { id, label, initialValue = '', prominent = false } = Astro.props;
+const resultsId = `${id}-results`;
+const statusId = `${id}-status`;
+---
+
+<form class:list={['search-control', { 'search-control-prominent': prominent }]} data-search-root action="/search/" role="search">
+  <label for={id}>{label}</label>
+  <div class="search-input-row">
+    <input
+      id={id}
+      name="q"
+      type="search"
+      role="combobox"
+      value={initialValue}
+      autocomplete="off"
+      spellcheck="false"
+      aria-autocomplete="list"
+      aria-controls={resultsId}
+      aria-describedby={statusId}
+      aria-expanded="false"
+    />
+    <button type="submit">Search</button>
+  </div>
+  <div class="search-results" data-search-results hidden>
+    <p id={statusId} class="search-status" data-search-status role="status" aria-live="polite">Enter a name or team tag.</p>
+    <ul id={resultsId} role="listbox" data-search-list></ul>
+  </div>
+</form>
+
+<script>
+  import { enhanceSearchControls } from '../client/search-client.mjs';
+  enhanceSearchControls();
+</script>

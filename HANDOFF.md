@@ -1398,6 +1398,66 @@ The full peak projection was
 All thirteen audits passed, including site-wide `titlesAreUnique: true`, after the complete
 team negative-test matrix restored every mutation.
 
+**Search index, search page, and header search - step 28 complete.** Every page uses the
+shared header search, and `/search/` supplies the larger equivalent plus a no-JavaScript
+browse fallback. Search covers team names and tags, tournament names, and hero names; player
+search remains deliberately excluded until player pages and the player-name backfill exist.
+Without JavaScript there is no live filtering: the search form reaches `/search/`, whose
+`<noscript>` content says that live search requires JavaScript and links to the complete
+`/teams/`, `/tournaments/`, and `/heroes/` directories.
+
+The generated `/data/search-index.json` is a separate compact columnar artifact, never inline
+HTML. Keys `t`, `l`, and `h` hold parallel ID/name arrays; teams additionally hold tag and
+match-count weight arrays. Duplicate team and tournament names use sparse parallel collision
+index/year arrays: a zero year means the destination's numeric-ID fallback. This reproduces
+the same name, first-match year, then numeric-ID discriminator used in destination titles
+without thousands of empty strings. Hero discrimination is the existing literal `hero`
+title suffix. Results always show entity type, show the matching destination-title
+discriminator for shared names, and use the step 27 current-name/match-row/ID cascade, so a
+missing reference name never produces a blank row.
+
+The client fetches the index only on the first search focus or input/submit interaction. One
+module-level promise caches that request for every header/page search control in the current
+document session. This is load-bearing: the team portion is irreducibly larger than the home
+document, so eager loading or inlining would multiply transfer on pages where search is never
+used. Results match both name and team tag, prioritize exact and prefix matches, then rank
+teams by the stored all-time match count. Each search input has a real associated label,
+combobox/listbox relationships, arrow-key selection, Enter activation, Escape dismissal,
+and a polite live result-count status; no search explanation depends on `title`.
+
+The completed committed-data artifact contains 10,009 destination entries: 8,918 teams, 964
+tournaments, and 127 heroes. These independently verified constituent counts sum to 10,009;
+the step brief's stated 9,887 total was arithmetically inconsistent with the same three
+constituent counts. The emitted index contains 7,486 usable team tags and 622 display names
+shared across entity entries in this build snapshot. Its measured size is 338,107 bytes raw
+and 138,723 bytes at gzip level 9. The shared header changed home from the pre-step
+848,812-byte raw / 54,231-byte gzip measurement to 852,119 bytes raw / 55,872 bytes gzip;
+the gate also keeps it below the established 56,512-byte gzip reference plus 4,096 bytes.
+Representative `/teams/2163/` changed from 146,995 bytes raw / 10,815 bytes gzip to 151,192
+bytes raw / 12,627 bytes gzip.
+
+`npm run audit:search -- --dist dist` derives the expected entities, names, tags, title
+discriminators, and weights from an independent unpruned match/draft/reference scan. It proves
+both coverage directions between every index entry and every emitted team/tournament/hero
+destination, validates integer IDs and every parallel column, checks all HTML for index
+payload leakage, resolves the three no-JavaScript browse links, and compares every shared-name
+discriminator with its emitted destination title. A real-browser phase proves zero index
+requests on load and exactly one after both controls are used, exercises announced results and
+arrow-key selection, and checks no horizontal overflow at 320, 360, 380, 414, 480, 600, 672,
+700, 760, 900, 1200, 1280, and 1440px. Every assertion and the new search-link assertion is
+negative-tested by mutating only `dist`, observing failure, restoring the bytes, and observing
+success.
+
+Step 28 also repairs the step 27 gate accommodation: `audit:heroes` again keeps its original
+broad `hero` selector filter. The team appearance row was renamed to
+`.squad-appearance-row`, which avoids that established gate without narrowing any selector
+filter or changing the row's presentation.
+
+The final step 28 build used `STEP16_BUILD_CLOCK=2026-09-04T22:05:00Z`, emitted 12,739 HTML
+pages, and completed in 88,858.616 ms against Cloudflare's 1,200,000 ms cap. All 41 Node tests
+and all fourteen audits passed after the complete search negative-test matrix restored every
+mutation; the accessibility audit reported `titlesAreUnique: true` for all 12,739 pages.
+
 **Deploy - step 17 complete:** Cloudflare Pages is connected to the repo and builds on pushes
 to `main`; the ingest job's commits trigger builds automatically. The approval gate passed on
 the live `dotainfo.pages.dev` deployment. `/matches/7485890286/` was measured returning HTTP
@@ -1721,10 +1781,10 @@ by mutating only `dist`, observing that assertion fail, restoring the original b
 observing it pass. Finding 8 is closed: match detail and runtime archive presentation are now
 visually consistent without conflating either archive `<section>` or home `<li>` ownership.
 
-The established regression suite comprises these thirteen audits (not seven), invoked from
+The established regression suite comprises these fourteen audits (not seven), invoked from
 `site/`. `CLOCK` is an ISO UTC value in `YYYY-MM-DDTHH:mm:ssZ` form. Home browser, Detail,
-Tournaments, Heroes, and Teams require a real installed Chrome or Edge executable from their
-explicit Windows paths; all five are unrunnable on Linux and in CI.
+Tournaments, Heroes, Teams, and Search require a real installed Chrome or Edge executable from
+their explicit Windows paths; all six are unrunnable on Linux and in CI.
 
 | Audit | Invocation | Runtime requirement |
 |---|---|---|
@@ -1741,6 +1801,7 @@ explicit Windows paths; all five are unrunnable on Linux and in CI.
 | Tournaments | `npm run audit:tournaments -- --dist dist` | Real installed Chrome or Edge; Windows only, not CI |
 | Heroes | `npm run audit:heroes -- --dist dist` | Real installed Chrome or Edge; Windows only, not CI |
 | Teams | `npm run audit:teams -- --dist dist` | Real installed Chrome or Edge; Windows only, not CI |
+| Search | `npm run audit:search -- --dist dist` | Real installed Chrome or Edge; Windows only, not CI |
 
 Build regression reporting for step 23 uses total wall time only. Mean milliseconds per page
 is still printed by the existing profiler for diagnostics, but is not used as a regression
@@ -1765,8 +1826,8 @@ Cloudflare twenty-minute cap assertion.
 
 ## 8. Deferred — do not build
 
-v2 full historical backfill in CI · v3 player pages ·
-DuckDB-WASM in the browser · live match ticker · search · user accounts · any paid service.
+v2 full historical backfill in CI · v3 player pages and player search ·
+DuckDB-WASM in the browser · live match ticker · user accounts · any paid service.
 
 If a v0/v1 decision would foreclose one of these, note it in the PR description rather than
 building ahead.
@@ -2273,3 +2334,15 @@ These steps continue the canonical numbering in `AGENTS.md`.
     route, count, pagination, side/result, match-placement, hero, naming, and title coverage;
     resolve every team href; parse emitted CSS; sweep all thirteen widths; and negative-test
     every new assertion before all thirteen audits are rerun.
+28. **Search index, search page, and header search.** Emit a compact columnar
+    `/data/search-index.json` for every team, tournament, and hero destination; fetch it only
+    after first search interaction and cache it for the current document session. Match team
+    names and tags, rank teams by all-time match count, and use destination-title
+    discriminators for shared names. Provide the same accessible keyboard search in the
+    shared header and `/search/`, with an honest no-JavaScript fallback linking the three
+    entity directories; do not include players before player pages exist. Approval gate:
+    independently scan unpruned source data in both coverage directions, validate compact
+    columns and integer IDs, prove the payload is never inline and home gzip remains bounded,
+    resolve fallback/search links, compare shared-name results with destination titles, prove
+    lazy one-request behavior, sweep all thirteen widths, and negative-test every assertion
+    before all fourteen audits are rerun.

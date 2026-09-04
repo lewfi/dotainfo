@@ -73,7 +73,7 @@ const dateRange = team.firstStartTime === null || team.lastStartTime === null
       {team.topHeroes.length > 0 ? (
         <ol>
           {team.topHeroes.map((hero) => (
-            <li class="team-hero-row" data-hero-id={hero.heroId ?? 'unavailable'} data-appearances={hero.appearances}>
+            <li class="squad-appearance-row" data-hero-id={hero.heroId ?? 'unavailable'} data-appearances={hero.appearances}>
               {hero.heroId === null
                 ? <span>{hero.name}</span>
                 : <a href={`/heroes/${hero.heroId}/`}>{hero.name}</a>}

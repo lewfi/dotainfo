@@ -77,7 +77,7 @@ for (const directory of teamDirectories) {
     html,
     pageCount: Number(/data-page-count="(\d+)"/.exec(html)?.[1]),
     matchCount: [...html.matchAll(/data-match-id="\d+"/g)].length,
-    heroCount: [...html.matchAll(/class="team-hero-row"/g)].length,
+    heroCount: [...html.matchAll(/class="squad-appearance-row"/g)].length,
   });
 }
 const candidates = records.filter((record) => record.pageCount === 1 && record.matchCount >= 2);

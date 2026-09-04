@@ -24,7 +24,9 @@
     "audit:heroes": "node scripts/audit-heroes.mjs",
     "negative-test:heroes": "node scripts/negative-test-heroes.mjs",
     "audit:teams": "node scripts/audit-teams.mjs",
-    "negative-test:teams": "node scripts/negative-test-teams.mjs"
+    "negative-test:teams": "node scripts/negative-test-teams.mjs",
+    "audit:search": "node scripts/audit-search.mjs",
+    "negative-test:search": "node scripts/negative-test-search.mjs"
   },
   "engines": {
     "node": ">=22.12.0 <23"

@@ -115,7 +115,7 @@ try {
     const assertions = Object.freeze({
       currentBuildUnderCloudflareTwentyMinutes: totalWallMs < TWENTY_MINUTES_MS,
       htmlPageCountConsistent:
-        pagesBuilt === recentMatches + tournamentPages + heroPages + teamPages + 2,
+        pagesBuilt === recentMatches + tournamentPages + heroPages + teamPages + 3,
     });
     const warnings = Object.freeze({
       currentBuildExceedsTenMinutes: totalWallMs >= TEN_MINUTES_MS,

@@ -442,6 +442,120 @@ img {
 
 .site-navigation-links {
   display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.search-control {
+  position: relative;
+  width: min(100%, 26rem);
+  margin-top: 0.75rem;
+}
+
+.search-control > label {
+  display: block;
+  margin-bottom: 0.25rem;
+  color: var(--fg-2);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.search-input-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.search-input-row input,
+.search-input-row button {
+  min-height: 2.35rem;
+  border: 1px solid var(--line-strong);
+  color: var(--fg);
+  background: var(--surface);
+  font: inherit;
+}
+
+.search-input-row input {
+  min-width: 0;
+  padding-inline: 0.65rem;
+  border-right: 0;
+}
+
+.search-input-row button {
+  padding-inline: 0.75rem;
+  cursor: pointer;
+}
+
+.search-results {
+  position: absolute;
+  z-index: 8;
+  inset: 100% 0 auto;
+  max-height: min(26rem, 65vh);
+  overflow: auto;
+  border: 1px solid var(--line-strong);
+  background: var(--surface);
+  box-shadow: var(--shadow-card);
+}
+
+.search-status {
+  margin: 0;
+  padding: 0.6rem 0.75rem;
+  color: var(--fg-2);
+  font-size: 11px;
+}
+
+.search-results ul,
+.search-browse ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.search-results li {
+  border-top: 1px solid var(--line);
+}
+
+.search-results a {
+  display: grid;
+  gap: 0.15rem;
+  padding: 0.65rem 0.75rem;
+  text-decoration: none;
+}
+
+.search-results a[aria-selected='true'] {
+  background: var(--surface-2);
+}
+
+.search-result-detail {
+  color: var(--fg-2);
+  font-size: 11px;
+}
+
+.search-page {
+  max-width: 48rem;
+  padding-block: 2rem 4rem;
+}
+
+.search-control-prominent {
+  width: 100%;
+  margin-block: 1.5rem;
+}
+
+.search-browse {
+  margin-top: 1.5rem;
+  padding: 1rem;
+  border: 1px solid var(--line-strong);
+  background: var(--surface);
+}
+
+.search-browse li + li {
+  margin-top: 0.6rem;
+}
+
+.site-navigation-links {
+  display: flex;
   align-items: baseline;
   gap: 1rem;
 }
@@ -1223,7 +1337,7 @@ img {
   font-size: 12px;
 }
 
-.team-page-panel .team-hero-row {
+.team-page-panel .squad-appearance-row {
   display: grid;
   grid-template-columns: minmax(8rem, 1fr) auto;
   gap: 1rem;
@@ -1232,7 +1346,7 @@ img {
   border-top: 1px solid var(--line);
 }
 
-.team-hero-row strong {
+.squad-appearance-row strong {
   font-family: var(--mono);
 }
 

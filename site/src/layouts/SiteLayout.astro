@@ -1,5 +1,6 @@
 ---
 import '../styles/global.css';
+import SearchBox from '../components/SearchBox.astro';
 
 interface Props {
   title?: string;
@@ -52,6 +53,7 @@ const {
             <a href="/tournaments/">Tournaments</a>
             <a href="/heroes/">Heroes</a>
             <a href="/teams/">Teams</a>
+            <a href="/search/">Search</a>
           </div>
           <div class="theme-control" role="group" aria-label="Theme">
             <span class="theme-control-label">Theme</span>
@@ -69,6 +71,7 @@ const {
             ><span class="theme-option-check" aria-hidden="true">&#10003;</span> Dark</button>
           </div>
         </nav>
+        <SearchBox id="header-search" label="Search DotaInfo" />
         <script is:inline data-theme-controls>
           (() => {
             const storageKey = 'dotainfo-theme';
