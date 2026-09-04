@@ -1,0 +1,34 @@
+---
+const { match } = Astro.props;
+const accessibleScore = match.score.status === 'available'
+  ? `${match.score.team} to ${match.score.opponent}`
+  : 'Score unavailable';
+---
+
+<a
+  class="team-match-row"
+  href={`/matches/${match.matchId}/`}
+  data-match-id={match.matchId}
+  data-opponent-team-id={match.opponent.teamId ?? 'unavailable'}
+  data-opponent-name={match.opponent.name.display}
+  data-score-state={match.score.status}
+  data-result-state={match.result.status}
+  aria-label={`${match.opponent.name.display}, ${accessibleScore}, ${match.result.label}, ${match.tournament.name}, view match details`}
+>
+  {match.date.status === 'available'
+    ? <time datetime={match.date.isoUtc}>{match.date.display}</time>
+    : <span>Date unavailable</span>}
+  <span class="team-match-opponent">
+    <small>Opponent</small>
+    <strong>{match.opponent.name.display}</strong>
+  </span>
+  <span class="team-match-score" data-score-state={match.score.status}>
+    {match.score.status === 'available'
+      ? <strong>{match.score.team}<span aria-hidden="true">–</span>{match.score.opponent}</strong>
+      : <strong>Score unavailable</strong>}
+  </span>
+  <strong class:list={{ 'team-match-result': true, 'team-match-result--win': match.result.won === true }}>
+    {match.result.label}
+  </strong>
+  <span class="team-match-tournament">{match.tournament.name}</span>
+</a>

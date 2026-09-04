@@ -1023,6 +1023,326 @@ img {
   color: var(--fg-3);
 }
 
+.team-index,
+.team-page {
+  min-width: 0;
+  padding-block: 2rem;
+}
+
+.team-index > h1,
+.team-page-header h1 {
+  margin-block: 0.35rem 0.5rem;
+  font-size: clamp(2rem, 6vw, 3.5rem);
+}
+
+.team-index-intro {
+  max-width: 58rem;
+  margin: 0 0 1.5rem;
+  color: var(--fg-2);
+}
+
+.team-index-group,
+.team-page-panel {
+  margin-block: 1rem;
+  border: 1px solid var(--line-strong);
+  color: var(--fg);
+  background: var(--surface);
+}
+
+.team-index-group > header,
+.team-heroes > header,
+.team-page-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.8rem 1rem;
+  background: var(--surface-2);
+}
+
+.team-index-group > header h2,
+.team-index-group > header p,
+.team-heroes > header h2,
+.team-heroes > header p,
+.team-page-heading h2,
+.team-page-heading p {
+  margin: 0;
+}
+
+.team-index-group > header h2,
+.team-heroes > header h2,
+.team-page-heading h2 {
+  font-size: 15px;
+}
+
+.team-index-group > header p,
+.team-heroes > header > p,
+.team-page-heading p {
+  color: var(--fg-2);
+  font-family: var(--mono);
+  font-size: 10px;
+}
+
+.team-heroes > header .eyebrow {
+  margin-bottom: 0.15rem;
+}
+
+.team-index-group > ul,
+.team-heroes > ol,
+.team-match-panel > ol {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.team-index-group > ul {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(24rem, 100%), 1fr));
+}
+
+.team-index-group .team-index-row {
+  display: grid;
+  grid-template-columns: minmax(10rem, 1fr) 5rem minmax(8rem, auto);
+  align-items: center;
+  gap: 0.8rem;
+  min-width: 0;
+  padding: 0.7rem 1rem;
+  border-top: 1px solid var(--line);
+  text-decoration: none;
+}
+
+.team-index-row:hover,
+.team-match-row:hover {
+  color: var(--fg);
+  background: var(--surface-2);
+}
+
+.team-index-identity,
+.team-index-stat {
+  display: grid;
+  min-width: 0;
+  gap: 0.15rem;
+}
+
+.team-index-identity strong,
+.team-index-identity small,
+.team-index-stat strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.team-index-identity small,
+.team-index-stat small {
+  color: var(--fg-3);
+  font-size: 9px;
+}
+
+.team-index-stat {
+  text-align: right;
+}
+
+.team-index-stat strong {
+  font-family: var(--mono);
+  font-size: 11px;
+}
+
+.team-page-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-block: 0.5rem 1rem;
+}
+
+.team-page-header > img,
+.team-logo-unavailable {
+  width: 6rem;
+  height: 6rem;
+  flex: none;
+  object-fit: contain;
+  background: var(--surface-2);
+}
+
+.team-logo-unavailable {
+  display: grid;
+  place-items: center;
+  padding: 0.5rem;
+  border: 1px dashed var(--line-strong);
+  color: var(--fg-3);
+  font-size: 9px;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.team-page-header p {
+  margin: 0.2rem 0 0;
+  color: var(--fg-2);
+}
+
+.team-facts {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.team-facts > div {
+  min-width: 0;
+  padding: 0.8rem 1rem;
+}
+
+.team-facts dt {
+  color: var(--fg-3);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.team-facts dd {
+  margin: 0.2rem 0 0;
+  overflow-wrap: anywhere;
+  font-family: var(--mono);
+  font-weight: 700;
+}
+
+.team-record-note {
+  padding: 1rem;
+}
+
+.team-record-note h2,
+.team-record-note p {
+  margin: 0;
+}
+
+.team-record-note h2 {
+  font-size: 13px;
+}
+
+.team-record-note p {
+  margin-top: 0.35rem;
+  color: var(--fg-2);
+  font-size: 12px;
+}
+
+.team-page-panel .team-hero-row {
+  display: grid;
+  grid-template-columns: minmax(8rem, 1fr) auto;
+  gap: 1rem;
+  align-items: center;
+  padding: 0.65rem 1rem;
+  border-top: 1px solid var(--line);
+}
+
+.team-hero-row strong {
+  font-family: var(--mono);
+}
+
+.team-empty-state {
+  margin: 0;
+  padding: 0.8rem 1rem;
+  color: var(--fg-3);
+}
+
+.team-page-heading {
+  margin-top: 1.5rem;
+}
+
+.team-match-panel {
+  container-type: inline-size;
+  margin-top: 0;
+}
+
+.team-page-panel .team-match-row {
+  display: grid;
+  grid-template-columns: 6rem minmax(10rem, 1fr) 5rem 5rem minmax(10rem, 0.8fr);
+  align-items: center;
+  gap: 0.6rem;
+  min-width: 0;
+  padding: 0.7rem 1rem;
+  border-top: 1px solid var(--line);
+  text-decoration: none;
+}
+
+.team-match-row > time,
+.team-match-row > span:first-child,
+.team-match-tournament {
+  color: var(--fg-2);
+  font-family: var(--mono);
+  font-size: 10px;
+}
+
+.team-match-opponent {
+  display: grid;
+  min-width: 0;
+  gap: 0.15rem;
+}
+
+.team-match-opponent small {
+  color: var(--fg-3);
+  font-size: 9px;
+  text-transform: uppercase;
+}
+
+.team-match-opponent strong,
+.team-match-tournament {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.team-match-score {
+  text-align: center;
+}
+
+.team-match-score[data-score-state='missing'] {
+  color: var(--fg-3);
+  font-size: 9px;
+}
+
+.team-match-score span {
+  padding-inline: 0.2rem;
+  color: var(--fg-3);
+}
+
+.team-match-result {
+  color: var(--accent-b);
+  font-size: 11px;
+  text-align: center;
+}
+
+.team-match-result--win {
+  color: var(--accent-a);
+}
+
+.team-pagination {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: center;
+  gap: 0.75rem;
+  margin-block: 1rem;
+  font-size: 12px;
+  text-align: center;
+}
+
+.team-pagination > :first-child {
+  text-align: left;
+}
+
+.team-pagination > :last-child {
+  text-align: right;
+}
+
+.team-pagination span:not(:nth-child(2)) {
+  color: var(--fg-3);
+}
+
+.match-detail-summary .match-team-link {
+  color: inherit;
+}
+
+.tournament-team-list a {
+  color: inherit;
+}
+
 .match-row {
   display: grid;
   grid-template-columns: 4rem minmax(9rem, 1fr) 7rem minmax(9rem, 1fr) 10rem;
@@ -1815,6 +2135,11 @@ img {
     padding-block: 2rem 1.5rem;
   }
 
+  .team-index,
+  .team-page {
+    padding-block: 2rem 1.5rem;
+  }
+
   .site-header nav {
     align-items: flex-start;
     flex-direction: column;
@@ -1874,6 +2199,73 @@ img {
 
   .hero-trend-row small {
     font-size: 8px;
+  }
+
+  .team-index-group > header,
+  .team-heroes > header,
+  .team-page-heading {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+
+  .team-index-group .team-index-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 0.5rem;
+    padding-inline: 0.75rem;
+  }
+
+  .team-index-identity {
+    grid-column: 1 / -1;
+  }
+
+  .team-index-stat {
+    text-align: left;
+  }
+
+  .team-page-header {
+    align-items: flex-start;
+  }
+
+  .team-page-header > img,
+  .team-logo-unavailable {
+    width: 4.5rem;
+    height: 4.5rem;
+  }
+
+  .team-facts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .team-page-panel .team-match-row {
+    grid-template-columns: 5.5rem minmax(0, 1fr) 4.5rem;
+    gap: 0.4rem;
+    padding-inline: 0.75rem;
+  }
+
+  .team-match-row > time,
+  .team-match-row > span:first-child {
+    grid-column: 1;
+    grid-row: 1 / span 2;
+  }
+
+  .team-match-opponent {
+    grid-column: 2;
+  }
+
+  .team-match-score {
+    grid-column: 3;
+    grid-row: 1 / span 2;
+  }
+
+  .team-match-result {
+    grid-column: 2;
+    text-align: left;
+  }
+
+  .team-match-tournament {
+    grid-column: 1 / -1;
+    white-space: normal;
   }
 
   .tier-control {

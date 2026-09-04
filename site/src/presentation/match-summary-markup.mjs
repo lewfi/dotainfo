@@ -52,20 +52,24 @@ function dateMarkup(date, display) {
   return `<time datetime="${datetime}" data-relative-time>${datetime}</time>`;
 }
 
-function teamMarkup(team, score, winner, showLogoState) {
+function teamMarkup(team, score, winner, showLogoState, linkTeams) {
   const winnerMarkup = winner ? '<small class="winner-label">Winner</small>' : '';
   const state = teamStateLabel(team, showLogoState);
   const stateMarkup = state
     ? `<small class="team-state">${escapeHtml(state)}</small>`
     : '';
   const idAttribute = team.teamId === null ? '' : ` data-team-id="${team.teamId}"`;
+  const name = escapeHtml(team.name.display);
+  const nameMarkup = linkTeams && team.teamId !== null
+    ? `<a class="match-team-link" href="/teams/${team.teamId}/">${name}</a>`
+    : name;
   return `<p class="${winner ? 'winner' : ''}"${idAttribute}`
     + `${team.teamId === null ? ' data-team-id-state="missing"' : ''}`
     + `${team.name.source === 'reference-tag' ? ' data-team-name-source="reference-tag"' : ''}`
     + `${showLogoState && team.logo.status === 'missing' ? ' data-logo-state="missing"' : ''}`
     + `${score === null ? ' data-score-state="missing"' : ''}`
     + ` data-team-display="${escapeHtml(team.name.display)}">`
-    + `<span>${escapeHtml(team.name.display)}${winnerMarkup}${stateMarkup}</span>`
+    + `<span>${nameMarkup}${winnerMarkup}${stateMarkup}</span>`
     + `<strong${score === null ? ' aria-label="Score unavailable"' : ''}>`
     + `${score ?? '&#8212;'}</strong></p>`;
 }
@@ -74,6 +78,7 @@ export function renderMatchSummaryMarkup(summary, {
   dateDisplay = 'relative',
   headingId,
   headingLevel = 'h2',
+  linkTeams = false,
   showLogoState = true,
   showPatch = false,
 } = {}) {
@@ -102,12 +107,14 @@ export function renderMatchSummaryMarkup(summary, {
       summary.score.radiant,
       summary.result.winner === 'radiant',
       showLogoState,
+      linkTeams,
     )
     + teamMarkup(
       summary.teams.dire,
       summary.score.dire,
       summary.result.winner === 'dire',
       showLogoState,
+      linkTeams,
     )
     + '</div>'
     + '<footer class="match-meta">'

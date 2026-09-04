@@ -1108,6 +1108,10 @@ duplicates. The persisted theme key remains `dotainfo-theme` and is not part of 
   pick/ban/contest/win statistics, a per-patch trend, and `players.lane_role` distribution.
   There is no client-side fallthrough and no top-player list; only about 3% of player
   account IDs resolve to a name, so that feature waits for the player-name backfill.
+- `/teams/` is a pre-rendered index of every distinct non-null `team_id` in committed match
+  data, grouped by current display name. `/teams/:team_id/` is page 1 of that team's
+  newest-first match history, with 200 matches per page; `/teams/:team_id/2/` onward are
+  subsequent static pages. There is no team payload or client-side fallthrough.
 
 Both page types apply the same absent-name rule. The committed data contains 7,058 matches
 with at least one null team ID and 655 match-side appearances whose non-null team ID has an
@@ -1328,6 +1332,71 @@ emitted 127 hero detail pages plus the index, and 2,974 HTML pages overall. Tota
 was 56,372.243 ms against Cloudflare's 1,200,000 ms cap. The full peak projection was
 `{"peakRecentMatches":8673,"peakPages":10204,"projectedPageGenerationMs":183396.073,"projectedTotalWallMs":186124.984,"tenMinuteHeadroomMs":413875.016,"tenMinuteHeadroomPercent":68.979,"cloudflareHeadroomMs":1013875.016,"cloudflareHeadroomPercent":84.49}`.
 All twelve audits passed after the negative-test matrix restored every mutation.
+
+**Team index and pages - step 27 complete.** Every distinct non-null `team_id` in committed
+match data receives a static page, regardless of match count. The planning snapshot contains
+8,918 such IDs and requires 9,764 detail pages at 200 matches per page: the largest team has
+4,652 matches and therefore 24 pages, while 271 teams exceed one page. A threshold subset was
+rejected because there is no team archive payload or client-side fallthrough; an omitted team
+would be unreachable and every team link would have to become conditional. The index groups
+all teams alphabetically instead of emitting one enormous 8,918-entry list, and shows current
+name, tag, match count, and date range.
+
+`team_id` is the durable identity for every route, join, aggregation, and link. Page headings,
+the index, and participating-team lists use the current reference name. Individual match rows
+prefer the denormalized match-write-time name, so a historical row is not silently relabelled
+as the current team. Of the match-used teams in the planning snapshot, 71 have a null or empty
+reference name; those fall back first to the most recent usable match-row name and then to
+`Team <team_id>`. Missing `logo_url` values render a labelled unavailable state rather than a
+broken image.
+
+Team document titles are computed across the complete team set and asserted unique during the
+build. A name used by one ID becomes `<name> — DotaInfo`; duplicate names first become
+`<name> (<year of first match>) — DotaInfo`; when name plus year still collides they become
+`<name> (<team_id>) — DotaInfo`. Page 2 onward inserts `— Page N` before the brand suffix.
+The ID stage is necessary: `Dominion` is shared by 41 IDs, so the year stage cannot resolve
+the group. `Elite Eclipse`, shared by 30 IDs in the measured 10-or-more-match subset, further
+illustrates why title uniqueness cannot be assumed from display names. The site-wide
+accessibility gate requires every emitted title to be unique. Five otherwise-valid team
+titles collided with hero names (`Ember Spirit`, `Mars`, `Marci`, `Broodmother`, and
+`Mirana`), so hero detail documents use `<Hero name> hero — DotaInfo`. This preserves the
+required team cascade while making the cross-entity title namespace unambiguous.
+
+Each team page shows its newest-first matches with opponent, score, result, and tournament,
+along with a date range, tournaments-played count, win/loss record, and five most-played
+heroes. A side is Radiant exactly when `radiant_team_id` equals the page's `team_id`; otherwise
+it is Dire. A recorded `radiant_win` is compared with that side to determine the result. The
+seven planning-snapshot matches with null `radiant_win` remain in match counts and lists but
+are excluded from both wins and losses; the page states the decided-match denominator. Null
+scores and results have explicit unavailable states, and neither `is_parsed` nor any other
+completeness predicate prunes match rows.
+
+Link ownership follows the existing whole-row anchor contract. Match-detail team names link
+to team pages, and tournament pages expose team links in their separate participating-team
+list. Home `.match-row` and tournament `.tournament-match-row` anchors continue to own their
+entire rows; nesting team anchors inside either would be invalid HTML and would break keyboard
+and screen-reader behaviour. Restructuring those rows remains out of scope.
+
+`npm run audit:teams -- --dist dist` independently scans all committed match and player shards
+and the reference files without importing the team data or presentation modules. It checks
+route and grouped-index coverage, per-team counts, complete exact duplicate-free pagination,
+the explicit null-result denominator, match placement on each non-null side, current and era
+name states, logo states, most-played heroes, and title uniqueness. It parses colours and line
+ownership from emitted CSS and sweeps the index plus the largest team at 320, 360, 380, 414,
+480, 600, 672, 700, 760, 900, 1200, 1280, and 1440px. The step 21 boundary rule remains a
+literal syntactic contract: each team selector using `--line` begins with a separately bounded
+team selector using `--line-strong`, followed by a descendant space. Every team assertion and
+the team-link assertion is negative-tested by mutating emitted output, observing failure,
+restoring the bytes, and observing success.
+
+The final step 27 verification used build clock `2026-09-04T19:08:43.217Z`. The independent
+scan found 147,245 matches and 8,918 team IDs; the build emitted 9,764 team detail pages plus
+the index, and 12,738 HTML pages overall. `dist/index.html` is 848,812 bytes raw and 56,512
+bytes gzipped. Total build wall time was 154,284.882 ms against Cloudflare's 1,200,000 ms cap.
+The full peak projection was
+`{"peakRecentMatches":8673,"peakPages":19969,"projectedPageGenerationMs":232829.298,"projectedTotalWallMs":235555.927,"tenMinuteHeadroomMs":364444.073,"tenMinuteHeadroomPercent":60.741,"cloudflareHeadroomMs":964444.073,"cloudflareHeadroomPercent":80.37}`.
+All thirteen audits passed, including site-wide `titlesAreUnique: true`, after the complete
+team negative-test matrix restored every mutation.
 
 **Deploy - step 17 complete:** Cloudflare Pages is connected to the repo and builds on pushes
 to `main`; the ingest job's commits trigger builds automatically. The approval gate passed on
@@ -1652,10 +1721,10 @@ by mutating only `dist`, observing that assertion fail, restoring the original b
 observing it pass. Finding 8 is closed: match detail and runtime archive presentation are now
 visually consistent without conflating either archive `<section>` or home `<li>` ownership.
 
-The established regression suite comprises these twelve audits (not seven), invoked from
+The established regression suite comprises these thirteen audits (not seven), invoked from
 `site/`. `CLOCK` is an ISO UTC value in `YYYY-MM-DDTHH:mm:ssZ` form. Home browser, Detail,
-Tournaments, and Heroes require a real installed Chrome or Edge executable from their
-explicit Windows paths; all four are unrunnable on Linux and in CI.
+Tournaments, Heroes, and Teams require a real installed Chrome or Edge executable from their
+explicit Windows paths; all five are unrunnable on Linux and in CI.
 
 | Audit | Invocation | Runtime requirement |
 |---|---|---|
@@ -1671,6 +1740,7 @@ explicit Windows paths; all four are unrunnable on Linux and in CI.
 | Detail | `npm run audit:detail -- --dist dist` | Real installed Chrome or Edge; Windows only, not CI |
 | Tournaments | `npm run audit:tournaments -- --dist dist` | Real installed Chrome or Edge; Windows only, not CI |
 | Heroes | `npm run audit:heroes -- --dist dist` | Real installed Chrome or Edge; Windows only, not CI |
+| Teams | `npm run audit:teams -- --dist dist` | Real installed Chrome or Edge; Windows only, not CI |
 
 Build regression reporting for step 23 uses total wall time only. Mean milliseconds per page
 is still printed by the existing profiler for diagnostics, but is not used as a regression
@@ -1695,7 +1765,7 @@ Cloudflare twenty-minute cap assertion.
 
 ## 8. Deferred — do not build
 
-v2 full historical backfill in CI · v3 team/player pages ·
+v2 full historical backfill in CI · v3 player pages ·
 DuckDB-WASM in the browser · live match ticker · search · user accounts · any paid service.
 
 If a v0/v1 decision would foreclose one of these, note it in the PR description rather than
@@ -1800,7 +1870,8 @@ the shared summary inputs; `is_parsed` therefore cannot be used as a completenes
 The match shards use 8,918 distinct non-null team IDs, while `teams.parquet` contains 22,019
 IDs. There are 271 used IDs absent from the reference file, covering 330 match-side
 appearances. The match rows preserve a denormalized name for 321 appearances, so those render
-a name but lack reference-provided logos and cannot support a complete future team page. The
+a name but lack reference-provided logos; step 27 builds their pages with the explicit
+missing-logo state and current-name fallback contract. The
 remaining nine appearances across seven missing reference IDs are part of, but do not define,
 the broader rendering-name gap:
 
@@ -2190,3 +2261,15 @@ These steps continue the canonical numbering in `AGENTS.md`.
     team 0 = Radiant by joining picks to player sides. Parse emitted CSS, sweep all thirteen
     required widths, and negative-test every new assertion—including an inverted team
     interpretation—before all twelve audits are rerun.
+27. **Team index and team pages.** Pre-render the grouped `/teams/` index and every numeric
+    `/teams/:team_id/` route found in committed match data, paginating newest-first matches at
+    200 per page. Use current reference names for the index, headings, and team lists; use
+    match-write-time era names inside match rows; and retain `team_id` as the durable key.
+    Compute titles over the full team set with the name, first-match year, then team-ID cascade,
+    and assert uniqueness at build time. Exclude null results only from the win/loss denominator,
+    never from match totals or lists. Link teams only where doing so does not nest an anchor:
+    match-detail names and tournament participating-team lists, not existing home or tournament
+    whole-row anchors. Approval gate: independently scan the unpruned fact shards for complete
+    route, count, pagination, side/result, match-placement, hero, naming, and title coverage;
+    resolve every team href; parse emitted CSS; sweep all thirteen widths; and negative-test
+    every new assertion before all thirteen audits are rerun.

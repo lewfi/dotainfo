@@ -152,7 +152,7 @@ export function createHeroCollection(referenceHeroes, aggregates) {
     return Object.freeze({
       heroId,
       name: localizedName,
-      title: `${localizedName} — DotaInfo`,
+      title: `${localizedName} hero — DotaInfo`,
       machineName: cleanText(reference.name),
       iconUrl: heroIcon(reference.name),
       primaryAttribute: group,

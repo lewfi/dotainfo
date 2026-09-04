@@ -34,7 +34,9 @@ const dateRange = `${dateFormatter.format(new Date(tournament.firstStartTime * 1
       {tournament.teams.length > 0 ? (
         <ul>
           {tournament.teams.map((team) => (
-            <li data-team-id={team.teamId}>{team.name.display}</li>
+            <li data-team-id={team.teamId}>
+              <a href={`/teams/${team.teamId}/`}>{team.name.display}</a>
+            </li>
           ))}
         </ul>
       ) : <p>Team information unavailable.</p>}

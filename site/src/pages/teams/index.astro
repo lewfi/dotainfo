@@ -1,0 +1,59 @@
+---
+import SiteLayout from '../../layouts/SiteLayout.astro';
+import { teamCollection } from '../../data/teams.mjs';
+import { TEAM_INDEX_TITLE } from '../../presentation/teams.mjs';
+
+const collection = await teamCollection();
+const dateFormatter = new Intl.DateTimeFormat('en-US', {
+  month: 'short',
+  timeZone: 'UTC',
+  year: 'numeric',
+});
+const range = (team) => team.firstStartTime === null || team.lastStartTime === null
+  ? 'Date unavailable'
+  : `${dateFormatter.format(new Date(team.firstStartTime * 1_000))}–${dateFormatter.format(new Date(team.lastStartTime * 1_000))}`;
+---
+
+<SiteLayout title={TEAM_INDEX_TITLE} description="Every team in the DotaInfo professional match archive.">
+  <article class="team-index" data-team-index data-total-teams={collection.teams.length} data-total-matches={collection.matchCount}>
+    <p class="eyebrow">Professional match archive</p>
+    <h1>Teams</h1>
+    <p class="team-index-intro">
+      Browse all {collection.teams.length.toLocaleString('en-US')} teams that appear in
+      committed match data, grouped by their current display name.
+    </p>
+    {collection.groups.map((group) => (
+      <section class="team-index-group" data-team-index-group={group.id} aria-labelledby={`team-group-${group.id}`}>
+        <header>
+          <h2 id={`team-group-${group.id}`}>{group.label}</h2>
+          <p>{group.teams.length.toLocaleString('en-US')} teams</p>
+        </header>
+        <ul>
+          {group.teams.map((team) => (
+            <li>
+              <a
+                class="team-index-row"
+                href={`/teams/${team.teamId}/`}
+                data-index-team-id={team.teamId}
+                data-team-name={team.name.display}
+                data-team-name-source={team.name.source}
+                data-team-tag={team.tag ?? 'unavailable'}
+                data-logo-state={team.logo.status}
+                data-match-count={team.matchCount}
+                data-first-start={team.firstStartTime ?? 'unavailable'}
+                data-last-start={team.lastStartTime ?? 'unavailable'}
+              >
+                <span class="team-index-identity">
+                  <strong>{team.name.display}</strong>
+                  <small>{team.tag ?? 'Tag unavailable'} · Team {team.teamId}</small>
+                </span>
+                <span class="team-index-stat"><small>Matches</small><strong>{team.matchCount.toLocaleString('en-US')}</strong></span>
+                <span class="team-index-stat"><small>Date range</small><strong>{range(team)}</strong></span>
+              </a>
+            </li>
+          ))}
+        </ul>
+      </section>
+    ))}
+  </article>
+</SiteLayout>

@@ -103,6 +103,6 @@ test('hero collection exposes every patch, reference field, and lane-role row', 
   ]);
   assert.equal(antiMage.attackType, 'Melee');
   assert.deepEqual(antiMage.roles, ['Carry', 'Escape']);
-  assert.equal(antiMage.title, 'Anti-Mage — DotaInfo');
+  assert.equal(antiMage.title, 'Anti-Mage hero — DotaInfo');
   assert.deepEqual(collection.groups.map((group) => group.id), ['str', 'agi']);
 });

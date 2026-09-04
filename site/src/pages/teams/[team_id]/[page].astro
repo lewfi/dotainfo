@@ -1,0 +1,18 @@
+---
+import TeamPage from '../../../components/TeamPage.astro';
+import { teamCollection } from '../../../data/teams.mjs';
+
+export async function getStaticPaths() {
+  const collection = await teamCollection();
+  return collection.pages
+    .filter((page) => page.pageNumber > 1)
+    .map((page) => ({
+      params: { team_id: String(page.teamId), page: String(page.pageNumber) },
+      props: { team: page },
+    }));
+}
+
+const { team } = Astro.props;
+---
+
+<TeamPage team={team} />

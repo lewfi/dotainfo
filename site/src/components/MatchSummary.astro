@@ -5,9 +5,15 @@ const {
   summary,
   headingId,
   headingLevel = 'h2',
+  linkTeams = false,
   showPatch = false,
 } = Astro.props;
-const markup = renderMatchSummaryMarkup(summary, { headingId, headingLevel, showPatch });
+const markup = renderMatchSummaryMarkup(summary, {
+  headingId,
+  headingLevel,
+  linkTeams,
+  showPatch,
+});
 ---
 
 <Fragment set:html={markup} />

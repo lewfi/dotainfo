@@ -22,7 +22,9 @@
     "audit:tournaments": "node scripts/audit-tournaments.mjs",
     "negative-test:tournaments": "node scripts/negative-test-tournaments.mjs",
     "audit:heroes": "node scripts/audit-heroes.mjs",
-    "negative-test:heroes": "node scripts/negative-test-heroes.mjs"
+    "negative-test:heroes": "node scripts/negative-test-heroes.mjs",
+    "audit:teams": "node scripts/audit-teams.mjs",
+    "negative-test:teams": "node scripts/negative-test-teams.mjs"
   },
   "engines": {
     "node": ">=22.12.0 <23"

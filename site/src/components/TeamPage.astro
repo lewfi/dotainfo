@@ -1,0 +1,103 @@
+---
+import SiteLayout from '../layouts/SiteLayout.astro';
+import TeamMatchRow from './TeamMatchRow.astro';
+
+const { team } = Astro.props;
+const number = (value) => Number(value).toLocaleString('en-US');
+const dateFormatter = new Intl.DateTimeFormat('en-US', {
+  day: 'numeric',
+  month: 'short',
+  timeZone: 'UTC',
+  year: 'numeric',
+});
+const dateRange = team.firstStartTime === null || team.lastStartTime === null
+  ? 'Date range unavailable'
+  : `${dateFormatter.format(new Date(team.firstStartTime * 1_000))}–${dateFormatter.format(new Date(team.lastStartTime * 1_000))}`;
+---
+
+<SiteLayout title={team.title} description={`${team.name.display} professional Dota 2 match history and statistics.`}>
+  <article
+    class="team-page"
+    data-team-page
+    data-team-id={team.teamId}
+    data-page-number={team.pageNumber}
+    data-page-count={team.pageCount}
+    data-total-matches={team.matchCount}
+    data-wins={team.wins}
+    data-losses={team.losses}
+    data-decided-matches={team.decidedMatches}
+    data-null-result-matches={team.nullResultMatches}
+    data-team-name={team.name.display}
+    data-team-name-source={team.name.source}
+    data-logo-state={team.logo.status}
+  >
+    <p class="eyebrow"><a href="/teams/">Teams</a> / Team {team.teamId}</p>
+    <header class="team-page-header">
+      {team.logo.status === 'available' ? (
+        <img src={team.logo.url} alt={`${team.name.display} logo`} width="96" height="96" />
+      ) : (
+        <div class="team-logo-unavailable" role="img" aria-label={`No logo on file for ${team.name.display}`}>
+          Logo unavailable
+        </div>
+      )}
+      <div>
+        <h1>{team.name.display}</h1>
+        <p>{team.tag ?? 'Tag unavailable'} · Team {team.teamId}</p>
+      </div>
+    </header>
+
+    <dl class="team-facts team-page-panel">
+      <div><dt>Matches</dt><dd>{number(team.matchCount)}</dd></div>
+      <div><dt>Record</dt><dd>{number(team.wins)}–{number(team.losses)}</dd></div>
+      <div><dt>Tournaments</dt><dd>{number(team.tournamentsPlayed)}</dd></div>
+      <div><dt>Date range</dt><dd>{dateRange}</dd></div>
+    </dl>
+
+    <aside class="team-record-note team-page-panel" aria-label="Win and loss denominator">
+      <h2>Record denominator</h2>
+      <p>
+        Wins and losses use {number(team.decidedMatches)} matches with a recorded result.
+        The {number(team.nullResultMatches)} {team.nullResultMatches === 1 ? 'match' : 'matches'}
+        without a result remain in the {number(team.matchCount)}-match total and list.
+      </p>
+    </aside>
+
+    <section class="team-heroes team-page-panel" aria-labelledby="team-heroes-heading">
+      <header>
+        <div>
+          <p class="eyebrow">Player appearances</p>
+          <h2 id="team-heroes-heading">Most-played heroes</h2>
+        </div>
+        <p>Top {team.topHeroes.length}</p>
+      </header>
+      {team.topHeroes.length > 0 ? (
+        <ol>
+          {team.topHeroes.map((hero) => (
+            <li class="team-hero-row" data-hero-id={hero.heroId ?? 'unavailable'} data-appearances={hero.appearances}>
+              {hero.heroId === null
+                ? <span>{hero.name}</span>
+                : <a href={`/heroes/${hero.heroId}/`}>{hero.name}</a>}
+              <strong>{number(hero.appearances)}</strong>
+            </li>
+          ))}
+        </ol>
+      ) : <p class="team-empty-state">Hero data unavailable.</p>}
+    </section>
+
+    <header class="team-page-heading">
+      <h2>Match history</h2>
+      <p>Page {team.pageNumber} of {team.pageCount}</p>
+    </header>
+    <div class="team-match-panel team-page-panel">
+      <ol>
+        {team.matches.map((match) => <li><TeamMatchRow match={match} /></li>)}
+      </ol>
+    </div>
+
+    <nav class="team-pagination" aria-label="Team match pages">
+      {team.previousHref ? <a rel="prev" href={team.previousHref}>Previous page</a> : <span>Previous page</span>}
+      <span>Page {team.pageNumber} of {team.pageCount}</span>
+      {team.nextHref ? <a rel="next" href={team.nextHref}>Next page</a> : <span>Next page</span>}
+    </nav>
+  </article>
+</SiteLayout>
