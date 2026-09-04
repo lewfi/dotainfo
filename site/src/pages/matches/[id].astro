@@ -16,7 +16,7 @@ const detail = await reader.detail(matchId);
 if (!detail) throw new Error(`recent match ${matchId} was not found during rendering`);
 const model = createMatchDetailModel(detail, references);
 const matchup = `${model.summary.teams.radiant.name.display} vs ${model.summary.teams.dire.name.display}`;
-const title = `${matchup} — match ${matchId}`;
+const title = `${matchup} — match ${matchId} — DotaInfo`;
 ---
 
 <SiteLayout title={title} description={`${matchup}, match ${matchId}: full details and boxscores.`}>

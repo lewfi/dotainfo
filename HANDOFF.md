@@ -1,4 +1,4 @@
-# Dota 2 Pro Stats — Implementation Handoff (v0 + v1)
+# DotaInfo — Implementation Handoff (v0 + v1)
 
 **Audience:** an autonomous coding agent (Codex).
 **Scope:** v0 and v1 only. Do not implement anything under "Deferred."
@@ -1065,6 +1065,13 @@ be the first live exercise of the late-arrival path against an existing REST sha
 
 **Stack:** Astro (static output), DuckDB via `duckdb-node` to read Parquet at build time,
 Observable Plot for charts, plain CSS. No React, no Tailwind, no UI framework.
+
+**Brand and document titles.** The public site name is **DotaInfo**. The home page document
+title is exactly `DotaInfo`; every other page uses `<Page-specific title> — DotaInfo`, with a
+real em dash. Recent match titles retain their per-match identity, and fixture titles retain
+their case identity. Do not simplify these titles to the bare brand: `audit:a11y` scans every
+emitted page and its `titlesAreUnique` assertion fails when page-specific titles collapse to
+duplicates. The persisted theme key remains `dotainfo-theme` and is not part of the rename.
 
 **Routes:**
 
