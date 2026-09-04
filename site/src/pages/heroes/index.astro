@@ -1,0 +1,71 @@
+---
+import SiteLayout from '../../layouts/SiteLayout.astro';
+import { heroCollection } from '../../data/heroes.mjs';
+import { HERO_INDEX_TITLE } from '../../presentation/heroes.mjs';
+
+const collection = await heroCollection();
+const percent = (value) => value === null
+  ? 'Unavailable'
+  : new Intl.NumberFormat('en-US', { style: 'percent', maximumFractionDigits: 1 }).format(value);
+---
+
+<SiteLayout title={HERO_INDEX_TITLE} description="Pick, ban, win, and role statistics for every Dota 2 hero in the DotaInfo archive.">
+  <article
+    class="hero-index"
+    data-hero-index
+    data-total-heroes={collection.heroes.length}
+    data-total-matches={collection.totalMatches}
+    data-draft-match-denominator={collection.draftMatchCount}
+    data-total-picks={collection.totalPicks}
+    data-total-bans={collection.totalBans}
+  >
+    <p class="eyebrow">Professional match archive</p>
+    <h1>Heroes</h1>
+    <p class="hero-index-intro">
+      All {collection.heroes.length} heroes, grouped by primary attribute. Pick, ban, and
+      contest rates use the {collection.draftMatchCount.toLocaleString('en-US')} matches with
+      draft data, not all {collection.totalMatches.toLocaleString('en-US')} matches.
+      Win rate uses only picks whose match has a recorded result; those picks remain in the
+      pick total when the result is unavailable.
+    </p>
+
+    {collection.groups.map((group) => (
+      <section class="hero-index-group" data-primary-attribute={group.id} aria-labelledby={`hero-attribute-${group.id}`}>
+        <header>
+          <h2 id={`hero-attribute-${group.id}`}>{group.label}</h2>
+          <p>{group.heroes.length} {group.heroes.length === 1 ? 'hero' : 'heroes'}</p>
+        </header>
+        <ul>
+          {group.heroes.map((hero) => (
+            <li>
+              <a
+                class="hero-index-row"
+                href={`/heroes/${hero.heroId}/`}
+                data-index-hero-id={hero.heroId}
+                data-hero-name={hero.name}
+                data-primary-attribute={hero.primaryAttribute.id}
+                data-attack-type={hero.attackType}
+                data-roles={hero.roles.join('|')}
+                data-pick-count={hero.pickCount}
+                data-ban-count={hero.banCount}
+                data-wins={hero.wins}
+                data-win-eligible-picks={hero.winEligiblePicks}
+              >
+                <span class="hero-index-identity">
+                  {hero.iconUrl && <img src={hero.iconUrl} alt="" width="64" height="36" loading="lazy" />}
+                  <span>
+                    <strong>{hero.name}</strong>
+                    <small>{hero.attackType} · {hero.roles.length > 0 ? hero.roles.join(', ') : 'Roles unavailable'}</small>
+                  </span>
+                </span>
+                <span class="hero-index-stat"><small>Pick rate</small><strong>{percent(hero.pickRate)}</strong></span>
+                <span class="hero-index-stat"><small>Ban rate</small><strong>{percent(hero.banRate)}</strong></span>
+                <span class="hero-index-stat"><small>Win rate</small><strong>{percent(hero.winRate)}</strong></span>
+              </a>
+            </li>
+          ))}
+        </ul>
+      </section>
+    ))}
+  </article>
+</SiteLayout>

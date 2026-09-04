@@ -32,6 +32,7 @@ Refer to steps by these numbers only. Do not renumber.
 23. Match detail and archive visual consistency
 24. late.ndjson historical payload gap
 25. Tournament index and tournament pages
+26. Hero index and hero pages
 
 ## Never
 

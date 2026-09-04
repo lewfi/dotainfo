@@ -1,0 +1,16 @@
+---
+import HeroPage from '../../components/HeroPage.astro';
+import { heroCollection } from '../../data/heroes.mjs';
+
+export async function getStaticPaths() {
+  const collection = await heroCollection();
+  return collection.heroes.map((hero) => ({
+    params: { hero_id: String(hero.heroId) },
+    props: { hero, collection },
+  }));
+}
+
+const { hero, collection } = Astro.props;
+---
+
+<HeroPage hero={hero} collection={collection} />

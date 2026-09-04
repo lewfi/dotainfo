@@ -1,0 +1,110 @@
+---
+import SiteLayout from '../layouts/SiteLayout.astro';
+
+const { hero, collection } = Astro.props;
+const number = (value) => Number(value).toLocaleString('en-US');
+const percent = (value) => value === null
+  ? 'Unavailable'
+  : new Intl.NumberFormat('en-US', { style: 'percent', maximumFractionDigits: 1 }).format(value);
+---
+
+<SiteLayout title={hero.title} description={`${hero.name} pick, ban, win, patch, and lane statistics from professional Dota 2 matches.`}>
+  <article
+    class="hero-page"
+    data-hero-page
+    data-hero-id={hero.heroId}
+    data-total-matches={collection.totalMatches}
+    data-draft-match-denominator={collection.draftMatchCount}
+    data-pick-count={hero.pickCount}
+    data-ban-count={hero.banCount}
+    data-wins={hero.wins}
+    data-win-eligible-picks={hero.winEligiblePicks}
+    data-player-count={hero.playerCount}
+  >
+    <p class="eyebrow"><a href="/heroes/">Heroes</a> / {hero.primaryAttribute.label}</p>
+    <header class="hero-page-header">
+      {hero.iconUrl && <img src={hero.iconUrl} alt="" width="128" height="72" />}
+      <div>
+        <h1>{hero.name}</h1>
+        <p>{hero.primaryAttribute.label} · {hero.attackType}</p>
+        <p>{hero.roles.length > 0 ? hero.roles.join(' · ') : 'Roles unavailable'}</p>
+      </div>
+    </header>
+
+    <dl class="hero-facts hero-page-panel">
+      <div><dt>Picks</dt><dd>{number(hero.pickCount)}</dd></div>
+      <div><dt>Bans</dt><dd>{number(hero.banCount)}</dd></div>
+      <div><dt>Pick rate</dt><dd>{percent(hero.pickRate)}</dd></div>
+      <div><dt>Ban rate</dt><dd>{percent(hero.banRate)}</dd></div>
+      <div><dt>Contest rate</dt><dd>{percent(hero.contestRate)}</dd></div>
+      <div><dt>Win rate</dt><dd>{percent(hero.winRate)}</dd></div>
+    </dl>
+
+    <aside class="hero-rate-note hero-page-panel" aria-label="Rate denominators">
+      <h2>How rates are calculated</h2>
+      <p>
+        Pick, ban, and contest rates divide by {number(collection.draftMatchCount)} matches
+        with draft rows—not all {number(collection.totalMatches)} archived matches.
+        Win rate divides {number(hero.wins)} wins by {number(hero.winEligiblePicks)} picks in
+        matches with a recorded result. Picks from null-result matches stay in the
+        {number(hero.pickCount)} pick total but do not enter that win-rate denominator.
+      </p>
+    </aside>
+
+    <section class="hero-trend hero-page-panel" aria-labelledby="hero-trend-heading">
+      <header>
+        <div>
+          <p class="eyebrow">Meta history</p>
+          <h2 id="hero-trend-heading">Trend by patch</h2>
+        </div>
+        <p>{hero.trends.length} patches</p>
+      </header>
+      <div class="hero-trend-list" role="table" aria-label={`${hero.name} statistics by patch`}>
+        <div class="hero-trend-row hero-trend-row--head" role="row">
+          <span role="columnheader">Patch</span>
+          <span role="columnheader">Picks</span>
+          <span role="columnheader">Bans</span>
+          <span role="columnheader">Contest</span>
+          <span role="columnheader">Win rate</span>
+        </div>
+        {hero.trends.map((trend) => (
+          <div
+            class="hero-trend-row"
+            role="row"
+            data-patch={trend.key}
+            data-draft-match-denominator={trend.draftMatchCount}
+            data-pick-count={trend.pickCount}
+            data-ban-count={trend.banCount}
+            data-wins={trend.wins}
+            data-win-eligible-picks={trend.winEligiblePicks}
+          >
+            <strong role="cell">{trend.label}</strong>
+            <span role="cell" data-label="Picks">{number(trend.pickCount)} <small>{percent(trend.pickRate)}</small></span>
+            <span role="cell" data-label="Bans">{number(trend.banCount)} <small>{percent(trend.banRate)}</small></span>
+            <span role="cell" data-label="Contest">{percent(trend.contestRate)}</span>
+            <span role="cell" data-label="Win rate">{percent(trend.winRate)}</span>
+          </div>
+        ))}
+      </div>
+    </section>
+
+    <section class="hero-lanes hero-page-panel" aria-labelledby="hero-lanes-heading">
+      <header>
+        <div>
+          <p class="eyebrow">Player rows</p>
+          <h2 id="hero-lanes-heading">Lane distribution</h2>
+        </div>
+        <p>{number(hero.playerCount)} appearances</p>
+      </header>
+      <ul>
+        {hero.lanes.map((lane) => (
+          <li class="hero-lane-row" data-lane-role={lane.key} data-appearances={lane.appearances}>
+            <span>{lane.label}</span>
+            <strong>{number(lane.appearances)}</strong>
+            <small>{percent(lane.rate)}</small>
+          </li>
+        ))}
+      </ul>
+    </section>
+  </article>
+</SiteLayout>

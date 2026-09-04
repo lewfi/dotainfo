@@ -17,7 +17,8 @@ script that imports Observable Plot; the chart is not build-time-only.
 data and commit data files. No website.
 
 **v1** — an Astro site reading those Parquet files at build time. It has a home feed, match
-detail pages, a tournament index, and paginated tournament pages. Deployed to Cloudflare Pages.
+detail pages, a tournament index with paginated tournament pages, and a hero index with one
+page per hero. Deployed to Cloudflare Pages.
 
 ---
 
@@ -1101,6 +1102,12 @@ duplicates. The persisted theme key remains `dotainfo-theme` and is not part of 
     means for an older match in v1; it is not a full-detail page. Historical dates use a
     readable absolute UTC date rather than relative age; the `time` element retains the exact
     ISO UTC value in its `datetime` attribute.
+- `/heroes/` is a pre-rendered index of all 127 reference heroes, grouped by primary
+  attribute and showing attack type, roles, pick rate, ban rate, and win rate.
+  `/heroes/:hero_id/` uses the numeric reference ID and pre-renders one page per hero with
+  pick/ban/contest/win statistics, a per-patch trend, and `players.lane_role` distribution.
+  There is no client-side fallthrough and no top-player list; only about 3% of player
+  account IDs resolve to a name, so that feature waits for the player-name backfill.
 
 Both page types apply the same absent-name rule. The committed data contains 7,058 matches
 with at least one null team ID and 655 match-side appearances whose non-null team ID has an
@@ -1278,6 +1285,49 @@ assertions and the tournament-link assertion were negative-tested by mutating on
 observing the targeted failure, restoring the original bytes, and observing the pass. All
 eleven audits then passed. Total build wall time was 53,072.905 ms, safely below Cloudflare's
 1,200,000 ms cap.
+
+**Hero index and pages - step 26 complete.** `/heroes/` and all 127 numeric
+`/heroes/:hero_id/` routes are static. The reference snapshot has 127 rows with `id`, `name`,
+`localized_name`, `primary_attr`, `attack_type`, and `roles`; all 127 distinct hero IDs used
+by draft rows and all 127 used by player rows resolve to those references, and every hero has
+been both drafted and played. This complete 127/127 coverage is unlike the incomplete item
+and player-name reference joins. The closed 146,875-match snapshot contains 3,484,209 draft
+rows—1,455,273 picks and 2,028,936 bans—across 145,508 matches; 1,367 matches have no draft.
+It has 14 distinct non-null patch values and seven matches whose `radiant_win` is null.
+Scheduled hot shards make current build counts grow, so pages and gates derive the same
+populations from all readable committed shards rather than pinning those snapshot totals.
+
+The rate denominators are deliberate and visible. Pick, ban, and contest rates divide by
+the number of distinct matches that have at least one draft row, not by all match rows; the
+1,367 draft-less matches in the closed snapshot therefore do not dilute every hero rate.
+Win rate divides wins by picks joined to a match with non-null `radiant_win`. A pick from a
+null-result match still contributes to pick totals and pick rate, but not to the win-rate
+denominator. These are aggregate denominator choices, not `is_parsed` or null-row filters;
+the underlying match, draft, and player scans remain unpruned.
+
+`draft.team` is verified as 0 = Radiant and 1 = Dire. The source check that established the
+contract joined 4,320 picks to `players.is_radiant` on `(match_id, hero_id)` and found 4,320
+agreements and zero disagreements. `audit:heroes` independently repeats that join over all
+currently readable pick/player rows before accepting win counts, rather than sharing the
+query layer's side interpretation. It also scans match, draft, player, and hero-reference
+files directly to compare per-hero pick/ban/win counts, patch trends, lane distributions,
+reference fields, route coverage, title uniqueness, the draft-match denominator, and the
+sum of hero picks to the total pick-row count. It parses colours and strong/decorative line
+ownership from emitted CSS and sweeps the index plus a representative hero page at 320,
+360, 380, 414, 480, 600, 672, 700, 760, 900, 1200, 1280, and 1440px. Its decorative
+selectors literally begin with `.hero-index-group ` or `.hero-page-panel ` before using
+`--line`, because the inherited step 21 gate is intentionally a syntactic prefix check.
+Every hero assertion and the hero-link assertion is negative-tested against emitted-output
+mutations; the team assertion is separately negative-tested with the encoding inverted.
+
+The final step 26 verification used build clock `2026-09-04T18:01:28.963Z`. The current
+independent scan found 147,245 matches, 145,878 matches with draft rows, 3,493,083 draft
+rows (1,458,973 picks and 2,034,110 bans), 14 patches, and seven null-result matches. All
+1,458,753 picks that could be joined to a player side agreed with team 0 = Radiant. The build
+emitted 127 hero detail pages plus the index, and 2,974 HTML pages overall. Total wall time
+was 56,372.243 ms against Cloudflare's 1,200,000 ms cap. The full peak projection was
+`{"peakRecentMatches":8673,"peakPages":10204,"projectedPageGenerationMs":183396.073,"projectedTotalWallMs":186124.984,"tenMinuteHeadroomMs":413875.016,"tenMinuteHeadroomPercent":68.979,"cloudflareHeadroomMs":1013875.016,"cloudflareHeadroomPercent":84.49}`.
+All twelve audits passed after the negative-test matrix restored every mutation.
 
 **Deploy - step 17 complete:** Cloudflare Pages is connected to the repo and builds on pushes
 to `main`; the ingest job's commits trigger builds automatically. The approval gate passed on
@@ -1602,10 +1652,10 @@ by mutating only `dist`, observing that assertion fail, restoring the original b
 observing it pass. Finding 8 is closed: match detail and runtime archive presentation are now
 visually consistent without conflating either archive `<section>` or home `<li>` ownership.
 
-The established regression suite comprises these eleven audits (not seven), invoked from
-`site/`. `CLOCK` is an ISO UTC value in `YYYY-MM-DDTHH:mm:ssZ` form. Home browser, Detail, and
-Tournaments require a real installed Chrome or Edge executable from their explicit Windows
-paths; all three are unrunnable on Linux and in CI.
+The established regression suite comprises these twelve audits (not seven), invoked from
+`site/`. `CLOCK` is an ISO UTC value in `YYYY-MM-DDTHH:mm:ssZ` form. Home browser, Detail,
+Tournaments, and Heroes require a real installed Chrome or Edge executable from their
+explicit Windows paths; all four are unrunnable on Linux and in CI.
 
 | Audit | Invocation | Runtime requirement |
 |---|---|---|
@@ -1620,6 +1670,7 @@ paths; all three are unrunnable on Linux and in CI.
 | Links | `npm run audit:links -- --dist dist` | — |
 | Detail | `npm run audit:detail -- --dist dist` | Real installed Chrome or Edge; Windows only, not CI |
 | Tournaments | `npm run audit:tournaments -- --dist dist` | Real installed Chrome or Edge; Windows only, not CI |
+| Heroes | `npm run audit:heroes -- --dist dist` | Real installed Chrome or Edge; Windows only, not CI |
 
 Build regression reporting for step 23 uses total wall time only. Mean milliseconds per page
 is still printed by the existing profiler for diagnostics, but is not used as a regression
@@ -1644,7 +1695,7 @@ Cloudflare twenty-minute cap assertion.
 
 ## 8. Deferred — do not build
 
-v2 full historical backfill in CI · v3 team/player pages · v4 hero meta dashboard ·
+v2 full historical backfill in CI · v3 team/player pages ·
 DuckDB-WASM in the browser · live match ticker · search · user accounts · any paid service.
 
 If a v0/v1 decision would foreclose one of these, note it in the PR description rather than
@@ -1773,7 +1824,8 @@ and 2886796 (5). These appearances occur from 2021-01 through 2026-05.
 
 All 964 distinct non-null league IDs used by matches occur among the 10,127 IDs in
 `leagues.parquet`; there is no league-reference gap. All 127 distinct non-null draft hero IDs
-occur among the 127 IDs in `heroes.parquet`; there is no draft-hero gap. Match rows already
+and all 127 distinct player hero IDs occur among the 127 IDs in `heroes.parquet`; there is no
+hero-reference gap, and every reference hero is present in both fact tables. Match rows already
 carry denormalized league names, while draft rows do not carry hero names, so a future hero
 gap would directly affect draft rendering whereas the measured league set is doubly covered.
 
@@ -2128,3 +2180,13 @@ These steps continue the canonical numbering in `AGENTS.md`.
     resolve tournament links, parse emitted CSS for colour contrast and line ownership, sweep
     all thirteen required browser widths, and negative-test every new assertion before all
     eleven audits are rerun.
+26. **Hero index and hero pages.** Pre-render the primary-attribute-grouped `/heroes/` index
+    and one numeric `/heroes/:hero_id/` route for every reference hero. Compute pick, ban,
+    contest, and win rates with the explicit draft-match and decided-pick denominators; retain
+    null-result picks in pick totals; show all patch trends and lane-role distributions; and
+    do not add player rankings before the player-name backfill. Approval gate: independently
+    scan all committed fact shards and hero references, verify 127/127 draft/player coverage,
+    counts, denominators, summed picks, titles, links, patch and lane placement, and prove
+    team 0 = Radiant by joining picks to player sides. Parse emitted CSS, sweep all thirteen
+    required widths, and negative-test every new assertion—including an inverted team
+    interpretation—before all twelve audits are rerun.

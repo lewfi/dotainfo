@@ -211,10 +211,15 @@ const resolutionCounts = Object.fromEntries(
 const tournamentLinks = links.filter((link) => (
   link.source.startsWith('/tournaments/') || link.href.startsWith('/tournaments/')
 ));
+const heroLinks = links.filter((link) => (
+  link.source.startsWith('/heroes/') || link.href.startsWith('/heroes/')
+));
 const assertions = Object.freeze({
   everyInternalHrefResolves: resolutionCounts.unresolved === 0,
   everyTournamentHrefResolves:
     tournamentLinks.length > 0 && tournamentLinks.every((link) => link.resolution !== 'unresolved'),
+  everyHeroHrefResolves:
+    heroLinks.length > 0 && heroLinks.every((link) => link.resolution !== 'unresolved'),
   homeViewsWereFound: homeViews.length > 0,
   everyHomeViewHasOneLinkPerCard: homeViews.every((view) => view.links === view.cards),
   everyHomeViewLinkResolves: homeViews.every((view) => view.unresolved === 0),
@@ -246,6 +251,10 @@ console.log(`STEP17_INTERNAL_HREFS=${JSON.stringify({
 console.log(`STEP25_TOURNAMENT_HREFS=${JSON.stringify({
   links: tournamentLinks.length,
   unresolved: tournamentLinks.filter((link) => link.resolution === 'unresolved'),
+})}`);
+console.log(`STEP26_HERO_HREFS=${JSON.stringify({
+  links: heroLinks.length,
+  unresolved: heroLinks.filter((link) => link.resolution === 'unresolved'),
 })}`);
 console.log(`STEP17_ICONS=${JSON.stringify({
   htmlFiles: htmlFiles.length,
