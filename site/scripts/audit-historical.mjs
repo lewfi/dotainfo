@@ -7,6 +7,7 @@ import {
   HISTORICAL_MATCH_COLUMNS,
   historicalMatchShards,
 } from '../src/data/historical-artifacts.mjs';
+import { openDuckDB, queryRows, sourceUnionSql } from '../src/data/duckdb.mjs';
 import { loadReferences } from '../src/data/references.mjs';
 import {
   historicalRouteView,
@@ -29,6 +30,29 @@ const ORDINARY_OLD_ID = 7485948611;
 function argument(name) {
   const index = process.argv.indexOf(name);
   return index === -1 ? null : process.argv[index + 1];
+}
+
+async function readNdjsonIfPresent(filePath) {
+  try {
+    return (await readFile(filePath, 'utf8'))
+      .split(/\r?\n/)
+      .filter((line) => line.trim().length > 0)
+      .map((line) => JSON.parse(line));
+  } catch (error) {
+    if (error.code === 'ENOENT') return [];
+    throw error;
+  }
+}
+
+function startTimeMonth(startTime) {
+  if (!Number.isSafeInteger(startTime)) {
+    throw new TypeError(`late match has invalid start_time: ${startTime}`);
+  }
+  const date = new Date(startTime * 1_000);
+  if (!Number.isFinite(date.getTime())) {
+    throw new TypeError(`late match has invalid start_time: ${startTime}`);
+  }
+  return date.toISOString().slice(0, 7);
 }
 
 async function countFiles(directory) {
@@ -131,6 +155,7 @@ let gzipBytes = 0;
 let rows = 0;
 let excludedAdvantageFields = true;
 let exactColumns = true;
+let payloadMatchIdsAreUnique = true;
 let largest = { month: null, bytes: 0 };
 const payloads = new Map();
 for (const entry of payloadEntries) {
@@ -141,6 +166,9 @@ for (const entry of payloadEntries) {
   rawBytes += buffer.byteLength;
   gzipBytes += gzipSync(buffer, { level: 9 }).byteLength;
   rows += payload.matches.length;
+  payloadMatchIdsAreUnique &&= new Set(
+    payload.matches.map((match) => match.match_id),
+  ).size === payload.matches.length;
   if (buffer.byteLength > largest.bytes) largest = { month, bytes: buffer.byteLength };
   for (const match of payload.matches) {
     excludedAdvantageFields &&= !Object.hasOwn(match, 'radiant_gold_adv')
@@ -148,6 +176,53 @@ for (const entry of payloadEntries) {
     exactColumns &&= Object.keys(match).sort().join(',')
       === [...HISTORICAL_MATCH_COLUMNS].sort().join(',');
   }
+}
+
+const matchRoot = expectedShards.length > 0
+  ? path.dirname(expectedShards[0].path)
+  : path.resolve(process.cwd(), '../data/matches');
+const lateRows = await readNdjsonIfPresent(path.join(matchRoot, 'late.ndjson'));
+const lateRowsByMonth = new Map();
+for (const row of lateRows) {
+  const month = startTimeMonth(row.start_time);
+  if (!lateRowsByMonth.has(month)) lateRowsByMonth.set(month, []);
+  lateRowsByMonth.get(month).push(row);
+}
+const regularMonths = new Set(expectedShards.map((shard) => shard.month));
+const orphanLateMonths = [...lateRowsByMonth.keys()]
+  .filter((month) => !regularMonths.has(month))
+  .sort();
+const lateRowsAppearInStartTimeMonth = [...lateRowsByMonth].every(([month, monthRows]) => {
+  const payloadIds = new Set(
+    (payloads.get(month)?.matches ?? []).map((match) => match.match_id),
+  );
+  return monthRows.every((row) => payloadIds.has(row.match_id));
+});
+const lateRowsStayInStartTimeMonth = lateRows.every((row) => {
+  const expectedMonth = startTimeMonth(row.start_time);
+  return [...payloads].every(([month, payload]) => month === expectedMonth
+    || payload.matches.every((match) => match.match_id !== row.match_id));
+});
+
+let everyRegularMatchRemainsInItsShardPayload = true;
+let regularRows = 0;
+const database = await openDuckDB();
+try {
+  for (const shard of expectedShards) {
+    const directRows = await queryRows(
+      database.connection,
+      sourceUnionSql([shard], 'matches', ['match_id']),
+    );
+    regularRows += directRows.length;
+    const payloadIds = new Set(
+      (payloads.get(shard.month)?.matches ?? []).map((match) => match.match_id),
+    );
+    everyRegularMatchRemainsInItsShardPayload &&= directRows.every(
+      (row) => payloadIds.has(row.match_id),
+    );
+  }
+} finally {
+  database.close();
 }
 
 const manifestBuffer = await readFile(path.join(artifactRoot, 'manifest.json'));
@@ -228,6 +303,11 @@ const assertions = Object.freeze({
   payloadCountMatchesCommittedShards: payloadEntries.length === expectedShards.length,
   everyPayloadHasExactMatchOnlyColumns: exactColumns,
   advantageArraysExcludedEntirely: excludedAdvantageFields,
+  lateRowsAppearInStartTimeMonth,
+  lateRowsStayInStartTimeMonth,
+  payloadMatchIdsAreUnique,
+  everyRegularMatchRemainsInItsShardPayload,
+  everyLateMonthHasRegularShard: orphanLateMonths.length === 0,
   manifestMatchesEveryPayloadRange: manifestMatchesPayloads,
   observedMonthRangesHaveZeroOverlaps: overlaps === 0,
   allSevenIncompleteMatchesRenderExplicitUnknowns:
@@ -252,6 +332,15 @@ console.log(`STEP15_PAYLOADS=${JSON.stringify({
   matches: rows,
   rawBytes,
   gzipBytes,
+})}`);
+console.log(`STEP24_LATE_ROWS=${JSON.stringify({
+  filePresent: lateRows.length > 0,
+  rows: lateRows.length,
+  rowsByMonth: Object.fromEntries(
+    [...lateRowsByMonth].map(([month, monthRows]) => [month, monthRows.length]),
+  ),
+  regularRows,
+  orphanMonths: orphanLateMonths,
 })}`);
 console.log(`STEP15_MANIFEST=${JSON.stringify({
   ranges: manifest.ranges.length,

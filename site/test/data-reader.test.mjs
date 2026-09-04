@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { copyFile, mkdir, mkdtemp, readdir, rm } from 'node:fs/promises';
+import { copyFile, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -9,6 +9,7 @@ import { createCatalog, lateShards } from '../src/data/catalog.mjs';
 import { buildClockEpoch } from '../src/data/clock.mjs';
 import { directWindowAudit } from '../src/data/direct-window-audit.mjs';
 import { openDuckDB } from '../src/data/duckdb.mjs';
+import { historicalMonthPayload } from '../src/data/historical-artifacts.mjs';
 import { DataReader } from '../src/data/queries.mjs';
 import { HOME_COLUMNS } from '../src/data/schema.mjs';
 
@@ -96,6 +97,17 @@ async function boundaryFixtureDataRoot(t) {
     database.close();
   }
   return root;
+}
+
+async function readNdjson(filePath) {
+  return (await readFile(filePath, 'utf8'))
+    .split(/\r?\n/)
+    .filter((line) => line.trim().length > 0)
+    .map((line) => JSON.parse(line));
+}
+
+async function writeNdjson(filePath, rows) {
+  await writeFile(filePath, `${rows.map((row) => JSON.stringify(row)).join('\n')}\n`, 'utf8');
 }
 
 test('catalog accepts an absent late-arrival shard', async (t) => {
@@ -239,5 +251,69 @@ test('window query filters rows across both straddling boundary months', async (
   assert.deepEqual(
     { count: directResult.count, tiers: directResult.tiers },
     { count: 3, tiers: { professional: 2, premium: 1 } },
+  );
+});
+
+test('historical payload includes a late row in its start-time month', async (t) => {
+  const dataRoot = await fixtureDataRoot(t, { withLate: true });
+  const payload = await historicalMonthPayload('2026-01', { dataRoot });
+
+  assert.ok(payload.matches.some((row) => row.match_id === 1500));
+});
+
+test('historical payload does not leak a late row into a different month', async (t) => {
+  const dataRoot = await fixtureDataRoot(t, { withLate: true });
+  const payload = await historicalMonthPayload('2025-12', { dataRoot });
+
+  assert.ok(payload.matches.every((row) => row.match_id !== 1500));
+});
+
+test('historical payload deduplicates regular and late rows by match id', async (t) => {
+  const dataRoot = await fixtureDataRoot(t, { withLate: true });
+  const regularPath = path.join(dataRoot, 'matches', '2026-01.ndjson');
+  const latePath = path.join(dataRoot, 'matches', 'late.ndjson');
+  const [regularRows, lateRows] = await Promise.all([
+    readNdjson(regularPath),
+    readNdjson(latePath),
+  ]);
+  await writeNdjson(latePath, [
+    ...lateRows,
+    { ...regularRows[0], league_name: 'Duplicate late row' },
+  ]);
+
+  const payload = await historicalMonthPayload('2026-01', { dataRoot });
+  const duplicates = payload.matches.filter((row) => row.match_id === regularRows[0].match_id);
+  assert.equal(duplicates.length, 1);
+  assert.equal(duplicates[0].league_name, 'Hot League');
+});
+
+test('historical payload preserves an out-of-month row from its regular shard', async (t) => {
+  const dataRoot = await fixtureDataRoot(t, { withLate: true });
+  const regularPath = path.join(dataRoot, 'matches', '2026-01.ndjson');
+  const regularRows = await readNdjson(regularPath);
+  const outOfMonth = {
+    ...regularRows[0],
+    match_id: 2003,
+    start_time: Date.UTC(2025, 11, 31, 23, 59, 59) / 1_000,
+  };
+  await writeNdjson(regularPath, [...regularRows, outOfMonth]);
+
+  const payload = await historicalMonthPayload('2026-01', { dataRoot });
+  assert.ok(payload.matches.some((row) => row.match_id === outOfMonth.match_id));
+});
+
+test('historical payload fails closed when a late row has no regular month shard', async (t) => {
+  const dataRoot = await fixtureDataRoot(t, { withLate: true });
+  const latePath = path.join(dataRoot, 'matches', 'late.ndjson');
+  const [lateRow] = await readNdjson(latePath);
+  await writeNdjson(latePath, [{
+    ...lateRow,
+    match_id: 2500,
+    start_time: Date.UTC(2026, 1, 1) / 1_000,
+  }]);
+
+  await assert.rejects(
+    historicalMonthPayload('2026-01', { dataRoot }),
+    /late match month\(s\) have no regular shard: 2026-02/,
   );
 });

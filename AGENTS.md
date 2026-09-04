@@ -30,6 +30,7 @@ Refer to steps by these numbers only. Do not renumber.
 21. Token migration for the second visual design
 22. Home feed visual overhaul
 23. Match detail and archive visual consistency
+24. late.ndjson historical payload gap
 
 ## Never
 

@@ -1208,11 +1208,27 @@ league banners, so `logo_url` and `banner` are omitted without changing the disp
 summary. This reduced `dist/404.html` from 4,109,130 bytes to 557,384 bytes; the inline
 reference JSON itself fell from 4,106,939 bytes to 555,193 bytes.
 
-One reachability gap remains recorded, not fixed in this preparation step. Historical
-monthly payloads and the range manifest are built from `regularShards()` and therefore
-exclude `late.ndjson`. Once late arrivals leave the trailing 90-day pre-render window, they
-become unreachable through the historical route. This first affects the roughly 320 planned
-late rows for 2026-08, including 135 TI 2026 premium matches, around 2026-11-29.
+**Late-arrival historical payload gap - step 24 closed.** `historicalMatchShards()` remains
+the regular-shard month enumerator consumed by the build profiler and historical audit.
+For each enumerated month, `historicalMonthPayload(month)` now unions the regular shard with
+only the rows from `data/matches/late.ndjson` whose `start_time` falls within that month's
+half-open UTC bounds. The bounds predicate applies only to the late branch: a row already
+stored in a regular monthly shard remains in that shard's payload even when its `start_time`
+falls outside the filename month. Applying the predicate to the combined result would hide
+such a row and recreate the reachability defect in a quieter form.
+
+The combined payload is deduplicated by `match_id`, with the regular row taking precedence,
+and payload generation asserts that every emitted match ID is unique. A late row whose
+`start_time` month has no regular shard cannot be reached by the deliberately unchanged
+regular-shard month enumerator. The explicit policy is therefore fail-closed: artifact
+generation names the orphan month and aborts rather than silently omitting it. The historical
+gate independently parses `late.ndjson`, groups rows by `start_time` month, verifies placement
+and isolation, checks payload uniqueness and complete regular-row retention, and asserts that
+every late month has a regular shard. This closes the reachability gap before the roughly 320
+planned late rows for 2026-08, including 135 TI 2026 premium matches, age out of the recent
+window. The implementation and fixture coverage are not yet exercised against real data;
+the explicitly bounded September 12 backfill is expected to make `late.ndjson` non-empty for
+the first time.
 
 **Deploy - step 17 complete:** Cloudflare Pages is connected to the repo and builds on pushes
 to `main`; the ingest job's commits trigger builds automatically. The approval gate passed on
@@ -2042,3 +2058,12 @@ These steps continue the canonical numbering in `AGENTS.md`.
     assertion fails under an isolated emitted-output mutation, and retain all nine prior
     audits, link integrity, the six-view no-JavaScript home cascade, and the Cloudflare build
     cap.
+24. **late.ndjson historical payload gap.** Keep regular match shards as the historical month
+    enumerator, but add the matching `late.ndjson` rows to each monthly match-only payload by
+    half-open UTC `start_time` bounds. Bound only the late branch, preserve every row already
+    assigned to the regular shard, deduplicate by `match_id` with regular-row precedence, and
+    assert payload uniqueness. Fail artifact generation when a late row belongs to a month
+    with no regular shard. Approval gate: fixture tests cover placement, non-leakage,
+    deduplication, regular out-of-month retention, and the orphan-month failure; the historical
+    audit independently groups the late file by `start_time` month and each new assertion is
+    negative-tested before all ten established audits are rerun.
