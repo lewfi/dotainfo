@@ -76,6 +76,22 @@ function replaceRowResultForMaps(html, mapIds, result) {
   return `${html.slice(0, rowStart)}${changed}${html.slice(rowOpenEnd + 1)}`;
 }
 
+function reclassifyStandaloneAsInternallyConsistentSeries(html, example) {
+  assert.ok(example?.maps?.length === 1, 'standalone mutation example is unavailable');
+  const marker = `data-map-rows="${example.maps.join(',')}"`;
+  const markerIndex = html.indexOf(marker);
+  assert.ok(markerIndex >= 0, `could not find emitted standalone ${example.maps.join(',')}`);
+  const rowStart = html.lastIndexOf('<li ', markerIndex);
+  const rowOpenEnd = html.indexOf('>', rowStart);
+  const opening = html.slice(rowStart, rowOpenEnd + 1);
+  const changed = opening
+    .replace('data-series-kind="standalone"', 'data-series-kind="series"')
+    .replace('data-row-label="Single game"', 'data-row-label="Series"')
+    .replace('>', ` data-series-result="${example.result.join(',')}">`);
+  assert.notEqual(changed, opening, 'standalone reclassification did not find its target');
+  return `${html.slice(0, rowStart)}${changed}${html.slice(rowOpenEnd + 1)}`;
+}
+
 const mapPayloads = [...home.matchAll(/data-map-rows="([\d,]+)"/g)].map((match) => match[1].split(',').map(Number));
 const multiMap = mapPayloads.find((maps) => maps.length > 1);
 const otherMap = mapPayloads.find((maps) => !multiMap.includes(maps[0]))[0];
@@ -99,6 +115,25 @@ const baseline = await command(['--only', 'sideSwappedSeriesScoresCorrectly']);
 assert.equal(baseline.code, 0, baseline.output);
 const auditResult = JSON.parse(/STEP29_HOME_SERIES_AUDIT=(\{.*\})/.exec(baseline.output)?.[1]);
 assert.ok(auditResult.swappedMutationExample, 'no side-swapped series with a distinct side score found');
+
+assert.ok(auditResult.zeroSeriesStandaloneExample, 'no emitted series-id-zero standalone found');
+await runAssertion('feedPartitionMatchesIndependentRecomputation', fileMutation(HOME_PAGE, (html) => (
+  reclassifyStandaloneAsInternallyConsistentSeries(html, auditResult.zeroSeriesStandaloneExample)
+)));
+
+await runAssertion('noSeriesGroupContainsNoSeriesSentinel', fileMutation(HOME_PAGE, (html) => (
+  reclassifyStandaloneAsInternallyConsistentSeries(html, auditResult.zeroSeriesStandaloneExample)
+)));
+
+assert.ok(auditResult.nullTeamStandaloneExample, 'no emitted null-team standalone found');
+await runAssertion('noSeriesGroupContainsNullTeamId', fileMutation(HOME_PAGE, (html) => (
+  reclassifyStandaloneAsInternallyConsistentSeries(html, auditResult.nullTeamStandaloneExample)
+)));
+
+await runAssertion('standaloneRowCountMatchesIndependentRecomputation', fileMutation(HOME_PAGE, (html) => (
+  reclassifyStandaloneAsInternallyConsistentSeries(html, auditResult.zeroSeriesStandaloneExample)
+)));
+
 await runAssertion('sideSwappedSeriesScoresCorrectly', fileMutation(HOME_PAGE, (html) => (
   replaceRowResultForMaps(
     html,

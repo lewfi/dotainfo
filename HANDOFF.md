@@ -1469,23 +1469,31 @@ interactive control. Every result row retains a resolving full-match link whethe
 progressive enhancement runs.
 
 `series_id` is not a safe global key. The committed-history measurement that motivated this
-design found 71 series-ID-only groups with multiple team pairings, 431 spanning more than 24
-hours (one spanning 613 days), and 15 with more than five maps; adding `leagueid` left all 71
-mixed pairings. The grouping key is therefore `(series_id, leagueid, unordered
-{radiant_team_id, dire_team_id})`, followed by a split wherever consecutive maps are more
-than six hours apart. That rule produced 71,187 measured groups, none over 24 hours, and six
-groups over five maps (0.008%). Those six are valid inputs: the UI renders any map count and
-must never impose a Bo5 maximum.
+design found series-ID-only groups with multiple team pairings, groups spanning more than 24
+hours, and groups with more than five maps. For rows that are eligible to form a series, the
+grouping key is therefore `(series_id, leagueid, unordered {radiant_team_id, dire_team_id})`,
+followed by a split wherever consecutive maps are more than six hours apart. The UI renders
+any map count and must never impose a Bo5 maximum.
+
+**Corrected finding, 2026-09-05.** Step 29 originally treated only null `series_id` values as
+standalone, but zero is Dota's no-series sentinel. Across the measured committed data there
+are 209 null values, 6,885 zeros, and 140,155 positive values. Both null and zero therefore
+produce separate Single game rows; two nearby zero-sentinel matches are never grouped. A
+match whose `radiant_team_id` or `dire_team_id` is null also cannot form a reliable unordered
+pairing key and is routed to a standalone row with the existing explicit unknown-team state,
+never filtered. The archive contains 3,431 matches with both team IDs null; the shipped rule
+had collapsed as many as 71 unrelated matches from league 20134 into one fabricated row
+spanning eight hours. Only a positive `series_id` with both team IDs present is eligible for
+series grouping. The earlier aggregate group counts mixed these ineligible rows into the
+series population and are withdrawn rather than treated as corrected measurements.
 
 Series scores are wins per durable `team_id`, using the first map only to establish the two
 display teams. They are never Radiant-win versus Dire-win totals because teams swap sides
 between maps. A null `radiant_win` is retained as an explicitly unknown map and increments
-neither team's score. A missing `series_id` produces a labelled Single game row with no
-fabricated 1–0 score. The measured 90-day snapshot contained 1,420 matches: 618 series plus
-189 standalone matches, or 807 possible feed rows. The 189 no-series matches are 13.3% of the
-window, versus 4.8% archive-wide, so standalone handling is a normal path. The same snapshot
-had 1/13/189 minimum/median/maximum matches per day, 130 median and 1,890 maximum player rows
-per day, and seven leagues with a match in the preceding 14 days.
+neither team's score. A standalone row has no fabricated 1–0 score. Standalone handling is a
+normal path, not an exceptional state. The measured snapshot also had 1/13/189
+minimum/median/maximum matches per day, 130 median and 1,890 maximum player rows per day, and
+seven leagues with a match in the preceding 14 days.
 
 The Active tournaments strip contains exactly the leagues with at least one match in the
 half-open trailing-14-day window at the build clock. Expansion constructs accessible map
@@ -1508,21 +1516,28 @@ match and player shard directly with its own DuckDB scan and independently recon
 named side-swapped assertion), standalone states, day payload placement and exact schema,
 active leagues, six no-JavaScript views, lazy/cache behavior, accessible tabs, all thirteen
 viewport widths, and the home gzip bound. It shares no grouping or query implementation with
-the production side. Every assertion is negative-tested by mutating only `dist`, observing
-failure, restoring the exact bytes, and observing success; the score matrix explicitly
-replaces a 2–0 team score with its incorrect 1–1 side score.
+the production side. Its partition assertion compares set equality of `(row type, sorted
+member match_ids)` for every emitted and independently derived row, and a separate named
+assertion requires the standalone count to match exactly. Named exclusions also reject any
+emitted series containing a null/zero `series_id` or either null team ID. Counts or
+within-group properties alone are insufficient: the negative matrix reclassifies a
+one-match standalone as an internally consistent series and proves the typed partition
+comparison catches a wrong partition that the prior property and ID-only assertions did not.
+Every assertion is negative-tested by mutating only `dist`, observing failure, restoring the
+exact bytes, and observing success; the score matrix
+explicitly replaces a 2–0 team score with its incorrect 1–1 side score.
 
 The step 21 decorative-border contract remains literal. New decorative `--line` selectors
 begin with `.active-tournaments ` or `.series-expansion `, and each corresponding component
 owns a separate `--line-strong` boundary; no existing audit selector filter was narrowed.
-At build clock `2026-09-05T06:55:56Z`, the emitted population was 293 series plus seven
-standalone rows, including 68 side-swapped series, with seven active tournaments. It emitted
-23 day shards; the largest, `2026-08-29.json`, was 148,649 bytes raw and 17,174 bytes at gzip
-level 9. `dist/index.html` was 670,899 bytes raw and 54,140 bytes gzipped, below the prior
-56,024-byte gzip baseline. The final verification build completed in 113,006.251 ms against
+At build clock `2026-09-05T07:20:22.859Z`, the corrected emitted population was 139 series
+plus 161 standalone rows, including 45 side-swapped series, with seven active tournaments.
+It emitted 13 day shards; the largest, `2026-08-29.json`, was 234,256 bytes raw and 27,496
+bytes at gzip level 9. `dist/index.html` was 669,788 bytes raw and 48,656 bytes gzipped, below
+the 56,024-byte gzip baseline. The verification build completed in 92,952.219 ms against
 Cloudflare's 1,200,000 ms cap; no cross-machine or ten-minute-headroom comparison is used.
-All 46 Node tests and all fifteen audits passed, and the full negative-test matrix restored
-every mutation before the final audit run.
+All 51 Node tests and all fifteen audits passed, and the complete 17-assertion negative-test
+matrix restored every mutation before the final audit run.
 
 **Deploy - step 17 complete:** Cloudflare Pages is connected to the repo and builds on pushes
 to `main`; the ingest job's commits trigger builds automatically. The approval gate passed on
@@ -2415,13 +2430,15 @@ These steps continue the canonical numbering in `AGENTS.md`.
     before all fourteen audits are rerun.
 29. **Home feed series grouping, active tournaments, expandable results.** Replace per-map
     home cards with one population of the newest 300 composite-key series and standalone
-    results, score wins by `team_id`, and split composite groups after any consecutive gap
-    over six hours without imposing a maximum map count. Add the trailing-14-day active
+    results. Treat null/zero `series_id` or either null team ID as standalone; otherwise score
+    wins by `team_id` and split composite groups after any consecutive gap over six hours
+    without imposing a maximum map count. Add the trailing-14-day active
     tournament strip and progressively enhanced one-map-at-a-time tabs. Keep player rows out
     of HTML in exact-schema UTC feed-day shards, fetched lazily and cached for the document
     session; never present numeric account IDs as names. Preserve the premium-plus-professional
     default and all six no-JavaScript tier choices. Approval gate: independently scan unpruned
-    fact data for grouping, per-team and side-swapped scores, standalone treatment, exact 300
-    membership, active leagues, and complete day shards; prove lazy/cache and tabs behavior,
+    fact data for grouping, per-team and side-swapped scores, standalone treatment, exact
+    typed partition membership and standalone count, active leagues, and complete day shards;
+    prove lazy/cache and tabs behavior,
     sweep all thirteen widths, keep home gzip below the 56,024-byte baseline, and negative-test
     every assertion before all fifteen audits are rerun.

@@ -27,6 +27,10 @@ const CHROME_PATHS = Object.freeze([
 ]);
 const ASSERTION_NAMES = Object.freeze([
   'emittedRowsMatchIndependentGrouping',
+  'feedPartitionMatchesIndependentRecomputation',
+  'noSeriesGroupContainsNoSeriesSentinel',
+  'noSeriesGroupContainsNullTeamId',
+  'standaloneRowCountMatchesIndependentRecomputation',
   'groupingKeyKeepsLeaguePairAndSpanValid',
   'seriesScoresCountWinsPerTeamId',
   'sideSwappedSeriesScoresCorrectly',
@@ -101,11 +105,16 @@ function groupKey(row) {
   return JSON.stringify([row.series_id, row.leagueid, ...pair(row)]);
 }
 
+function isDirectStandalone(row) {
+  return row.series_id === null || row.series_id === 0
+    || row.radiant_team_id === null || row.dire_team_id === null;
+}
+
 function directGroups(input) {
   const groups = [];
   const keyed = new Map();
   for (const row of input) {
-    if (row.series_id === null) {
+    if (isDirectStandalone(row)) {
       groups.push({ kind: 'standalone', rows: [row] });
       continue;
     }
@@ -425,6 +434,14 @@ const sourceByMatch = new Map(matches.map((row) => [row.match_id, row]));
 const expectedMapIds = expectedGroups.map((group) => group.rows.map((row) => row.match_id));
 const emittedMapIds = emitted.map((group) => group.maps.map((map) => Number(map[0])));
 const groupSignature = (ids) => ids.join(',');
+const partitionSignature = (kind, ids) => JSON.stringify([
+  kind,
+  [...ids].sort((left, right) => left - right),
+]);
+const expectedPartition = expectedGroups
+  .map((group) => partitionSignature(group.kind, group.rows.map((row) => row.match_id))).sort();
+const emittedPartition = emitted
+  .map((group) => partitionSignature(group.kind, group.maps.map((map) => Number(map[0])))).sort();
 const expectedBySignature = new Map(expectedGroups.map((group) => [
   groupSignature(group.rows.map((row) => row.match_id)), group,
 ]));
@@ -438,6 +455,38 @@ const structuralValidity = emitted.every((group) => {
     && source.slice(1).every((row, index) => row.start_time - source[index].start_time <= SIX_HOURS)
     && source.at(-1).start_time - first.start_time <= DAY_SECONDS;
 });
+const emittedSeriesSources = emitted.filter((group) => group.kind === 'series').map((group) => (
+  group.maps.map((map) => sourceByMatch.get(Number(map[0])))
+));
+const noSeriesSentinelInSeries = emittedSeriesSources.every((source) => (
+  source.length > 0 && source.every((row) => row && row.series_id !== null && row.series_id !== 0)
+));
+const noNullTeamInSeries = emittedSeriesSources.every((source) => (
+  source.length > 0 && source.every((row) => (
+    row && row.radiant_team_id !== null && row.dire_team_id !== null
+  ))
+));
+const expectedStandaloneCount = expectedGroups.filter((group) => group.kind === 'standalone').length;
+const emittedStandaloneCount = emitted.filter((group) => group.kind === 'standalone').length;
+const zeroSeriesStandaloneGroup = emitted.find((group) => (
+  group.kind === 'standalone'
+  && group.maps.some((map) => sourceByMatch.get(Number(map[0]))?.series_id === 0)
+));
+const nullTeamStandaloneGroup = emitted.find((group) => (
+  group.kind === 'standalone'
+  && group.maps.some((map) => {
+    const row = sourceByMatch.get(Number(map[0]));
+    return row && (row.radiant_team_id === null || row.dire_team_id === null);
+  })
+));
+function wrongSeriesExample(group) {
+  if (!group) return null;
+  const maps = group.maps.map((map) => Number(map[0]));
+  const expected = directScore({ rows: maps.map((matchId) => sourceByMatch.get(matchId)) });
+  return { maps, result: [expected.one, expected.two, expected.unknown] };
+}
+const zeroSeriesStandaloneExample = wrongSeriesExample(zeroSeriesStandaloneGroup);
+const nullTeamStandaloneExample = wrongSeriesExample(nullTeamStandaloneGroup);
 const scoreResults = emitted.map((actual) => {
   const group = expectedBySignature.get(groupSignature(actual.maps.map((map) => Number(map[0]))));
   return { actual, group, expected: group ? directScore(group) : null };
@@ -502,6 +551,11 @@ if (!only || ['sixViewsAndApprovedDefaultWorkWithoutJavaScript', 'expansionIsLaz
 const computed = {
   emittedRowsMatchIndependentGrouping: JSON.stringify(emittedMapIds.map(groupSignature).sort())
     === JSON.stringify(expectedMapIds.map(groupSignature).sort()),
+  feedPartitionMatchesIndependentRecomputation: JSON.stringify(emittedPartition)
+    === JSON.stringify(expectedPartition),
+  noSeriesGroupContainsNoSeriesSentinel: noSeriesSentinelInSeries,
+  noSeriesGroupContainsNullTeamId: noNullTeamInSeries,
+  standaloneRowCountMatchesIndependentRecomputation: emittedStandaloneCount === expectedStandaloneCount,
   groupingKeyKeepsLeaguePairAndSpanValid: structuralValidity,
   seriesScoresCountWinsPerTeamId: scoreValidity,
   sideSwappedSeriesScoresCorrectly: swappedResults.length > 0 && swappedResults.every(({ actual, expected }) => (
@@ -551,6 +605,9 @@ console.log(`STEP29_HOME_SERIES_AUDIT=${JSON.stringify({
   rows: emitted.length,
   series: emitted.filter((row) => row.kind === 'series').length,
   standalone: emitted.filter((row) => row.kind === 'standalone').length,
+  expectedStandalone: expectedStandaloneCount,
+  zeroSeriesStandaloneExample,
+  nullTeamStandaloneExample,
   sideSwappedSeries: swappedResults.length,
   swappedMutationExample,
   activeTournaments: actualActive.length,

@@ -42,13 +42,50 @@ test('series grouping keys by series, league, unordered team pair and six-hour s
   ]);
 });
 
-test('missing series ids remain labelled standalone rows', () => {
+test('series id zero remains a standalone row', () => {
+  const [group] = groupHomeSeriesRows([row({ series_id: 0 })]);
+  assert.equal(group.kind, 'standalone');
+  assert.equal(group.rows.length, 1);
+});
+
+test('null series id remains a standalone row', () => {
+  const [group] = groupHomeSeriesRows([row({ series_id: null })]);
+  assert.equal(group.kind, 'standalone');
+  assert.equal(group.rows.length, 1);
+});
+
+test('either one null team id makes a match standalone', () => {
   const groups = groupHomeSeriesRows([
-    row({ match_id: 1, series_id: null }),
-    row({ match_id: 2, series_id: null }),
+    row({ match_id: 1, radiant_team_id: null }),
+    row({ match_id: 2, start_time: 2_000, dire_team_id: null }),
   ]);
   assert.equal(groups.length, 2);
   assert.ok(groups.every((group) => group.kind === 'standalone' && group.rows.length === 1));
+});
+
+test('two null team ids make a match standalone', () => {
+  const [group] = groupHomeSeriesRows([row({ radiant_team_id: null, dire_team_id: null })]);
+  assert.equal(group.kind, 'standalone');
+  assert.equal(group.rows.length, 1);
+});
+
+test('nearby series id zero matches remain two standalone rows', () => {
+  const groups = groupHomeSeriesRows([
+    row({ match_id: 1, series_id: 0 }),
+    row({ match_id: 2, series_id: 0, start_time: 4_600 }),
+  ]);
+  assert.equal(groups.length, 2);
+  assert.ok(groups.every((group) => group.kind === 'standalone' && group.rows.length === 1));
+  assert.deepEqual(groups.map((group) => group.rows[0].match_id), [2, 1]);
+});
+
+test('positive series ids still group genuine multi-map series', () => {
+  const [group] = groupHomeSeriesRows([
+    row({ match_id: 1 }),
+    row({ match_id: 2, start_time: 2_000 }),
+  ]);
+  assert.equal(group.kind, 'series');
+  assert.deepEqual(group.rows.map((candidate) => candidate.match_id), [1, 2]);
 });
 
 test('series grouping preserves every map without imposing a best-of-five maximum', () => {

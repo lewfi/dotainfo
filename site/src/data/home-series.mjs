@@ -18,10 +18,20 @@ function baseKey(row, pair) {
   return [row.series_id, row.leagueid, ...pair].map(idPart).join(':');
 }
 
+function isStandalone(row) {
+  return row.series_id === null
+    || row.series_id === undefined
+    || row.series_id === 0
+    || row.radiant_team_id === null
+    || row.radiant_team_id === undefined
+    || row.dire_team_id === null
+    || row.dire_team_id === undefined;
+}
+
 function freezeGroup(rows, pair, segment) {
   const first = rows[0];
   const last = rows.at(-1);
-  const standalone = first.series_id === null || first.series_id === undefined;
+  const standalone = isStandalone(first);
   return Object.freeze({
     id: standalone
       ? `match-${first.match_id}`
@@ -45,7 +55,7 @@ export function groupHomeSeriesRows(rows) {
   const keyed = new Map();
 
   for (const row of rows) {
-    if (row.series_id === null || row.series_id === undefined) {
+    if (isStandalone(row)) {
       groups.push(freezeGroup([row], teamPair(row), 0));
       continue;
     }
