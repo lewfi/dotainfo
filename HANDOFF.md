@@ -1559,6 +1559,20 @@ the global `:focus-visible` outline and `--focus` token unchanged while preventi
 from crossing the input/button seam; ordinary mouse clicks do not trigger a container-level
 `:focus-within` treatment.
 
+**Discoverability core - step 31 complete.** The canonical public origin is
+`https://dotainfo.pages.dev`. Every emitted HTML document receives one absolute canonical
+URL derived from its own Astro pathname, preserving the trailing slash, plus a description,
+Open Graph title/description/URL metadata, and the summary Twitter card declaration. The
+shared layout provides a site-level description only as a fallback. Match, team, tournament,
+hero, directory-index, and search routes pass descriptions specific to their page content;
+existing document titles remain unchanged for the separate step 32 correction.
+
+`@astrojs/sitemap` emits only Astro's genuinely pre-rendered routes. The static `404.html`
+document is excluded, and client-resolved historical match URLs are never supplied as custom
+pages because they are not static routes. `audit:metadata` independently derives canonical
+URLs from every emitted HTML path and requires exact two-way set equality with the sitemap,
+excluding only `404.html`.
+
 **Deploy - step 17 complete:** Cloudflare Pages is connected to the repo and builds on pushes
 to `main`; the ingest job's commits trigger builds automatically. The approval gate passed on
 the live `dotainfo.pages.dev` deployment. `/matches/7485890286/` was measured returning HTTP
@@ -1882,7 +1896,7 @@ by mutating only `dist`, observing that assertion fail, restoring the original b
 observing it pass. Finding 8 is closed: match detail and runtime archive presentation are now
 visually consistent without conflating either archive `<section>` or home `<li>` ownership.
 
-The established regression suite comprises these fifteen audits (not seven), invoked from
+The established regression suite comprises these sixteen audits (not seven), invoked from
 `site/`. `CLOCK` is an ISO UTC value in `YYYY-MM-DDTHH:mm:ssZ` form. Home browser, Detail,
 Tournaments, Heroes, Teams, Search, and Home series require a real installed Chrome or Edge
 executable from their explicit Windows paths; all seven are unrunnable on Linux and in CI.
@@ -1904,6 +1918,7 @@ executable from their explicit Windows paths; all seven are unrunnable on Linux 
 | Teams | `npm run audit:teams -- --dist dist` | Real installed Chrome or Edge; Windows only, not CI |
 | Search | `npm run audit:search -- --dist dist` | Real installed Chrome or Edge; Windows only, not CI |
 | Home series | `npm run audit:home-series -- --clock CLOCK --dist dist` | Real installed Chrome or Edge; Windows only, not CI |
+| Metadata | `npm run audit:metadata -- --dist dist` | None |
 
 Build regression reporting for step 23 uses total wall time only. Mean milliseconds per page
 is still printed by the existing profiler for diagnostics, but is not used as a regression
