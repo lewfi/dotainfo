@@ -59,3 +59,17 @@ Refer to steps by these numbers only. Do not renumber.
   HEAD and origin/main as a failed step to report, not a status line to paste.
 - Update HANDOFF.md when a decision changes the spec, in the same commit
 - Start each step assuming no prior conversation context
+
+## Agent skills
+
+### Issue tracker
+
+Issues and specs are tracked in GitHub Issues via the `gh` CLI. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+The five canonical triage roles use their default label names. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+This repository uses the single-context layout. See `docs/agents/domain.md`.
