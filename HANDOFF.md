@@ -1573,6 +1573,30 @@ pages because they are not static routes. `audit:metadata` independently derives
 URLs from every emitted HTML path and requires exact two-way set equality with the sitemap,
 excluding only `404.html`.
 
+**Structured data and title corrections - step 32 complete.** Document titles reserve the
+em dash for the single boundary before `DotaInfo`. Match titles use a comma before
+`match ID`, and pages after the first in a team or tournament series use a comma followed by
+lowercase `page N`. Page 1 descriptions retain their existing wording; later team and
+tournament descriptions add `page N` so distinct canonical pages in one pagination series
+do not share a description.
+
+The shared layout accepts an optional Open Graph type. Pre-rendered match pages pass
+`article`; every other emitted page retains the `website` default. The same layout emits at
+most one JSON-LD block when a page supplies committed-data-backed structured data. Match
+pages emit `SportsEvent` with the event name, ISO 8601 UTC start time, and both competitors as
+`SportsTeam` values whose names come from the match row's write-time snapshots and whose
+identities use durable team IDs. Team pages emit `SportsTeam` with the page's team name and
+canonical URL. Hero, tournament, directory-index, search, home, 404, and client-resolved
+historical pages omit JSON-LD until a supported type and all required values can be sourced;
+no placeholder, guessed, or empty-string fields are emitted.
+
+`audit:metadata` continues to scan every emitted HTML page. In addition to the step 31
+canonical, description, Open Graph, and sitemap assertions, it rejects multiple em dashes or
+a missing site-name suffix in titles, repeated descriptions within one team or tournament
+pagination series, any mismatch between exact emitted match routes and `article` pages, and
+invalid or unsupported JSON-LD. The SportsEvent-bearing page set must equal the independently
+derived match-route set in both directions.
+
 **Deploy - step 17 complete:** Cloudflare Pages is connected to the repo and builds on pushes
 to `main`; the ingest job's commits trigger builds automatically. The approval gate passed on
 the live `dotainfo.pages.dev` deployment. `/matches/7485890286/` was measured returning HTTP

@@ -16,9 +16,39 @@ const detail = await reader.detail(matchId);
 if (!detail) throw new Error(`recent match ${matchId} was not found during rendering`);
 const model = createMatchDetailModel(detail, references);
 const matchup = `${model.summary.teams.radiant.name.display} vs ${model.summary.teams.dire.name.display}`;
-const title = `${matchup} — match ${matchId} — DotaInfo`;
+const title = `${matchup}, match ${matchId} — DotaInfo`;
+const rawTeam = (side) => {
+  const rawTeamId = detail.match[`${side}_team_id`];
+  const teamId = rawTeamId === null || rawTeamId === undefined ? null : Number(rawTeamId);
+  const name = typeof detail.match[`${side}_team_name`] === 'string'
+    ? detail.match[`${side}_team_name`].trim()
+    : '';
+  if (!Number.isSafeInteger(teamId)) return null;
+  return {
+    '@type': 'SportsTeam',
+    '@id': new URL(`/teams/${teamId}/`, Astro.site).href,
+    ...(name ? { name } : {}),
+  };
+};
+const competitors = [rawTeam('radiant'), rawTeam('dire')].filter(Boolean);
+const startDate = model.summary.date.isoUtc;
+const eraMatchup = competitors.length === 2 && competitors.every((team) => team.name)
+  ? `${competitors[0].name} vs ${competitors[1].name}`
+  : null;
+const structuredData = {
+  '@context': 'https://schema.org',
+  '@type': 'SportsEvent',
+  name: eraMatchup ?? `Match ${matchId}`,
+  ...(startDate ? { startDate } : {}),
+  ...(competitors.length > 0 ? { competitor: competitors } : {}),
+};
 ---
 
-<SiteLayout title={title} description={`${matchup}, match ${matchId}: full details and boxscores.`}>
+<SiteLayout
+  title={title}
+  description={`${matchup}, match ${matchId}: full details and boxscores.`}
+  ogType="article"
+  {structuredData}
+>
   <MatchDetail model={model} />
 </SiteLayout>

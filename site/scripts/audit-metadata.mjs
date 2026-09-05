@@ -60,6 +60,30 @@ function canonicalValues(html) {
     .map((tag) => tag.get('href') ?? '');
 }
 
+function elementTextValues(html, name) {
+  return [...html.matchAll(new RegExp(`<${name}\\b[^>]*>([\\s\\S]*?)<\\/${name}>`, 'gi'))]
+    .map((match) => decodeEntities(match[1].replace(/<[^>]*>/g, '').trim()));
+}
+
+function jsonLdValues(html) {
+  return [...html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi)]
+    .filter((match) => attributes(`<script${match[1]}>`).get('type') === 'application/ld+json')
+    .map((match) => match[2].trim());
+}
+
+function routeKind(relativePath) {
+  const normalized = relativePath.replaceAll(path.sep, '/');
+  const match = /^matches\/(\d+)\/index\.html$/.exec(normalized);
+  if (match) return Object.freeze({ kind: 'match', id: match[1] });
+  const team = /^teams\/(\d+)(?:\/(\d+))?\/index\.html$/.exec(normalized);
+  if (team) return Object.freeze({ kind: 'team', id: team[1], page: Number(team[2] ?? 1) });
+  const tournament = /^tournaments\/(\d+)(?:\/(\d+))?\/index\.html$/.exec(normalized);
+  if (tournament) {
+    return Object.freeze({ kind: 'tournament', id: tournament[1], page: Number(tournament[2] ?? 1) });
+  }
+  return Object.freeze({ kind: 'other' });
+}
+
 function routePath(relativePath) {
   const normalized = relativePath.replaceAll(path.sep, '/');
   if (normalized === 'index.html') return '/';
@@ -86,11 +110,31 @@ async function main() {
   const errors = [];
   const canonicalToPage = new Map();
   const expectedSitemapUrls = new Set();
+  const expectedMatchUrls = new Set();
+  const articleUrls = new Set();
+  const sportsEventUrls = new Set();
+  const paginatedDescriptions = new Map();
 
   for (const file of htmlFiles) {
     const relativePath = path.relative(dist, file);
     const html = await readFile(file, 'utf8');
     const expectedUrl = new URL(routePath(relativePath), SITE_ORIGIN).href;
+    const kind = routeKind(relativePath);
+    if (kind.kind === 'match') expectedMatchUrls.add(expectedUrl);
+
+    const titles = elementTextValues(html, 'title');
+    if (titles.length !== 1) {
+      errors.push(`${relativePath}: expected exactly one title, found ${titles.length}`);
+    } else {
+      const emDashCount = [...titles[0]].filter((character) => character === '—').length;
+      if (emDashCount > 1) {
+        errors.push(`${relativePath}: title contains more than one em dash: ${titles[0]}`);
+      }
+      if (titles[0] !== 'DotaInfo' && !titles[0].endsWith(' — DotaInfo')) {
+        errors.push(`${relativePath}: title must end with the site name: ${titles[0]}`);
+      }
+    }
+
     const canonicals = canonicalValues(html);
     if (canonicals.length !== 1) {
       errors.push(`${relativePath}: expected exactly one canonical link, found ${canonicals.length}`);
@@ -131,6 +175,22 @@ async function main() {
     } else if (descriptions[0].length >= 200) {
       errors.push(`${relativePath}: description must be under 200 characters, found ${descriptions[0].length}`);
     }
+    if (
+      descriptions.length === 1
+      && (kind.kind === 'team' || kind.kind === 'tournament')
+    ) {
+      const series = `${kind.kind}:${kind.id}`;
+      const byDescription = paginatedDescriptions.get(series) ?? new Map();
+      const previousCanonical = byDescription.get(descriptions[0]);
+      if (previousCanonical && previousCanonical !== canonical) {
+        errors.push(
+          `${relativePath}: ${kind.kind} pagination description duplicates ${previousCanonical}: ${descriptions[0]}`,
+        );
+      } else {
+        byDescription.set(descriptions[0], canonical);
+      }
+      paginatedDescriptions.set(series, byDescription);
+    }
 
     const ogUrls = metadataValues(html, 'property', 'og:url');
     if (ogUrls.length !== 1 || ogUrls[0] !== canonical) {
@@ -143,9 +203,55 @@ async function main() {
       }
     }
 
+    const ogTypes = metadataValues(html, 'property', 'og:type');
+    if (ogTypes.length !== 1) {
+      errors.push(`${relativePath}: expected exactly one og:type, found ${ogTypes.length}`);
+    } else if (ogTypes[0] === 'article') {
+      articleUrls.add(expectedUrl);
+    } else if (ogTypes[0] !== 'website') {
+      errors.push(`${relativePath}: og:type must be article or website, found ${ogTypes[0]}`);
+    }
+
+    const jsonLdBlocks = jsonLdValues(html);
+    for (const block of jsonLdBlocks) {
+      let value;
+      try {
+        value = JSON.parse(block);
+      } catch (error) {
+        errors.push(`${relativePath}: JSON-LD does not parse: ${error.message}`);
+        continue;
+      }
+      if (value?.['@type'] !== 'SportsEvent' && value?.['@type'] !== 'SportsTeam') {
+        errors.push(`${relativePath}: unsupported JSON-LD @type: ${String(value?.['@type'])}`);
+      }
+      if (value?.['@type'] === 'SportsEvent') sportsEventUrls.add(expectedUrl);
+    }
+
     if (relativePath.replaceAll(path.sep, '/') !== '404.html') {
       expectedSitemapUrls.add(parsedCanonical.href);
     }
+  }
+
+  const missingArticleUrls = [...expectedMatchUrls].filter((url) => !articleUrls.has(url)).sort();
+  const unexpectedArticleUrls = [...articleUrls].filter((url) => !expectedMatchUrls.has(url)).sort();
+  if (missingArticleUrls.length > 0) {
+    errors.push(`og:type article is missing from match route(s): ${describeList(missingArticleUrls)}`);
+  }
+  if (unexpectedArticleUrls.length > 0) {
+    errors.push(`og:type article appears on non-match route(s): ${describeList(unexpectedArticleUrls)}`);
+  }
+
+  const missingSportsEvents = [...expectedMatchUrls]
+    .filter((url) => !sportsEventUrls.has(url))
+    .sort();
+  const unexpectedSportsEvents = [...sportsEventUrls]
+    .filter((url) => !expectedMatchUrls.has(url))
+    .sort();
+  if (missingSportsEvents.length > 0) {
+    errors.push(`SportsEvent JSON-LD is missing from match route(s): ${describeList(missingSportsEvents)}`);
+  }
+  if (unexpectedSportsEvents.length > 0) {
+    errors.push(`SportsEvent JSON-LD appears on non-match route(s): ${describeList(unexpectedSportsEvents)}`);
   }
 
   const sitemapFiles = allFiles

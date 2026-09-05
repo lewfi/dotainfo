@@ -3,6 +3,12 @@ import SiteLayout from '../layouts/SiteLayout.astro';
 import TeamMatchRow from './TeamMatchRow.astro';
 
 const { team } = Astro.props;
+const structuredData = {
+  '@context': 'https://schema.org',
+  '@type': 'SportsTeam',
+  name: team.name.display,
+  url: new URL(Astro.url.pathname, Astro.site).href,
+};
 const number = (value) => Number(value).toLocaleString('en-US');
 const dateFormatter = new Intl.DateTimeFormat('en-US', {
   day: 'numeric',
@@ -15,7 +21,7 @@ const dateRange = team.firstStartTime === null || team.lastStartTime === null
   : `${dateFormatter.format(new Date(team.firstStartTime * 1_000))}–${dateFormatter.format(new Date(team.lastStartTime * 1_000))}`;
 ---
 
-<SiteLayout title={team.title} description={`${team.name.display} professional Dota 2 match history and statistics.`}>
+<SiteLayout title={team.title} description={team.description} {structuredData}>
   <article
     class="team-page"
     data-team-page

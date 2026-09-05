@@ -167,10 +167,12 @@ function titleStems(tournaments) {
 function tournamentPage(tournament, pageNumber, pageSize, titleStem) {
   const offset = (pageNumber - 1) * pageSize;
   const matches = tournament.matches.slice(offset, offset + pageSize);
-  const suffix = pageNumber === 1 ? '' : ` — Page ${pageNumber}`;
+  const titlePrefix = pageNumber === 1 ? titleStem : `${titleStem}, page ${pageNumber}`;
+  const descriptionSuffix = pageNumber === 1 ? '' : `, page ${pageNumber}`;
   return Object.freeze({
     ...tournament,
-    title: `${titleStem}${suffix} — DotaInfo`,
+    title: `${titlePrefix} — DotaInfo`,
+    description: `${tournament.name} professional Dota 2 match results${descriptionSuffix}.`,
     pageNumber,
     pageCount: Math.ceil(tournament.matchCount / pageSize),
     matches: Object.freeze(matches),

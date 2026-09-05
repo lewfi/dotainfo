@@ -12,7 +12,7 @@ const dateFormatter = new Intl.DateTimeFormat('en-US', {
 const dateRange = `${dateFormatter.format(new Date(tournament.firstStartTime * 1_000))}–${dateFormatter.format(new Date(tournament.lastStartTime * 1_000))}`;
 ---
 
-<SiteLayout title={tournament.title} description={`${tournament.name} professional Dota 2 match results.`}>
+<SiteLayout title={tournament.title} description={tournament.description}>
   <article
     class="tournament-page"
     data-tournament-page
