@@ -22,7 +22,6 @@ const fallbackAlt = `No logo on file for ${team.name.display}`;
     data-monogram={team.monogram}
     role={team.logo.status === 'missing' ? 'img' : undefined}
     aria-label={team.logo.status === 'missing' ? fallbackAlt : undefined}
-    title={team.logo.status === 'missing' ? fallbackAlt : undefined}
   >
     {team.logo.status === 'available' && (
       <img

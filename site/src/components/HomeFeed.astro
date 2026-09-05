@@ -1,52 +1,34 @@
 ---
-import HomeMatchRow from './HomeMatchRow.astro';
+import HomeSeriesRow from './HomeSeriesRow.astro';
 
-const { view, active = false } = Astro.props;
+const { home } = Astro.props;
 ---
 
-<section
-  class="home-view"
-  id={`home-view-${view.id}`}
-  data-home-view={view.id}
-  aria-labelledby={`home-view-${view.id}-title`}
-  hidden={!active}
->
+<section class="home-view" id="home-results" data-home-view="default" aria-labelledby="home-results-title">
   <header class="home-view-heading">
-    <h2 id={`home-view-${view.id}-title`}>{view.label}</h2>
-    <p>{view.matches.length} newest matching matches</p>
+    <h2 id="home-results-title">Recent series results</h2>
+    <p>{home.entries.length} newest series and standalone games</p>
   </header>
-
-  {view.days.map((day, dayIndex) => (
-    <section class="day-group" aria-labelledby={`day-${view.id}-${dayIndex}`}>
+  {home.days.map((day, dayIndex) => (
+    <section class="day-group" data-home-day-group aria-labelledby={`day-${dayIndex}`}>
       <header class="day-heading">
-        <h3 id={`day-${view.id}-${dayIndex}`}>
+        <h3 id={`day-${dayIndex}`}>
           <span class="day-label-long">{day.label}</span>
           <span class="day-label-short" aria-hidden="true">{day.shortLabel}</span>
         </h3>
         <span aria-hidden="true"></span>
-        <p>{day.count} {day.count === 1 ? 'game' : 'games'}</p>
+        <p>{day.count} {day.count === 1 ? 'result' : 'results'}</p>
       </header>
-
       {day.leagues.map((league, leagueIndex) => (
-        <section
-          class="league-group"
-          aria-labelledby={`league-${view.id}-${dayIndex}-${leagueIndex}`}
-        >
+        <section class="league-group" data-home-league-group aria-labelledby={`league-${dayIndex}-${leagueIndex}`}>
           <header class="league-heading">
             <span class="tier-badge">{league.category.badge}</span>
-            <h4 id={`league-${view.id}-${dayIndex}-${leagueIndex}`}>{league.name}</h4>
-            <p>
-              {league.matches.length} {league.matches.length === 1 ? 'game' : 'games'}
-              {league.category.id === 'other' && (
-                <> · tier {league.rawTier ? `“${league.rawTier}”` : 'unavailable'} mapped to Other</>
-              )}
-            </p>
+            <h4 id={`league-${dayIndex}-${leagueIndex}`}>{league.name}</h4>
+            <p>{league.entries.length} {league.entries.length === 1 ? 'result' : 'results'}</p>
           </header>
           <ol class="match-feed">
-            {league.matches.map((match) => (
-              <li class="match-card" data-match-id={match.matchId}>
-                <HomeMatchRow match={match} />
-              </li>
+            {league.entries.map((entry) => (
+              <HomeSeriesRow entry={entry} day={day.key} categoryId={league.category.id} />
             ))}
           </ol>
         </section>

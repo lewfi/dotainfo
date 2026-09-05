@@ -1458,6 +1458,72 @@ pages, and completed in 88,858.616 ms against Cloudflare's 1,200,000 ms cap. All
 and all fourteen audits passed after the complete search negative-test matrix restored every
 mutation; the accessibility audit reported `titlesAreUnique: true` for all 12,739 pages.
 
+**Home feed series grouping, active tournaments, and expandable results — step 29 complete.**
+The home feed now contains one population of the newest 300 result rows, where a row is either
+a real series or a standalone match. This replaces the former 500 DOM card placements; it is
+not 300 rows per tier. All six static tier choices filter that same population, the approved
+Top tier + Pro (`premium` plus `professional`) view remains the default, and fragment-targeted
+CSS preserves all six choices and tier filtering when JavaScript is disabled. Each summary
+link and its real expand button are siblings, so the whole-row anchor does not contain another
+interactive control. Every result row retains a resolving full-match link whether or not the
+progressive enhancement runs.
+
+`series_id` is not a safe global key. The committed-history measurement that motivated this
+design found 71 series-ID-only groups with multiple team pairings, 431 spanning more than 24
+hours (one spanning 613 days), and 15 with more than five maps; adding `leagueid` left all 71
+mixed pairings. The grouping key is therefore `(series_id, leagueid, unordered
+{radiant_team_id, dire_team_id})`, followed by a split wherever consecutive maps are more
+than six hours apart. That rule produced 71,187 measured groups, none over 24 hours, and six
+groups over five maps (0.008%). Those six are valid inputs: the UI renders any map count and
+must never impose a Bo5 maximum.
+
+Series scores are wins per durable `team_id`, using the first map only to establish the two
+display teams. They are never Radiant-win versus Dire-win totals because teams swap sides
+between maps. A null `radiant_win` is retained as an explicitly unknown map and increments
+neither team's score. A missing `series_id` produces a labelled Single game row with no
+fabricated 1–0 score. The measured 90-day snapshot contained 1,420 matches: 618 series plus
+189 standalone matches, or 807 possible feed rows. The 189 no-series matches are 13.3% of the
+window, versus 4.8% archive-wide, so standalone handling is a normal path. The same snapshot
+had 1/13/189 minimum/median/maximum matches per day, 130 median and 1,890 maximum player rows
+per day, and seven leagues with a match in the preceding 14 days.
+
+The Active tournaments strip contains exactly the leagues with at least one match in the
+half-open trailing-14-day window at the build clock. Expansion constructs accessible map
+tabs in place and shows one simplified scoreboard at a time, with Arrow Left/Right plus Home
+and End keyboard navigation, one `aria-selected` tab, announced load status, and a full-map
+detail link. The expand control has `aria-expanded` and a descriptive Show/Hide label naming
+both teams; none of this UI uses `title`.
+
+Player facts are not inlined. The build emits one `/data/home-players/YYYY-MM-DD.json` shard
+for every UTC feed day, containing only `match_id`, `account_id`, `hero_id`, `is_radiant`,
+`kills`, `deaths`, `assists`, and `level`. The day is the day of the series' newest map, and
+its shard contains the player rows for every map in that result row. First expansion lazily
+fetches that day; a document-session promise cache prevents a second fetch for another row on
+the same day. The small hero reference is likewise external and cached. Scoreboards show hero
+identity and K/D/A/level, never a numeric account ID masquerading as a player name.
+
+The new `npm run audit:home-series -- --clock CLOCK --dist dist` gate reads every committed
+match and player shard directly with its own DuckDB scan and independently reconstructs the
+300-row population, composite grouping and six-hour splits, per-team scores (including a
+named side-swapped assertion), standalone states, day payload placement and exact schema,
+active leagues, six no-JavaScript views, lazy/cache behavior, accessible tabs, all thirteen
+viewport widths, and the home gzip bound. It shares no grouping or query implementation with
+the production side. Every assertion is negative-tested by mutating only `dist`, observing
+failure, restoring the exact bytes, and observing success; the score matrix explicitly
+replaces a 2–0 team score with its incorrect 1–1 side score.
+
+The step 21 decorative-border contract remains literal. New decorative `--line` selectors
+begin with `.active-tournaments ` or `.series-expansion `, and each corresponding component
+owns a separate `--line-strong` boundary; no existing audit selector filter was narrowed.
+At build clock `2026-09-05T06:55:56Z`, the emitted population was 293 series plus seven
+standalone rows, including 68 side-swapped series, with seven active tournaments. It emitted
+23 day shards; the largest, `2026-08-29.json`, was 148,649 bytes raw and 17,174 bytes at gzip
+level 9. `dist/index.html` was 670,899 bytes raw and 54,140 bytes gzipped, below the prior
+56,024-byte gzip baseline. The final verification build completed in 113,006.251 ms against
+Cloudflare's 1,200,000 ms cap; no cross-machine or ten-minute-headroom comparison is used.
+All 46 Node tests and all fifteen audits passed, and the full negative-test matrix restored
+every mutation before the final audit run.
+
 **Deploy - step 17 complete:** Cloudflare Pages is connected to the repo and builds on pushes
 to `main`; the ingest job's commits trigger builds automatically. The approval gate passed on
 the live `dotainfo.pages.dev` deployment. `/matches/7485890286/` was measured returning HTTP
@@ -1781,10 +1847,10 @@ by mutating only `dist`, observing that assertion fail, restoring the original b
 observing it pass. Finding 8 is closed: match detail and runtime archive presentation are now
 visually consistent without conflating either archive `<section>` or home `<li>` ownership.
 
-The established regression suite comprises these fourteen audits (not seven), invoked from
+The established regression suite comprises these fifteen audits (not seven), invoked from
 `site/`. `CLOCK` is an ISO UTC value in `YYYY-MM-DDTHH:mm:ssZ` form. Home browser, Detail,
-Tournaments, Heroes, Teams, and Search require a real installed Chrome or Edge executable from
-their explicit Windows paths; all six are unrunnable on Linux and in CI.
+Tournaments, Heroes, Teams, Search, and Home series require a real installed Chrome or Edge
+executable from their explicit Windows paths; all seven are unrunnable on Linux and in CI.
 
 | Audit | Invocation | Runtime requirement |
 |---|---|---|
@@ -1802,6 +1868,7 @@ their explicit Windows paths; all six are unrunnable on Linux and in CI.
 | Heroes | `npm run audit:heroes -- --dist dist` | Real installed Chrome or Edge; Windows only, not CI |
 | Teams | `npm run audit:teams -- --dist dist` | Real installed Chrome or Edge; Windows only, not CI |
 | Search | `npm run audit:search -- --dist dist` | Real installed Chrome or Edge; Windows only, not CI |
+| Home series | `npm run audit:home-series -- --clock CLOCK --dist dist` | Real installed Chrome or Edge; Windows only, not CI |
 
 Build regression reporting for step 23 uses total wall time only. Mean milliseconds per page
 is still printed by the existing profiler for diagnostics, but is not used as a regression
@@ -2346,3 +2413,15 @@ These steps continue the canonical numbering in `AGENTS.md`.
     resolve fallback/search links, compare shared-name results with destination titles, prove
     lazy one-request behavior, sweep all thirteen widths, and negative-test every assertion
     before all fourteen audits are rerun.
+29. **Home feed series grouping, active tournaments, expandable results.** Replace per-map
+    home cards with one population of the newest 300 composite-key series and standalone
+    results, score wins by `team_id`, and split composite groups after any consecutive gap
+    over six hours without imposing a maximum map count. Add the trailing-14-day active
+    tournament strip and progressively enhanced one-map-at-a-time tabs. Keep player rows out
+    of HTML in exact-schema UTC feed-day shards, fetched lazily and cached for the document
+    session; never present numeric account IDs as names. Preserve the premium-plus-professional
+    default and all six no-JavaScript tier choices. Approval gate: independently scan unpruned
+    fact data for grouping, per-team and side-swapped scores, standalone treatment, exact 300
+    membership, active leagues, and complete day shards; prove lazy/cache and tabs behavior,
+    sweep all thirteen widths, keep home gzip below the 56,024-byte baseline, and negative-test
+    every assertion before all fifteen audits are rerun.

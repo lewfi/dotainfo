@@ -90,6 +90,8 @@ export const HOME_COLUMNS = Object.freeze([
   'leagueid',
   'league_name',
   'league_tier',
+  'series_id',
+  'series_type',
   'radiant_team_id',
   'dire_team_id',
   'radiant_team_name',
@@ -98,4 +100,15 @@ export const HOME_COLUMNS = Object.freeze([
   'radiant_score',
   'dire_score',
   'patch',
+]);
+
+export const HOME_PLAYER_COLUMNS = Object.freeze([
+  'match_id',
+  'account_id',
+  'hero_id',
+  'is_radiant',
+  'kills',
+  'deaths',
+  'assists',
+  'level',
 ]);

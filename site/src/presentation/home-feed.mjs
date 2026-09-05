@@ -1,4 +1,4 @@
-import { createMatchSummary } from './match-summary.mjs';
+import { createHomeSeriesEntry } from './home-series.mjs';
 
 export const DEFAULT_HOME_TIERS = Object.freeze(['premium', 'professional']);
 
@@ -85,96 +85,99 @@ function dayIdentity(summary) {
   });
 }
 
-function groupMatches(matches) {
+function groupEntries(entries) {
   const days = new Map();
-  for (const match of matches) {
-    const day = dayIdentity(match);
+  for (const entry of entries) {
+    const day = dayIdentity(entry.latest);
     let dayGroup = days.get(day.key);
     if (!dayGroup) {
-      dayGroup = { ...day, matches: [], leagues: new Map() };
+      dayGroup = { ...day, entries: [], leagues: new Map() };
       days.set(day.key, dayGroup);
     }
-    dayGroup.matches.push(match);
+    dayGroup.entries.push(entry);
 
-    const leagueKey = match.league.leagueId === null
-      ? `name:${match.league.name.display}|tier:${match.league.tier.value ?? ''}`
-      : `id:${match.league.leagueId}`;
-    let league = dayGroup.leagues.get(leagueKey);
-    if (!league) {
-      const category = homeTierCategory(match.league.tier.value);
-      league = {
+    const league = entry.latest.league;
+    const leagueKey = league.leagueId === null
+      ? `name:${league.name.display}|tier:${league.tier.value ?? ''}`
+      : `id:${league.leagueId}`;
+    let leagueGroup = dayGroup.leagues.get(leagueKey);
+    if (!leagueGroup) {
+      const category = homeTierCategory(entry.leagueTier);
+      leagueGroup = {
         key: leagueKey,
-        name: match.league.name.display,
-        nameState: match.league.name.status,
-        rawTier: match.league.tier.value,
+        name: league.name.display,
+        nameState: league.name.status,
+        rawTier: entry.leagueTier,
         category,
-        matches: [],
+        entries: [],
       };
-      dayGroup.leagues.set(leagueKey, league);
+      dayGroup.leagues.set(leagueKey, leagueGroup);
     }
-    league.matches.push(match);
+    leagueGroup.entries.push(entry);
   }
 
   return Object.freeze([...days.values()].map((day) => Object.freeze({
     key: day.key,
     label: day.label,
     shortLabel: day.shortLabel,
-    count: day.matches.length,
+    count: day.entries.length,
     leagues: Object.freeze([...day.leagues.values()].map((league) => Object.freeze({
       ...league,
-      matches: Object.freeze(league.matches),
+      entries: Object.freeze(league.entries),
     }))),
   })));
 }
 
-function homeView(category, query, references) {
-  const matches = Object.freeze(query.rows.map((row) => createMatchSummary(row, references)));
+function viewMatches(entry, category) {
+  const id = homeTierCategory(entry.leagueTier).id;
+  if (category.id === 'all') return true;
+  if (category.id === 'default') return id === 'top' || id === 'pro';
+  return id === category.id;
+}
+
+function homeView(category, entries, range) {
+  const matching = entries.filter((entry) => viewMatches(entry, category));
   return Object.freeze({
     id: category.id,
     label: category.label,
     badge: category.badge,
     hint: category.hint,
-    selectedTiers: query.selectedTiers,
-    matches,
-    days: groupMatches(matches),
-    tierCounts: query.tierCounts,
-    hiddenCount: query.hiddenCount,
-    range: query.range,
+    selectedTiers: category.id === 'all' ? null : category.tiers,
+    resultCount: matching.length,
+    hiddenCount: entries.length - matching.length,
+    range,
   });
 }
 
-export async function createHomeFeedViews({ reader, references, clock, limit = 100 }) {
-  if (!reader || typeof reader.home !== 'function') {
+export async function createHomeFeedViews({ reader, references, clock, limit = 300 }) {
+  if (!reader || typeof reader.homeSeries !== 'function') {
     throw new TypeError('home feed requires a data reader');
   }
   if (!references || typeof references.resolveTeam !== 'function') {
     throw new TypeError('home feed requires a reference resolver');
   }
 
-  const allQuery = await reader.home({ clock, limit, tiers: null });
-  const otherTiers = allQuery.availableTiers.filter(
+  const query = await reader.homeSeries({ clock, limit });
+  const entries = Object.freeze(query.groups.map(
+    (group) => createHomeSeriesEntry(group, references),
+  ));
+  const otherTiers = query.availableTiers.filter(
     (tier) => homeTierCategory(tier).id === OTHER_CATEGORY.id,
   );
-  const categoryQueries = await Promise.all([
-    reader.home({ clock, limit, tiers: DEFAULT_HOME_TIERS }),
-    ...TIER_CATEGORIES.map((category) => reader.home({ clock, limit, tiers: category.tiers })),
-    reader.home({ clock, limit, tiers: otherTiers }),
-  ]);
-  const categories = [...TIER_CATEGORIES, OTHER_CATEGORY];
-  const views = [
-    homeView(DEFAULT_CATEGORY, categoryQueries[0], references),
-    homeView(ALL_CATEGORY, allQuery, references),
-    ...categories.map((category, index) => homeView(
-      category,
-      categoryQueries[index + 1],
-      references,
-    )),
+  const categories = [
+    DEFAULT_CATEGORY,
+    ALL_CATEGORY,
+    ...TIER_CATEGORIES,
+    Object.freeze({ ...OTHER_CATEGORY, tiers: Object.freeze(otherTiers) }),
   ];
+  const views = categories.map((category) => homeView(category, entries, query.range));
 
   return Object.freeze({
-    clock: new Date(allQuery.range.endEpoch * 1000).toISOString(),
+    clock: new Date(query.range.endEpoch * 1000).toISOString(),
     limit,
-    availableTiers: allQuery.availableTiers,
+    availableTiers: query.availableTiers,
+    entries,
+    days: groupEntries(entries),
     views: Object.freeze(views),
   });
 }

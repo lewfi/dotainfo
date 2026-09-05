@@ -397,6 +397,7 @@ assert.ok(Number.isFinite(containerRem), 'emitted scoreboard container threshold
 
 const buttons = [...homeHtml.matchAll(/<button\b[^>]*\bdata-home-view-option="([^"]+)"[^>]*>/g)];
 const views = [...homeHtml.matchAll(/<section\b[^>]*class="home-view"[^>]*\bdata-home-view="([^"]+)"[^>]*>/g)];
+const noScriptTierLinks = [...homeHtml.matchAll(/<a\b[^>]*href="#home-filter-([^"]+)"[^>]*>/g)];
 const defaultButton = buttons.find((match) => match[1] === 'default')?.[0] ?? '';
 const hints = /<p id="tier-hints" class="tier-hints">([\s\S]*?)<\/p>/.exec(homeHtml)?.[1] ?? '';
 
@@ -512,9 +513,11 @@ const computedAssertions = {
     && buttons.every((match) => !/\btitle=/.test(match[0]))
     && /aria-pressed="true"/.test(defaultButton)
     && defaultButton.includes(`data-view-label="${defaultLabel}"`)
-    && views.length === expectedViewCount
-    && !/\shidden(?:\s|>)/.test(views.find((match) => match[1] === 'default')?.[0] ?? '')
-    && views.filter((match) => match[1] !== 'default').every((match) => /\shidden(?:\s|>)/.test(match[0]))
+    && views.length === 1
+    && views[0][1] === 'default'
+    && !/\shidden(?:\s|>)/.test(views[0][0])
+    && noScriptTierLinks.length === expectedViewCount
+    && new Set(noScriptTierLinks.map((match) => match[1])).size === expectedViewCount
     && expectedHintLabels
       .every((label) => hints.includes(`<strong>${label}</strong>`)),
 };

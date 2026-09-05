@@ -64,16 +64,8 @@ function output(target) {
 }
 
 let home;
-const rowsByView = new Map();
 try {
-  home = await createHomeFeedViews({ reader, references, clock, limit: 100 });
-  for (const view of home.views) {
-    rowsByView.set(view.id, (await reader.home({
-      clock,
-      limit: 100,
-      tiers: view.selectedTiers,
-    })).rows);
-  }
+  home = await createHomeFeedViews({ reader, references, clock, limit: 300 });
 } finally {
   reader.close();
 }
@@ -89,36 +81,41 @@ const viewCounts = [];
 const allMatchIds = new Set();
 
 for (const view of home.views) {
-  const rows = rowsByView.get(view.id);
+  const entries = home.entries.filter((entry) => {
+    if (view.id === 'all') return true;
+    const tier = entry.leagueTier;
+    const category = tier === 'premium' ? 'top'
+      : tier === 'professional' ? 'pro'
+        : tier === 'amateur' ? 'amateur' : 'other';
+    return view.id === 'default' ? category === 'top' || category === 'pro' : view.id === category;
+  });
   const counts = {
     id: view.id,
     label: view.label,
-    cards: view.matches.length,
+    cards: entries.length,
     nullTeamId: 0,
     blankWriteTimeName: 0,
     tagFallback: 0,
     nullResultAndScore: 0,
     missingLogo: 0,
   };
-  for (const [index, summary] of view.matches.entries()) {
-    const row = rows[index];
+  for (const [index, entry] of entries.entries()) {
     const placementKey = `${view.id}:${index}`;
-    allMatchIds.add(summary.matchId);
-    const sides = [sideState(row, summary, 'radiant'), sideState(row, summary, 'dire')];
-    for (const side of sides) {
-      for (const key of ['nullTeamId', 'blankWriteTimeName', 'tagFallback', 'missingLogo']) {
-        if (!side[key]) continue;
-        counts[key] += 1;
-        record(aggregate[key], placementKey, summary.matchId, side);
+    for (const map of entry.maps) {
+      const { row, summary } = map;
+      allMatchIds.add(summary.matchId);
+      const sides = [sideState(row, summary, 'radiant'), sideState(row, summary, 'dire')];
+      for (const side of sides) {
+        for (const key of ['nullTeamId', 'blankWriteTimeName', 'tagFallback', 'missingLogo']) {
+          if (!side[key]) continue;
+          counts[key] += 1;
+          record(aggregate[key], placementKey, summary.matchId, side);
+        }
       }
-    }
-    if (
-      row.radiant_win === null
-      && row.radiant_score === null
-      && row.dire_score === null
-    ) {
-      counts.nullResultAndScore += 1;
-      record(aggregate.nullResultAndScore, placementKey, summary.matchId);
+      if (row.radiant_win === null && row.radiant_score === null && row.dire_score === null) {
+        counts.nullResultAndScore += 1;
+        record(aggregate.nullResultAndScore, placementKey, summary.matchId);
+      }
     }
   }
   viewCounts.push(Object.freeze(counts));
@@ -126,7 +123,7 @@ for (const view of home.views) {
 
 console.log(`STEP19_HOME_CLOCK=${home.clock}`);
 console.log(`STEP19_HOME_VIEWS=${JSON.stringify(viewCounts)}`);
-console.log(`STEP19_HOME_CARDS=${home.views.reduce((sum, view) => sum + view.matches.length, 0)}`);
+console.log(`STEP19_HOME_CARDS=${home.entries.length}`);
 console.log(`STEP19_HOME_UNIQUE_MATCHES=${allMatchIds.size}`);
 for (const [key, value] of Object.entries(aggregate)) {
   console.log(`STEP19_${key.replaceAll(/([A-Z])/g, '_$1').toUpperCase()}=${JSON.stringify(output(value))}`);

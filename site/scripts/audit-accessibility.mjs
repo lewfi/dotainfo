@@ -392,6 +392,9 @@ const homeMatchCards = [...homeHtml.matchAll(/<li\b[^>]*>/gi)]
   .filter((match) => (attributes(match[0]).get('class') ?? '').split(/\s+/).includes('match-card'));
 const homeMatchLinks = [...homeHtml.matchAll(/<a\b[^>]*>/gi)]
   .filter((match) => /^\/matches\/\d+\/$/.test(attributes(match[0]).get('href') ?? ''));
+const homeRowLinks = homeMatchLinks.filter((match) => (
+  (attributes(match[0]).get('class') ?? '').split(/\s+/).includes('series-row-link')
+));
 const homeTeamLogos = [...homeHtml.matchAll(/<img\b[^>]*data-team-logo[^>]*>/gi)]
   .map((match) => attributes(match[0]));
 const tierViewIds = new Set(tierButtonAttributes.map((button) => button.get('data-home-view-option')));
@@ -433,10 +436,10 @@ const tierAssertions = Object.freeze({
     && /hiddenRange\.textContent\s*=\s*`Counted from \$\{option\.dataset\.rangeStart\} inclusive to \$\{option\.dataset\.rangeEnd\} exclusive\.`/.test(homeHtml),
   categoryHintsAreVisible: /Top tier<\/strong>\s*=\s*Flagship events/i.test(homeHtml)
     && /Other<\/strong>\s*=\s*Unclassified, excluded/i.test(homeHtml),
-  stateNotColorOnly: /Current view:/i.test(homeHtml) && /matches hidden/i.test(homeHtml),
+  stateNotColorOnly: /Current view:/i.test(homeHtml) && /results hidden/i.test(homeHtml),
   everyMatchCardLinksToItsCanonicalRoute: homeMatchCards.length > 0
-    && homeMatchLinks.length === homeMatchCards.length,
-  everyWholeRowLinkNamesItsMatch: homeMatchLinks.every((match) => {
+    && homeRowLinks.length === homeMatchCards.length,
+  everyWholeRowLinkNamesItsMatch: homeRowLinks.every((match) => {
     const link = attributes(match[0]);
     return (link.get('class') ?? '').split(/\s+/).includes('match-row')
       && (link.get('aria-label') ?? '').includes('view match details');

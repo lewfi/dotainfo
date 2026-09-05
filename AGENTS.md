@@ -35,6 +35,7 @@ Refer to steps by these numbers only. Do not renumber.
 26. Hero index and hero pages
 27. Team index and team pages
 28. Search index, search page and header search
+29. Home feed series grouping, active tournaments, expandable results
 
 ## Never
 

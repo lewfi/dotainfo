@@ -1,0 +1,66 @@
+---
+import HomeTeam from './HomeTeam.astro';
+
+const { entry, day, categoryId } = Astro.props;
+const latest = entry.latest;
+const time = latest.date.status === 'available'
+  ? new Intl.DateTimeFormat('en-US', {
+      hour: '2-digit', hour12: false, minute: '2-digit', timeZone: 'UTC',
+    }).format(new Date(latest.date.isoUtc))
+  : 'Time unavailable';
+const score = entry.seriesScore;
+const unknownText = score?.unknownMaps
+  ? `${score.unknownMaps} ${score.unknownMaps === 1 ? 'map' : 'maps'} unknown`
+  : null;
+const names = `${entry.teams.one.name.display} versus ${entry.teams.two.name.display}`;
+const panelId = `p-${entry.primaryMatchId}`;
+const buttonId = `b-${entry.primaryMatchId}`;
+const mapRows = entry.maps.map((map) => map.summary.matchId).join(',');
+---
+
+<li
+  class="match-card series-result"
+  data-series-row
+  data-series-kind={entry.kind}
+  data-row-label={entry.kind === 'standalone' ? 'Single game' : undefined}
+  data-series-result={score ? `${score.teamOneWins},${score.teamTwoWins},${score.unknownMaps}` : undefined}
+  data-tier-category={categoryId}
+>
+  <div class="series-result-summary">
+    <a class="match-row series-row-link" href={`/matches/${entry.primaryMatchId}/`} aria-label={`${names}, view match details`}>
+      {latest.date.status === 'available' ? (
+        <time class="match-time" datetime={latest.date.isoUtc}>{time}</time>
+      ) : <span class="match-time">{time}</span>}
+      <HomeTeam team={entry.teams.one} side="radiant" winner={score ? score.teamOneWins > score.teamTwoWins : latest.result.winner === 'radiant'} />
+      <span class="home-score series-score" aria-hidden="true">
+        {score ? (
+          <span>
+            <strong>{score.teamOneWins}</strong><span class="score-separator">–</span><strong>{score.teamTwoWins}</strong>
+          </span>
+        ) : <span class="single-game-label"><strong>—</strong><small>SINGLE GAME</small></span>}
+      </span>
+      <HomeTeam team={entry.teams.two} side="dire" winner={score ? score.teamTwoWins > score.teamOneWins : latest.result.winner === 'dire'} />
+      <span class="home-match-meta">
+        <span>{entry.kind === 'series' ? `${entry.mapCount} maps` : 'Single game'}</span>
+        {unknownText && <span>{unknownText}</span>}
+        <span class="row-arrow" aria-hidden="true">›</span>
+      </span>
+    </a>
+    <button type="button" class="series-expand-button" id={buttonId} aria-label={`Show maps for ${names}`} aria-expanded="false" aria-controls={panelId} data-series-expand>
+      <span aria-hidden="true">+</span>
+    </button>
+  </div>
+  <section
+    class="series-expansion"
+    id={panelId}
+    role="region"
+    aria-labelledby={buttonId}
+    aria-live="polite"
+    data-series-expansion
+    data-player-day={day}
+    data-map-rows={mapRows}
+    hidden
+  >
+    <div data-map-host><p role="status">Expand this result to load its maps.</p></div>
+  </section>
+</li>

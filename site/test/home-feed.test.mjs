@@ -120,7 +120,7 @@ test('home query applies the injected upper cutoff to every selected shard', asy
   assert.ok(result.rows.every((row) => row.start_time < result.range.endEpoch));
 });
 
-test('home views match an offline query by ordering and range-scoped tier counts', async (t) => {
+test('home feed keeps one 300-row population behind all six tier views', async (t) => {
   const dataRoot = await homeFixtureRoot(t);
   const catalog = await createCatalog({ dataRoot });
   const reader = await DataReader.create(catalog);
@@ -150,38 +150,17 @@ test('home views match an offline query by ordering and range-scoped tier counts
   const defaultView = home.views[0];
   assert.equal(defaultView.label, 'Top tier + Pro');
   assert.deepEqual(defaultView.selectedTiers, ['premium', 'professional']);
+  assert.equal(defaultView.resultCount, 1);
   assert.equal(defaultView.hiddenCount, 2);
-  assert.equal(
-    defaultView.matches.find((match) => match.matchId === 3002).patch.display,
-    '7.41',
-  );
+  assert.equal(home.entries.length, 3);
+  assert.deepEqual(home.entries.map((entry) => entry.primaryMatchId), [3004, 3003, 3002]);
+  assert.equal(home.entries.find((entry) => entry.primaryMatchId === 3002).latest.patch.display, '7.41');
   const other = home.views.find((view) => view.id === 'other');
   assert.deepEqual(other.selectedTiers, ['excluded', 'future-tier']);
-  assert.ok(other.matches.some((match) => match.league.tier.value === 'future-tier'));
+  assert.equal(other.resultCount, 2);
   assert.equal(other.label, 'Other');
-  assert.ok(home.views.every((view) => view.days.length > 0 || view.matches.length === 0));
-  assert.ok(home.views.flatMap((view) => view.days).every((day) => (
-    day.leagues.flatMap((league) => league.matches).length === day.count
+  assert.equal(home.days.length, 3);
+  assert.ok(home.days.every((day) => (
+    day.leagues.flatMap((league) => league.entries).length === day.count
   )));
-
-  const database = await openDuckDB();
-  t.after(() => database.close());
-  for (const view of home.views) {
-    const expected = await directView(database.connection, catalog, {
-      clock: CLOCK,
-      limit: 3,
-      tiers: view.selectedTiers,
-    });
-    assert.deepEqual(
-      view.matches.map((match) => match.matchId),
-      expected.rows.map((row) => row.match_id),
-      `${view.id} ordering`,
-    );
-    assert.deepEqual(view.tierCounts, expected.tierCounts, `${view.id} tier counts`);
-    assert.equal(view.hiddenCount, expected.hiddenCount, `${view.id} hidden count`);
-    assert.deepEqual(view.range, {
-      startEpoch: expected.startEpoch,
-      endEpoch: expected.endEpoch,
-    });
-  }
 });

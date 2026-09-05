@@ -176,6 +176,11 @@ for (const [index, section] of homeViewMarkers.entries()) {
   const sectionHtml = homeHtml.slice(section.index, sectionEnd);
   const matchIds = [...sectionHtml.matchAll(/href="\/matches\/(\d+)\/"/g)]
     .map((match) => Number(match[1]));
+  const rowMatchIds = [...sectionHtml.matchAll(/<a\b[^>]*>/gi)]
+    .map((match) => attributes(match[0]))
+    .filter((link) => (link.get('class') ?? '').split(/\s+/).includes('series-row-link'))
+    .map((link) => Number(/^\/matches\/(\d+)\/$/.exec(link.get('href') ?? '')?.[1]))
+    .filter(Number.isSafeInteger);
   const cards = [...sectionHtml.matchAll(/<li\b[^>]*class="[^"]*\bmatch-card\b[^"]*"/g)].length;
   let preRendered = 0;
   let viaPayload = 0;
@@ -192,7 +197,8 @@ for (const [index, section] of homeViewMarkers.entries()) {
   homeViews.push(Object.freeze({
     view: section[1],
     cards,
-    links: matchIds.length,
+    links: rowMatchIds.length,
+    mapLinks: matchIds.length - rowMatchIds.length,
     preRendered,
     viaPayload,
     unresolved,

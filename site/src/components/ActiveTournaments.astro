@@ -1,0 +1,27 @@
+---
+const { tournaments, startEpoch, endEpoch } = Astro.props;
+---
+
+<section class="active-tournaments" aria-labelledby="active-tournaments-title">
+  <header>
+    <div>
+      <p class="eyebrow">Last 14 days</p>
+      <h2 id="active-tournaments-title">Active tournaments</h2>
+    </div>
+    <p>{tournaments.length} active</p>
+  </header>
+  <ul>
+    {tournaments.map((tournament) => (
+      <li data-active-league-id={tournament.leagueId} data-active-match-count={tournament.matchCount}>
+        <a href={`/tournaments/${tournament.leagueId}/`}>
+          <strong>{tournament.league.name.display}</strong>
+          <span>{tournament.matchCount} {tournament.matchCount === 1 ? 'match' : 'matches'}</span>
+        </a>
+      </li>
+    ))}
+  </ul>
+  <p class="active-range">
+    Activity is measured from <time datetime={new Date(startEpoch * 1000).toISOString()}>{new Date(startEpoch * 1000).toISOString().slice(0, 10)}</time>
+    {' '}through <time datetime={new Date(endEpoch * 1000).toISOString()}>{new Date(endEpoch * 1000).toISOString().slice(0, 10)}</time> UTC.
+  </p>
+</section>

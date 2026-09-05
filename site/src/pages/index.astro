@@ -1,29 +1,11 @@
 ---
+import ActiveTournaments from '../components/ActiveTournaments.astro';
 import HomeFeed from '../components/HomeFeed.astro';
-import { BUILD_CLOCK, buildDataPaths } from '../build-context.mjs';
-import { createCatalog } from '../data/catalog.mjs';
-import { DataReader } from '../data/queries.mjs';
-import { loadReferences } from '../data/references.mjs';
+import { homeBuildContext } from '../data/home-artifacts.mjs';
 import SiteLayout from '../layouts/SiteLayout.astro';
-import { createHomeFeedViews } from '../presentation/home-feed.mjs';
 
-const { dataRoot, referenceRoot } = buildDataPaths();
-const [catalog, references] = await Promise.all([
-  createCatalog({ dataRoot }),
-  loadReferences({ referenceRoot }),
-]);
-const reader = await DataReader.create(catalog);
-let home;
-try {
-  home = await createHomeFeedViews({
-    reader,
-    references,
-    clock: BUILD_CLOCK,
-    limit: 100,
-  });
-} finally {
-  reader.close();
-}
+const context = await homeBuildContext();
+const { home } = context;
 
 function isoFromEpoch(epoch) {
   return new Date(epoch * 1000).toISOString();
@@ -32,22 +14,27 @@ function isoFromEpoch(epoch) {
 
 <SiteLayout
   title="DotaInfo"
-  description="The newest 100 professional Dota 2 match results, filterable by league tier."
+  description="The newest 300 professional Dota 2 series and standalone results, filterable by league tier."
 >
   <section class="home-intro" aria-labelledby="page-title">
     <p class="eyebrow">Dota 2 professional matches</p>
-    <h1 id="page-title">Recent match results</h1>
-    <p>The newest 100 matches for the selected league tiers.</p>
+    <h1 id="page-title">Recent series results</h1>
+    <p>The newest 300 series and standalone games, with map scoreboards available on demand.</p>
   </section>
+
+  <ActiveTournaments
+    tournaments={context.activeTournaments}
+    startEpoch={context.activeRange.startEpoch}
+    endEpoch={context.activeRange.endEpoch}
+  />
+
+  {home.views.map((view) => (
+    <span class="visually-hidden home-filter-target" id={`home-filter-${view.id}`} aria-hidden="true"></span>
+  ))}
 
   <section class="tier-control" aria-labelledby="tier-control-title">
     <h2 id="tier-control-title">League tiers</h2>
-    <div
-      class="tier-options"
-      role="group"
-      aria-label="Filter recent matches by league tier"
-      aria-describedby="tier-hints tier-filter-status tier-filter-range"
-    >
+    <div class="tier-options" role="group" aria-label="Filter recent results by league tier" aria-describedby="tier-hints tier-filter-status tier-filter-range">
       {home.views.map((view, index) => (
         <button
           type="button"
@@ -55,17 +42,34 @@ function isoFromEpoch(epoch) {
           data-home-view-option={view.id}
           data-view-label={view.label}
           aria-pressed={index === 0 ? 'true' : 'false'}
-          aria-controls={`home-view-${view.id}`}
+          aria-controls="home-results"
           data-hidden-count={view.hiddenCount}
+          data-result-count={view.resultCount}
           data-range-start={isoFromEpoch(view.range.startEpoch)}
           data-range-end={isoFromEpoch(view.range.endEpoch)}
         >
           <span class="tier-option-check" aria-hidden="true">✓</span>
           <span>{view.label}</span>
-          <small>{view.matches.length}</small>
+          <small>{view.resultCount}</small>
         </button>
       ))}
     </div>
+    <noscript>
+      <nav class="tier-options no-script-tier-options" aria-label="Filter recent results without JavaScript">
+        {home.views.map((view) => <a class="tier-option" href={`#home-filter-${view.id}`}>{view.label} <small>{view.resultCount}</small></a>)}
+      </nav>
+      <style>
+        .home-view .series-result:not([data-tier-category='top']):not([data-tier-category='pro']) { display: none; }
+        main:has(.home-filter-target:target) .home-view .series-result { display: none; }
+        main:has(#home-filter-all:target) .home-view .series-result { display: list-item; }
+        main:has(#home-filter-top:target) .home-view .series-result[data-tier-category='top'],
+        main:has(#home-filter-pro:target) .home-view .series-result[data-tier-category='pro'],
+        main:has(#home-filter-amateur:target) .home-view .series-result[data-tier-category='amateur'],
+        main:has(#home-filter-other:target) .home-view .series-result[data-tier-category='other'],
+        main:has(#home-filter-default:target) .home-view .series-result[data-tier-category='top'],
+        main:has(#home-filter-default:target) .home-view .series-result[data-tier-category='pro'] { display: list-item; }
+      </style>
+    </noscript>
     <p id="tier-hints" class="tier-hints">
       {home.views.filter((view) => view.id !== 'all').map((view) => (
         <span><strong>{view.label}</strong> = {view.hint}.</span>
@@ -73,7 +77,7 @@ function isoFromEpoch(epoch) {
     </p>
     <p id="tier-filter-status" class="hidden-count" role="status" aria-live="polite">
       Current view: <strong data-current-view-output>{home.views[0].label}</strong>.
-      <strong data-hidden-count-output>{home.views[0].hiddenCount}</strong> matches hidden.
+      <strong data-hidden-count-output>{home.views[0].hiddenCount}</strong> results hidden.
       <span id="tier-filter-range" data-hidden-range>
         Counted from {isoFromEpoch(home.views[0].range.startEpoch)} inclusive to
         {' '}{isoFromEpoch(home.views[0].range.endEpoch)} exclusive.
@@ -81,28 +85,239 @@ function isoFromEpoch(epoch) {
     </p>
   </section>
 
-  {home.views.map((view, index) => <HomeFeed view={view} active={index === 0} />)}
+  <HomeFeed home={home} />
 
   <script is:inline>
     const options = document.querySelectorAll('[data-home-view-option]');
+    const rows = [...document.querySelectorAll('[data-series-row]')];
     const hiddenCount = document.querySelector('[data-hidden-count-output]');
     const hiddenRange = document.querySelector('[data-hidden-range]');
     const currentView = document.querySelector('[data-current-view-output]');
+    const dayPayloads = new Map();
+    let heroesPromise;
+
+    function rowMatchesView(row, view) {
+      if (view === 'all') return true;
+      if (view === 'default') return row.dataset.tierCategory === 'top' || row.dataset.tierCategory === 'pro';
+      return row.dataset.tierCategory === view;
+    }
+
+    function updateGroupVisibility() {
+      for (const league of document.querySelectorAll('[data-home-league-group]')) {
+        league.hidden = ![...league.querySelectorAll('[data-series-row]')].some((row) => !row.hidden);
+      }
+      for (const day of document.querySelectorAll('[data-home-day-group]')) {
+        day.hidden = ![...day.querySelectorAll('[data-series-row]')].some((row) => !row.hidden);
+      }
+    }
 
     function selectHomeView(option) {
-      for (const view of document.querySelectorAll('[data-home-view]')) {
-        view.hidden = view.dataset.homeView !== option.dataset.homeViewOption;
-      }
-      for (const candidate of options) {
-        candidate.setAttribute('aria-pressed', String(candidate === option));
-      }
+      for (const row of rows) row.hidden = !rowMatchesView(row, option.dataset.homeViewOption);
+      updateGroupVisibility();
+      for (const candidate of options) candidate.setAttribute('aria-pressed', String(candidate === option));
       currentView.textContent = option.dataset.viewLabel;
       hiddenCount.textContent = option.dataset.hiddenCount;
       hiddenRange.textContent = `Counted from ${option.dataset.rangeStart} inclusive to ${option.dataset.rangeEnd} exclusive.`;
     }
 
-    for (const option of options) {
-      option.addEventListener('click', () => selectHomeView(option));
+    for (const option of options) option.addEventListener('click', () => selectHomeView(option));
+    selectHomeView(options[0]);
+
+    function loadDay(day) {
+      if (!dayPayloads.has(day)) {
+        dayPayloads.set(day, fetch(`/data/home-players/${day}.json`).then((response) => {
+          if (!response.ok) throw new Error(`Player data request failed with ${response.status}`);
+          return response.json();
+        }));
+      }
+      return dayPayloads.get(day);
+    }
+
+    function loadHeroes() {
+      heroesPromise ??= fetch('/data/home-heroes.json').then((response) => {
+        if (!response.ok) throw new Error(`Hero data request failed with ${response.status}`);
+        return response.json();
+      }).then((payload) => new Map(payload.heroes.map((hero) => [hero.id, hero])));
+      return heroesPromise;
+    }
+
+    function cell(text, heading = false) {
+      const element = document.createElement(heading ? 'th' : 'td');
+      if (heading) element.scope = 'col';
+      element.textContent = text;
+      return element;
+    }
+
+    function playerTable(label, players, heroes) {
+      const section = document.createElement('section');
+      section.className = 'map-side';
+      const heading = document.createElement('h5');
+      heading.textContent = label;
+      section.append(heading);
+      const table = document.createElement('table');
+      const caption = document.createElement('caption');
+      caption.className = 'visually-hidden';
+      caption.textContent = `${label} player statistics`;
+      const head = document.createElement('thead');
+      const headRow = document.createElement('tr');
+      for (const value of ['Hero', 'K', 'D', 'A', 'Lvl']) headRow.append(cell(value, true));
+      head.append(headRow);
+      const body = document.createElement('tbody');
+      for (const player of players) {
+        const row = document.createElement('tr');
+        const resolved = heroes.get(player.hero_id);
+        const identity = document.createElement('th');
+        identity.scope = 'row';
+        identity.className = 'map-player-identity';
+        if (resolved?.icon) {
+          const image = document.createElement('img');
+          image.src = resolved.icon;
+          image.alt = '';
+          image.width = 48;
+          image.height = 27;
+          image.loading = 'lazy';
+          identity.append(image);
+        }
+        const name = document.createElement('span');
+        name.textContent = resolved?.name ?? 'Unknown hero';
+        identity.append(name);
+        row.append(identity, cell(player.kills ?? '—'), cell(player.deaths ?? '—'), cell(player.assists ?? '—'), cell(player.level ?? '—'));
+        body.append(row);
+      }
+      table.append(caption, head, body);
+      section.append(table);
+      return section;
+    }
+
+    function renderScoreboard(panel, payload, heroes) {
+      const scoreboard = panel.querySelector('[data-map-scoreboard]');
+      if (scoreboard.dataset.loadState === 'loaded') return;
+      const matchId = Number(panel.dataset.matchId);
+      const matchPlayers = payload.rows.filter((player) => player.match_id === matchId);
+      const radiant = matchPlayers.filter((player) => player.is_radiant === true);
+      const dire = matchPlayers.filter((player) => player.is_radiant === false);
+      const summary = document.createElement('p');
+      summary.setAttribute('role', 'status');
+      summary.textContent = matchPlayers.length > 0
+        ? `${matchPlayers.length} player rows loaded for map ${matchId}.`
+        : `Player statistics unavailable for map ${matchId}.`;
+      scoreboard.replaceChildren(summary, playerTable('Radiant', radiant, heroes), playerTable('Dire', dire, heroes));
+      scoreboard.dataset.loadState = 'loaded';
+    }
+
+    function bindTab(tab) {
+      tab.addEventListener('click', () => selectTab(tab));
+      tab.addEventListener('keydown', (event) => {
+        const tabs = [...tab.closest('[role=tablist]').querySelectorAll('[role=tab]')];
+        const index = tabs.indexOf(tab);
+        let next = null;
+        if (event.key === 'ArrowRight') next = tabs[(index + 1) % tabs.length];
+        if (event.key === 'ArrowLeft') next = tabs[(index - 1 + tabs.length) % tabs.length];
+        if (event.key === 'Home') next = tabs[0];
+        if (event.key === 'End') next = tabs.at(-1);
+        if (next) {
+          event.preventDefault();
+          selectTab(next, true);
+        }
+      });
+    }
+
+    function ensureMapUi(expansion) {
+      if (expansion.querySelector('[role=tablist]')) return;
+      const maps = expansion.dataset.mapRows.split(',').map(Number);
+      const host = expansion.querySelector('[data-map-host]');
+      const tablist = document.createElement('div');
+      tablist.className = 'map-tabs';
+      tablist.setAttribute('role', 'tablist');
+      tablist.setAttribute('aria-label', buttonLabel(expansion).replace(/^Show /, ''));
+      const panels = [];
+      maps.forEach((map, index) => {
+        const number = index + 1;
+        const tab = document.createElement('button');
+        const tabId = `${expansion.id}-tab-${number}`;
+        const panelId = `${expansion.id}-map-${number}`;
+        tab.type = 'button';
+        tab.id = tabId;
+        tab.textContent = `Map ${number}`;
+        tab.dataset.mapTab = '';
+        tab.setAttribute('role', 'tab');
+        tab.setAttribute('aria-controls', panelId);
+        tab.setAttribute('aria-selected', String(index === 0));
+        tab.tabIndex = index === 0 ? 0 : -1;
+        bindTab(tab);
+        tablist.append(tab);
+
+        const panel = document.createElement('section');
+        panel.className = 'map-panel';
+        panel.id = panelId;
+        panel.dataset.mapPanel = '';
+        panel.dataset.matchId = map;
+        panel.setAttribute('role', 'tabpanel');
+        panel.setAttribute('aria-labelledby', tabId);
+        panel.hidden = index !== 0;
+        const header = document.createElement('header');
+        const result = document.createElement('p');
+        const radiant = document.createElement('strong');
+        radiant.textContent = `Map ${number}`;
+        result.append(radiant);
+        const link = document.createElement('a');
+        link.href = `/matches/${map}/`;
+        link.textContent = 'Full map details';
+        header.append(result, link);
+        const scoreboard = document.createElement('div');
+        scoreboard.className = 'map-scoreboard';
+        scoreboard.dataset.mapScoreboard = '';
+        scoreboard.dataset.loadState = 'idle';
+        const status = document.createElement('p');
+        status.setAttribute('role', 'status');
+        status.textContent = 'Loading player statistics…';
+        scoreboard.append(status);
+        panel.append(header, scoreboard);
+        panels.push(panel);
+      });
+      host.replaceChildren(tablist, ...panels);
+    }
+
+    async function populateExpansion(expansion) {
+      ensureMapUi(expansion);
+      try {
+        const [payload, heroes] = await Promise.all([loadDay(expansion.dataset.playerDay), loadHeroes()]);
+        for (const panel of expansion.querySelectorAll('[data-map-panel]')) renderScoreboard(panel, payload, heroes);
+      } catch {
+        for (const scoreboard of expansion.querySelectorAll('[data-map-scoreboard]')) {
+          scoreboard.dataset.loadState = 'error';
+          scoreboard.querySelector('[role=status]').textContent = 'Player statistics could not be loaded.';
+        }
+      }
+    }
+
+    function buttonLabel(expansion) {
+      return document.getElementById(expansion.getAttribute('aria-labelledby')).getAttribute('aria-label');
+    }
+
+    function selectTab(tab, focus = false) {
+      const tablist = tab.closest('[role=tablist]');
+      const expansion = tab.closest('[data-series-expansion]');
+      for (const candidate of tablist.querySelectorAll('[role=tab]')) {
+        const selected = candidate === tab;
+        candidate.setAttribute('aria-selected', String(selected));
+        candidate.tabIndex = selected ? 0 : -1;
+        document.getElementById(candidate.getAttribute('aria-controls')).hidden = !selected;
+      }
+      if (focus) tab.focus();
+      expansion.dataset.activeMap = tab.getAttribute('aria-controls');
+    }
+
+    for (const button of document.querySelectorAll('[data-series-expand]')) {
+      button.addEventListener('click', () => {
+        const expansion = document.getElementById(button.getAttribute('aria-controls'));
+        const open = button.getAttribute('aria-expanded') !== 'true';
+        button.setAttribute('aria-expanded', String(open));
+        button.querySelector('[aria-hidden=true]').textContent = open ? '−' : '+';
+        button.setAttribute('aria-label', button.getAttribute('aria-label').replace(open ? /^Show / : /^Hide /, open ? 'Hide ' : 'Show '));
+        expansion.hidden = !open;
+        if (open) populateExpansion(expansion);
+      });
     }
 
     for (const logo of document.querySelectorAll('[data-team-logo]')) {

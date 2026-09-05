@@ -7,9 +7,11 @@ import {
 } from './catalog.mjs';
 import { buildClockEpoch, trailingWindow, utcMonthFromEpoch } from './clock.mjs';
 import { openDuckDB, queryRows, sourceUnionSql } from './duckdb.mjs';
+import { groupHomeSeriesRows } from './home-series.mjs';
 import {
   DRAFT_COLUMNS,
   HOME_COLUMNS,
+  HOME_PLAYER_COLUMNS,
   MATCH_COLUMNS,
   PLAYER_COLUMNS,
 } from './schema.mjs';
@@ -105,6 +107,7 @@ export class DataReader {
     this.catalog = catalog;
     this.database = database;
     this.homeTiers = null;
+    this.homeSeriesCache = new Map();
   }
 
   close() {
@@ -205,6 +208,86 @@ export class DataReader {
       hiddenCount,
       range: Object.freeze({ startEpoch, endEpoch }),
     });
+  }
+
+  async homeSeries({ limit = 300, clock = new Date() } = {}) {
+    if (!Number.isInteger(limit) || limit <= 0) {
+      throw new TypeError('home series limit must be a positive integer');
+    }
+    const endEpoch = buildClockEpoch(clock);
+    let allGroups = this.homeSeriesCache.get(endEpoch);
+    if (!allGroups) {
+      const shards = readableShards(this.catalog, 'matches');
+      const rows = shards.length === 0 ? [] : await selectRows(
+        this.database.connection,
+        shards,
+        'matches',
+        HOME_COLUMNS,
+        `WHERE start_time < ${endEpoch} ORDER BY start_time ASC, match_id ASC`,
+      );
+      allGroups = groupHomeSeriesRows(rows);
+      this.homeSeriesCache.set(endEpoch, allGroups);
+    }
+    const groups = Object.freeze(allGroups.slice(0, limit));
+    const startEpoch = groups.length === 0
+      ? endEpoch
+      : Math.min(...groups.flatMap((group) => group.rows.map((row) => row.start_time)));
+    return Object.freeze({
+      groups,
+      availableTiers: await this.availableHomeTiers(),
+      range: Object.freeze({ startEpoch, endEpoch }),
+    });
+  }
+
+  async activeTournaments({ clock = new Date(), days = 14 } = {}) {
+    if (!Number.isInteger(days) || days <= 0) {
+      throw new TypeError('active tournament days must be a positive integer');
+    }
+    const range = trailingWindow(clock, days);
+    const shards = windowShards(
+      this.catalog,
+      'matches',
+      range.startEpoch,
+      range.endEpoch,
+    );
+    const rows = shards.length === 0 ? [] : await selectRows(
+      this.database.connection,
+      shards,
+      'matches',
+      ['match_id', 'start_time', 'leagueid', 'league_name', 'league_tier'],
+      `WHERE start_time >= ${range.startEpoch} AND start_time < ${range.endEpoch} `
+        + 'AND leagueid IS NOT NULL ORDER BY start_time DESC, match_id DESC',
+    );
+    const byLeague = new Map();
+    for (const row of rows) {
+      const existing = byLeague.get(row.leagueid);
+      if (existing) existing.matchCount += 1;
+      else byLeague.set(row.leagueid, { ...row, matchCount: 1 });
+    }
+    return Object.freeze({
+      rows: Object.freeze([...byLeague.values()].map((row) => Object.freeze(row))),
+      ...range,
+    });
+  }
+
+  async homePlayers(matchIds) {
+    if (!Array.isArray(matchIds) || matchIds.some(
+      (matchId) => !Number.isSafeInteger(matchId) || matchId <= 0
+    )) {
+      throw new TypeError('home player match ids must be positive safe integers');
+    }
+    const ids = [...new Set(matchIds)];
+    if (ids.length === 0) return Object.freeze([]);
+    const shards = readableShards(this.catalog, 'players');
+    const rows = await selectRows(
+      this.database.connection,
+      shards,
+      'players',
+      HOME_PLAYER_COLUMNS,
+      `WHERE match_id IN (${ids.join(', ')}) `
+        + 'ORDER BY match_id, is_radiant DESC, hero_id, account_id',
+    );
+    return Object.freeze(rows.map((row) => Object.freeze(row)));
   }
 
   async detail(matchId) {
