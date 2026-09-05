@@ -1539,6 +1539,26 @@ Cloudflare's 1,200,000 ms cap; no cross-machine or ten-minute-headroom compariso
 All 51 Node tests and all fifteen audits passed, and the complete 17-assertion negative-test
 matrix restored every mutation before the final audit run.
 
+**Site source inventory and deletion-only cleanup - step 30 phase 2a complete.** The unused
+`HomeMatchRow.astro` component was deleted after confirming it had no references in site
+source, tests, or audit scripts. The unused `homeTierLabel` and `SEARCH_INDEX_PATH` exports
+were removed under the same three-directory reference check; the active client-side
+`INDEX_PATH` remains unchanged. Seven selectors absent from the phase 1 build output were
+removed: `.intro`; the three `.home-score .no-result` selectors; and the three
+`.match-feed`-qualified heading/team selectors. The shared `.match-heading h3` rule remains
+because the summary markup supports heading levels h1 through h6.
+
+The other 44 selectors found absent from that build's `dist` were retained. They are not
+proven dead: source templates or runtime scripts can emit them for data-conditional states,
+including active tournaments, series longer than three maps, unparsed matches, null team
+IDs, and empty search results. Absence from the current emitted data is insufficient grounds
+for deletion.
+
+The search input now overrides only its own visible-focus outline offset to zero. This keeps
+the global `:focus-visible` outline and `--focus` token unchanged while preventing the ring
+from crossing the input/button seam; ordinary mouse clicks do not trigger a container-level
+`:focus-within` treatment.
+
 **Deploy - step 17 complete:** Cloudflare Pages is connected to the repo and builds on pushes
 to `main`; the ingest job's commits trigger builds automatically. The approval gate passed on
 the live `dotainfo.pages.dev` deployment. `/matches/7485890286/` was measured returning HTTP

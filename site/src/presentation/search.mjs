@@ -1,5 +1,4 @@
 export const SEARCH_INDEX_VERSION = 1;
-export const SEARCH_INDEX_PATH = '/data/search-index.json';
 
 function safeColumns(entries, fields) {
   const columns = Object.fromEntries(fields.map((field) => [field.key, []]));

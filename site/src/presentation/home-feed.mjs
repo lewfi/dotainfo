@@ -69,10 +69,6 @@ export function homeTierCategory(tier) {
     ?? OTHER_CATEGORY;
 }
 
-export function homeTierLabel(tier) {
-  return homeTierCategory(tier).label;
-}
-
 function dayIdentity(summary) {
   if (summary.date.status !== 'available') {
     return Object.freeze({ key: 'unavailable', label: 'Date unavailable', shortLabel: 'Date unavailable' });
