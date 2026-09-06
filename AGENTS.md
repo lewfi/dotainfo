@@ -39,6 +39,7 @@ Refer to steps by these numbers only. Do not renumber.
 30. Site source inventory and deletion-only cleanup
 31. Discoverability core
 32. Structured data and title corrections
+33. Breadcrumb navigation and structured data
 
 ## Never
 

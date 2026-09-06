@@ -1,8 +1,14 @@
 ---
+import Breadcrumbs from './Breadcrumbs.astro';
 import SiteLayout from '../layouts/SiteLayout.astro';
 import TournamentMatchRow from './TournamentMatchRow.astro';
 
 const { tournament } = Astro.props;
+const breadcrumbItems = [
+  { name: 'Home', href: '/' },
+  { name: 'Tournaments', href: '/tournaments/' },
+  { name: tournament.name },
+];
 const dateFormatter = new Intl.DateTimeFormat('en-US', {
   day: 'numeric',
   month: 'short',
@@ -20,7 +26,9 @@ const dateRange = `${dateFormatter.format(new Date(tournament.firstStartTime * 1
     data-page-number={tournament.pageNumber}
     data-page-count={tournament.pageCount}
     data-total-matches={tournament.matchCount}
+    data-title-stem={tournament.titleStem}
   >
+    <Breadcrumbs items={breadcrumbItems} />
     <p class="eyebrow"><a href="/tournaments/">Tournaments</a> / {tournament.category.label}</p>
     <h1>{tournament.name}</h1>
     <dl class="tournament-facts">

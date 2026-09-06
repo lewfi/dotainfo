@@ -222,6 +222,38 @@ main {
   font-weight: 800;
 }
 
+.breadcrumbs {
+  margin-block: 1rem 0;
+  color: var(--fg-2);
+  font-size: 12px;
+}
+
+.breadcrumbs ol {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.breadcrumbs li {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.breadcrumbs li:not(:last-child)::after {
+  color: var(--fg-3);
+  content: '/';
+}
+
+.breadcrumbs [aria-current='page'] {
+  color: var(--fg);
+  font-weight: 700;
+}
+
 h1,
 h2,
 h3 {

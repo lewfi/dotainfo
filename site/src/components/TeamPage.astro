@@ -1,4 +1,5 @@
 ---
+import Breadcrumbs from './Breadcrumbs.astro';
 import SiteLayout from '../layouts/SiteLayout.astro';
 import TeamMatchRow from './TeamMatchRow.astro';
 
@@ -9,6 +10,11 @@ const structuredData = {
   name: team.name.display,
   url: new URL(Astro.url.pathname, Astro.site).href,
 };
+const breadcrumbItems = [
+  { name: 'Home', href: '/' },
+  { name: 'Teams', href: '/teams/' },
+  { name: team.name.display },
+];
 const number = (value) => Number(value).toLocaleString('en-US');
 const dateFormatter = new Intl.DateTimeFormat('en-US', {
   day: 'numeric',
@@ -35,8 +41,10 @@ const dateRange = team.firstStartTime === null || team.lastStartTime === null
     data-null-result-matches={team.nullResultMatches}
     data-team-name={team.name.display}
     data-team-name-source={team.name.source}
+    data-title-stem={team.titleStem}
     data-logo-state={team.logo.status}
   >
+    <Breadcrumbs items={breadcrumbItems} />
     <p class="eyebrow"><a href="/teams/">Teams</a> / Team {team.teamId}</p>
     <header class="team-page-header">
       {team.logo.status === 'available' ? (

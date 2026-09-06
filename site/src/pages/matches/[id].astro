@@ -1,5 +1,6 @@
 ---
 import { BUILD_CLOCK } from '../../build-context.mjs';
+import Breadcrumbs from '../../components/Breadcrumbs.astro';
 import MatchDetail from '../../components/MatchDetail.astro';
 import SiteLayout from '../../layouts/SiteLayout.astro';
 import { createMatchDetailModel } from '../../presentation/match-detail.mjs';
@@ -42,6 +43,11 @@ const structuredData = {
   ...(startDate ? { startDate } : {}),
   ...(competitors.length > 0 ? { competitor: competitors } : {}),
 };
+const breadcrumbItems = [
+  { name: 'Home', href: '/' },
+  { name: 'Matches' },
+  { name: eraMatchup ?? `Match ${matchId}` },
+];
 ---
 
 <SiteLayout
@@ -50,5 +56,6 @@ const structuredData = {
   ogType="article"
   {structuredData}
 >
+  <Breadcrumbs items={breadcrumbItems} />
   <MatchDetail model={model} />
 </SiteLayout>

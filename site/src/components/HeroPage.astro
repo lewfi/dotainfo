@@ -1,7 +1,13 @@
 ---
+import Breadcrumbs from './Breadcrumbs.astro';
 import SiteLayout from '../layouts/SiteLayout.astro';
 
 const { hero, collection } = Astro.props;
+const breadcrumbItems = [
+  { name: 'Home', href: '/' },
+  { name: 'Heroes', href: '/heroes/' },
+  { name: hero.name },
+];
 const number = (value) => Number(value).toLocaleString('en-US');
 const percent = (value) => value === null
   ? 'Unavailable'
@@ -21,6 +27,7 @@ const percent = (value) => value === null
     data-win-eligible-picks={hero.winEligiblePicks}
     data-player-count={hero.playerCount}
   >
+    <Breadcrumbs items={breadcrumbItems} />
     <p class="eyebrow"><a href="/heroes/">Heroes</a> / {hero.primaryAttribute.label}</p>
     <header class="hero-page-header">
       {hero.iconUrl && <img src={hero.iconUrl} alt="" width="128" height="72" />}

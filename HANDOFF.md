@@ -1591,11 +1591,37 @@ historical pages omit JSON-LD until a supported type and all required values can
 no placeholder, guessed, or empty-string fields are emitted.
 
 `audit:metadata` continues to scan every emitted HTML page. In addition to the step 31
-canonical, description, Open Graph, and sitemap assertions, it rejects multiple em dashes or
-a missing site-name suffix in titles, repeated descriptions within one team or tournament
-pagination series, any mismatch between exact emitted match routes and `article` pages, and
-invalid or unsupported JSON-LD. The SportsEvent-bearing page set must equal the independently
-derived match-route set in both directions.
+canonical, description, Open Graph, and sitemap assertions, it requires the exact site-name
+suffix and independently checks route-derived match and pagination title fragments, repeated
+descriptions within one team or tournament pagination series, any mismatch between exact
+emitted match routes and `article` pages, and invalid or unsupported JSON-LD. The title stem
+is deliberately opaque: committed entity names may themselves contain em dashes, so counting
+that character would reject valid data rather than validate the generated separator. The
+SportsEvent-bearing page set must equal the independently derived match-route set in both
+directions.
+
+**Breadcrumb navigation and structured data - step 33 complete.** Pre-rendered match, team,
+tournament, and hero detail pages display one `Breadcrumb` navigation landmark containing an
+ordered list. The trails are Home / Matches / matchup, Home / Teams / team name, Home /
+Tournaments / tournament name, and Home / Heroes / hero name. The current final crumb is text,
+not a link. `Matches` is also text because `/matches/` is not a genuinely emitted route; every
+breadcrumb link must resolve to an emitted HTML page.
+
+Match breadcrumbs use the two write-time team-name snapshots stored on the match row when both
+durable team IDs are present. If either team ID is null, the final crumb is `Match <id>` rather
+than implying a stable team identity. Every visible trail has a corresponding
+`BreadcrumbList` JSON-LD block with the same item count, order, names, and linked destinations.
+This block is additive to the page-type structured data from step 32. Breadcrumb styling uses
+spacing, typography, colour, and slash separators without introducing border ownership.
+
+The metadata gate derives the eligible detail-route sets from every emitted path and requires
+exact two-way equality for both visible breadcrumbs and `BreadcrumbList` blocks. It also
+requires an ordered list, an unlinked final crumb, parseable and positionally identical
+structured data, and link targets that exist in `dist`. Title assertions remain concerned only
+with generated fragments: each title ends in the exact ` — DotaInfo` suffix, match titles end
+their pre-suffix content in `, match <route id>`, later pagination pages end it in
+`, page <route page>`, and page 1 contains no generated page fragment. Entity-name punctuation
+is never treated as a separator signal.
 
 **Deploy - step 17 complete:** Cloudflare Pages is connected to the repo and builds on pushes
 to `main`; the ingest job's commits trigger builds automatically. The approval gate passed on
