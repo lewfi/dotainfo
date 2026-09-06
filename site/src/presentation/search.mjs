@@ -1,4 +1,4 @@
-export const SEARCH_INDEX_VERSION = 1;
+export const SEARCH_INDEX_VERSION = 2;
 
 function safeColumns(entries, fields) {
   const columns = Object.fromEntries(fields.map((field) => [field.key, []]));
@@ -37,7 +37,7 @@ function collisionColumns(entries, name, titleStem) {
   ]);
 }
 
-export function createSearchIndex({ teams, tournaments, heroes }) {
+export function createSearchIndex({ teams, tournaments, heroes, matches = [] }) {
   const teamColumns = safeColumns(teams, [
     { key: 'i', value: (entry) => entry.teamId },
     { key: 'n', value: (entry) => entry.name.display },
@@ -52,6 +52,9 @@ export function createSearchIndex({ teams, tournaments, heroes }) {
     { key: 'i', value: (entry) => entry.heroId },
     { key: 'n', value: (entry) => entry.name },
   ]);
+  const matchColumns = safeColumns(matches, [
+    { key: 'i', value: (entry) => entry.matchId },
+  ]);
   return Object.freeze({
     v: SEARCH_INDEX_VERSION,
     t: Object.freeze({
@@ -63,5 +66,6 @@ export function createSearchIndex({ teams, tournaments, heroes }) {
       c: collisionColumns(tournaments, (entry) => entry.name, (entry) => entry.titleStem),
     }),
     h: heroColumns,
+    m: matchColumns,
   });
 }

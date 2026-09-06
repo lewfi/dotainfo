@@ -15,6 +15,9 @@ function fixtures() {
     heroes: [
       { heroId: 30, name: 'Hero Name', pickCount: 4, banCount: 3 },
     ],
+    matches: [
+      { matchId: 40 },
+    ],
   };
 }
 
@@ -28,6 +31,7 @@ test('search index is compact columnar data with parallel arrays', () => {
   assert.ok(['i', 'n', 'g', 'w'].every((key) => index.t[key].length === 2));
   assert.ok(['i', 'n'].every((key) => index.l[key].length === 1));
   assert.ok(['i', 'n'].every((key) => index.h[key].length === 1));
+  assert.deepEqual(index.m.i, [40]);
   assert.equal(index.t.c.i.length, index.t.c.y.length);
   assert.equal(index.l.c.i.length, index.l.c.y.length);
 });

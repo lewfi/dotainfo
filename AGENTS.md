@@ -40,6 +40,7 @@ Refer to steps by these numbers only. Do not renumber.
 31. Discoverability core
 32. Structured data and title corrections
 33. Breadcrumb navigation and structured data
+34. Search improvements and breadcrumb correction
 
 ## Never
 

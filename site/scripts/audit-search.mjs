@@ -32,6 +32,11 @@ const ASSERTION_NAMES = Object.freeze([
   'noJavaScriptFallbackResolvesBrowseLinks',
   'sharedNameDiscriminatorsMatchDestinationTitles',
   'keyboardResultsAreLabeledAnnouncedAndResponsive',
+  'everyIndexEntryResolvesToEmittedPage',
+  'matchEntriesExactlyMatchEmittedRoutes',
+  'collisionTeamDiscriminatorsContainMatchCount',
+  'uniqueTeamDiscriminatorsAreAbsent',
+  'keyboardNavigationMovesFollowsAndCloses',
 ]);
 
 function argument(name) {
@@ -43,6 +48,10 @@ function cleanText(value) {
   if (typeof value !== 'string') return null;
   const cleaned = value.trim();
   return cleaned.length > 0 ? cleaned : null;
+}
+
+function matchCountDiscriminator(matchCount) {
+  return `(${Number(matchCount).toLocaleString('en-US')} ${matchCount === 1 ? 'match' : 'matches'})`;
 }
 
 function sqlString(value) {
@@ -202,9 +211,12 @@ function expand(type, columns) {
   return columns.i.map((id, index) => ({
     type,
     id,
-    name: columns.n[index],
+    name: type === 'match' ? `Match ${id}` : columns.n[index],
     tag: columns.g?.[index] ?? '',
     discriminator: type === 'hero' ? 'hero' : (collision.get(index) ?? ''),
+    displayDiscriminator: type === 'team' && collision.has(index)
+      ? matchCountDiscriminator(columns.w[index])
+      : (type === 'hero' ? 'hero' : (collision.get(index) ?? '')),
     weight: columns.w?.[index] ?? 0,
   }));
 }
@@ -245,7 +257,9 @@ async function matchingFiles(files, predicate) {
 }
 
 function hrefFor(entry) {
-  const segment = entry.type === 'team' ? 'teams' : entry.type === 'tournament' ? 'tournaments' : 'heroes';
+  const segment = entry.type === 'team' ? 'teams'
+    : entry.type === 'tournament' ? 'tournaments'
+      : entry.type === 'hero' ? 'heroes' : 'matches';
   return `/${segment}/${entry.id}/`;
 }
 
@@ -375,7 +389,7 @@ async function newTarget(port) {
   return new CdpClient((await response.json()).webSocketDebuggerUrl);
 }
 
-async function browserCheck(chrome, outputRoot) {
+async function browserCheck(chrome, outputRoot, uniqueTeamName) {
   const scratch = await mkdtemp(path.join(tmpdir(), 'dotainfo-step28-'));
   const profile = await mkdtemp(path.join(scratch, 'profile-'));
   const chromePort = await freePort();
@@ -420,7 +434,51 @@ async function browserCheck(chrome, outputRoot) {
         if (index === 0) {
           const before = requests.index;
           const result = await client.send('Runtime.evaluate', {
-            expression: `(async()=>{const roots=[...document.querySelectorAll('[data-search-root]')];const header=roots[0].querySelector('input');const page=roots[1].querySelector('input');header.focus();await new Promise(r=>setTimeout(r,100));page.focus();page.value='Dominion';page.dispatchEvent(new Event('input',{bubbles:true}));for(let i=0;i<100&&roots[1].querySelector('[data-search-status]').textContent.includes('Loading');i++)await new Promise(r=>setTimeout(r,25));const links=[...roots[1].querySelectorAll('[data-search-list] a')];page.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowDown',bubbles:true}));return{expanded:page.getAttribute('aria-expanded'),active:page.getAttribute('aria-activedescendant'),status:roots[1].querySelector('[data-search-status]').textContent,live:roots[1].querySelector('[role=status]').getAttribute('aria-live'),listRole:roots[1].querySelector('[data-search-list]').getAttribute('role'),results:links.map(a=>({href:a.getAttribute('href'),id:Number(a.dataset.searchResultId),type:a.dataset.searchResultType,discriminator:a.dataset.searchDiscriminator,selected:a.getAttribute('aria-selected')}))}})()`,
+            expression: `(async()=>{
+              const roots=[...document.querySelectorAll('[data-search-root]')];
+              const header=roots[0].querySelector('input');
+              const searchRoot=roots[1];
+              const page=searchRoot.querySelector('input');
+              const status=searchRoot.querySelector('[data-search-status]');
+              const list=searchRoot.querySelector('[data-search-list]');
+              const panel=searchRoot.querySelector('[data-search-results]');
+              const query=async(value)=>{
+                page.value=value;
+                page.dispatchEvent(new Event('input',{bubbles:true}));
+                for(let i=0;i<100&&status.textContent.includes('Loading');i++)await new Promise(r=>setTimeout(r,25));
+                await new Promise(r=>setTimeout(r,0));
+                return[...list.querySelectorAll('a')];
+              };
+              header.focus();
+              await new Promise(r=>setTimeout(r,100));
+              page.focus();
+              const links=await query('Dominion');
+              const initialActive=page.getAttribute('aria-activedescendant');
+              const initialSelected=links.filter(a=>a.getAttribute('aria-selected')==='true').length;
+              page.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowDown',bubbles:true}));
+              const firstActive=page.getAttribute('aria-activedescendant');
+              const primary={expanded:page.getAttribute('aria-expanded'),active:firstActive,status:status.textContent,
+                live:searchRoot.querySelector('[role=status]').getAttribute('aria-live'),listRole:list.getAttribute('role'),
+                results:links.map(a=>({href:a.getAttribute('href'),id:Number(a.dataset.searchResultId),type:a.dataset.searchResultType,discriminator:a.dataset.searchDiscriminator,selected:a.getAttribute('aria-selected')}))};
+              page.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowDown',bubbles:true}));
+              const secondActive=page.getAttribute('aria-activedescendant');
+              page.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowUp',bubbles:true}));
+              const returnedActive=page.getAttribute('aria-activedescendant');
+              let followedHref=null;
+              links[0].addEventListener('click',event=>{event.preventDefault();followedHref=event.currentTarget.getAttribute('href')},{once:true});
+              page.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}));
+              page.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));
+              const keyboardNavigation=initialActive===null&&initialSelected===0
+                &&firstActive===links[0]?.id&&secondActive===links[1]?.id&&returnedActive===links[0]?.id
+                &&followedHref===links[0]?.getAttribute('href')&&panel.hidden
+                &&page.getAttribute('aria-expanded')==='false'&&page.getAttribute('aria-activedescendant')===null
+                &&document.activeElement===page;
+              const collisionLinks=await query('Team Spirit');
+              const collisionResults=collisionLinks.filter(a=>a.dataset.searchResultType==='team'&&a.querySelector('strong')?.textContent==='Team Spirit').map(a=>({id:Number(a.dataset.searchResultId),displayDiscriminator:a.dataset.searchDisplayDiscriminator,markup:a.outerHTML}));
+              const uniqueLinks=await query(${JSON.stringify(uniqueTeamName)});
+              const uniqueTeam=uniqueLinks.find(a=>a.dataset.searchResultType==='team'&&a.querySelector('strong')?.textContent===${JSON.stringify(uniqueTeamName)});
+              return{...primary,keyboardNavigation,collisionResults,uniqueTeamDisplayDiscriminator:uniqueTeam?.dataset.searchDisplayDiscriminator??null};
+            })()`,
             awaitPromise: true,
             returnByValue: true,
           });
@@ -451,23 +509,33 @@ const actualEntries = [
   ...expand('team', index.t),
   ...expand('tournament', index.l),
   ...expand('hero', index.h),
+  ...expand('match', index.m),
 ];
 const actualByKey = new Map(actualEntries.map((entry) => [`${entry.type}:${entry.id}`, entry]));
 const expectedGroups = await independentEntries();
-const expectedEntries = Object.entries(expectedGroups).flatMap(([type, entries]) => [...entries.values()].map((entry) => ({ type, ...entry })));
-const expectedByKey = new Map(expectedEntries.map((entry) => [`${entry.type}:${entry.id}`, entry]));
 const routeSets = {
   team: await numericDirectories(path.join(outputRoot, 'teams')),
   tournament: await numericDirectories(path.join(outputRoot, 'tournaments')),
   hero: await numericDirectories(path.join(outputRoot, 'heroes')),
+  match: await numericDirectories(path.join(outputRoot, 'matches')),
 };
-const indexedSets = Object.fromEntries(['team', 'tournament', 'hero'].map((type) => [type, new Set(actualEntries.filter((entry) => entry.type === type).map((entry) => entry.id))]));
-const validColumns = index.v === 1 && [['t', ['i', 'n', 'g', 'w']], ['l', ['i', 'n']], ['h', ['i', 'n']]].every(([type, keys]) => {
+expectedGroups.match = new Map([...routeSets.match].map((id) => [id, {
+  id,
+  name: `Match ${id}`,
+  tag: '',
+  discriminator: '',
+  matchCount: 0,
+}]));
+const expectedEntries = Object.entries(expectedGroups).flatMap(([type, entries]) => [...entries.values()].map((entry) => ({ type, ...entry })));
+const expectedByKey = new Map(expectedEntries.map((entry) => [`${entry.type}:${entry.id}`, entry]));
+const entryTypes = Object.freeze(['team', 'tournament', 'hero', 'match']);
+const indexedSets = Object.fromEntries(entryTypes.map((type) => [type, new Set(actualEntries.filter((entry) => entry.type === type).map((entry) => entry.id))]));
+const validColumns = index.v === 2 && [['t', ['i', 'n', 'g', 'w']], ['l', ['i', 'n']], ['h', ['i', 'n']], ['m', ['i']]].every(([type, keys]) => {
   const columns = index[type];
   const length = columns.i.length;
   return keys.every((key) => Array.isArray(columns[key]) && columns[key].length === length)
     && columns.i.every(Number.isSafeInteger)
-    && columns.n.every((name) => typeof name === 'string' && name.trim())
+    && (type === 'm' || columns.n.every((name) => typeof name === 'string' && name.trim()))
     && (!columns.w || columns.w.every((weight) => Number.isSafeInteger(weight) && weight >= 0))
     && (!columns.g || columns.g.every((tag) => typeof tag === 'string'))
     && (!columns.c || (columns.c.i.length === columns.c.y.length
@@ -499,6 +567,18 @@ for (const entry of actualEntries) {
   globalNames.set(entry.name, group);
 }
 const sharedEntries = [...globalNames.values()].filter((group) => group.length > 1).flat();
+const teamNameCounts = new Map();
+for (const entry of actualEntries.filter((candidate) => candidate.type === 'team')) {
+  teamNameCounts.set(entry.name, (teamNameCounts.get(entry.name) ?? 0) + 1);
+}
+const collisionTeamEntries = actualEntries.filter((entry) => (
+  entry.type === 'team' && teamNameCounts.get(entry.name) > 1
+));
+const uniqueTeamEntries = actualEntries.filter((entry) => (
+  entry.type === 'team' && teamNameCounts.get(entry.name) === 1
+));
+const uniqueTeamProbe = uniqueTeamEntries.find((entry) => entry.name.length >= 3);
+assert.ok(uniqueTeamProbe, 'search audit needs one uniquely named team');
 let destinationDiscriminators = true;
 const sharedPages = await Promise.all(sharedEntries.map(async (entry) => ({
   entry,
@@ -509,21 +589,36 @@ for (const { entry, html } of sharedPages) {
   if (titleDiscriminator(title, entry.name) !== entry.discriminator) destinationDiscriminators = false;
 }
 let browser = null;
-if (!only || ['searchIsLazyAndSessionCached', 'sharedNameDiscriminatorsMatchDestinationTitles', 'keyboardResultsAreLabeledAnnouncedAndResponsive'].includes(only)) {
+if (!only || [
+  'searchIsLazyAndSessionCached',
+  'sharedNameDiscriminatorsMatchDestinationTitles',
+  'keyboardResultsAreLabeledAnnouncedAndResponsive',
+  'collisionTeamDiscriminatorsContainMatchCount',
+  'uniqueTeamDiscriminatorsAreAbsent',
+  'keyboardNavigationMovesFollowsAndCloses',
+].includes(only)) {
   const chrome = CHROME_PATHS.find((candidate) => { try { return statSync(candidate).isFile(); } catch { return false; } });
   assert.ok(chrome, 'Chrome or Edge is required for the Step 28 search gate');
-  browser = await browserCheck(chrome, outputRoot);
+  browser = await browserCheck(chrome, outputRoot, uniqueTeamProbe.name);
 }
 const runtimeDiscriminators = browser?.interaction.results.every((result) => {
   const entry = actualByKey.get(`${result.type}:${result.id}`);
   return entry && result.discriminator === entry.discriminator;
 }) ?? true;
+const expectedTeamSpirit = collisionTeamEntries.filter((entry) => entry.name === 'Team Spirit');
+const teamSpiritBrowserValid = browser ? browser.interaction.collisionResults.length === expectedTeamSpirit.length
+  && expectedTeamSpirit.every((entry) => browser.interaction.collisionResults.some((result) => (
+    result.id === entry.id && result.displayDiscriminator === entry.displayDiscriminator
+  ))) : true;
+const uniqueTeamBrowserValid = browser
+  ? browser.interaction.uniqueTeamDisplayDiscriminator === ''
+  : true;
 const assertions = Object.freeze({
-  indexAndPagesCoverEachOther: ['team', 'tournament', 'hero'].every((type) => routeSets[type].size === indexedSets[type].size
+  indexAndPagesCoverEachOther: entryTypes.every((type) => routeSets[type].size === indexedSets[type].size
     && [...routeSets[type]].every((id) => indexedSets[type].has(id))
     && [...indexedSets[type]].every((id) => routeSets[type].has(id))),
   entryCountsMatchIndependentUnprunedScan: actualEntries.length === expectedEntries.length
-    && ['team', 'tournament', 'hero'].every((type) => indexedSets[type].size === expectedGroups[type].size),
+    && entryTypes.every((type) => indexedSets[type].size === expectedGroups[type].size),
   namesTagsAndWeightsMatchIndependentSource: actualByKey.size === expectedByKey.size && valueCoverage,
   compactColumnsHaveValidIntegerIdsAndValues: validColumns && actualByKey.size === actualEntries.length,
   indexIsExternalAndHomeStaysBounded: inlineFiles.length === 0 && homeGzip <= HOME_GZIP_REFERENCE + HOME_GZIP_TOLERANCE,
@@ -539,9 +634,19 @@ const assertions = Object.freeze({
     && browser.interaction.live === 'polite' && browser.interaction.listRole === 'listbox'
     && browser.interaction.results.length > 1
     && browser.interaction.results.filter((result) => result.selected === 'true').length === 1 : true,
+  everyIndexEntryResolvesToEmittedPage: actualEntries.every((entry) => routeSets[entry.type].has(entry.id)),
+  matchEntriesExactlyMatchEmittedRoutes: routeSets.match.size === indexedSets.match.size
+    && [...routeSets.match].every((id) => indexedSets.match.has(id))
+    && [...indexedSets.match].every((id) => routeSets.match.has(id)),
+  collisionTeamDiscriminatorsContainMatchCount: collisionTeamEntries.every((entry) => (
+    entry.displayDiscriminator === matchCountDiscriminator(expectedByKey.get(`team:${entry.id}`).matchCount)
+  )) && teamSpiritBrowserValid,
+  uniqueTeamDiscriminatorsAreAbsent: uniqueTeamEntries.every((entry) => entry.displayDiscriminator === '')
+    && uniqueTeamBrowserValid,
+  keyboardNavigationMovesFollowsAndCloses: browser ? browser.interaction.keyboardNavigation === true : true,
 });
 const selected = Object.freeze(Object.fromEntries(Object.entries(assertions).filter(([name]) => !only || name === only)));
-const typeCounts = Object.fromEntries(['team', 'tournament', 'hero'].map((type) => [type, indexedSets[type].size]));
+const typeCounts = Object.fromEntries(entryTypes.map((type) => [type, indexedSets[type].size]));
 console.log(`STEP28_SEARCH_AUDIT=${JSON.stringify({
   entries: actualEntries.length,
   typeCounts,

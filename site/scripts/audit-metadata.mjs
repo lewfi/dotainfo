@@ -365,6 +365,9 @@ async function main() {
             ? null
             : new URL(visibleItem.href, expectedUrl).href;
           const actualItemUrl = structuredItem?.item ?? null;
+          if (index < structuredItems.length - 1 && !actualItemUrl) {
+            errors.push(`${relativePath}: BreadcrumbList non-final item ${index + 1} must have an item URL`);
+          }
           if (
             structuredItem?.['@type'] !== 'ListItem'
             || structuredItem?.position !== index + 1

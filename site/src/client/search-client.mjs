@@ -4,6 +4,10 @@ const RESULT_LIMIT = 20;
 let indexPromise;
 let searchablePromise;
 
+function matchCountDiscriminator(matchCount) {
+  return `(${Number(matchCount).toLocaleString('en-US')} ${matchCount === 1 ? 'match' : 'matches'})`;
+}
+
 function loadIndex() {
   indexPromise ??= fetch(INDEX_PATH).then((response) => {
     if (!response.ok) throw new Error(`Search index request failed: ${response.status}`);
@@ -21,9 +25,12 @@ function rows(type, columns, href, typeLabel) {
     id,
     type,
     typeLabel,
-    name: columns.n[index],
+    name: type === 'match' ? `Match ${id}` : columns.n[index],
     tag: columns.g?.[index] ?? '',
     discriminator: type === 'hero' ? 'hero' : (discriminators.get(index) ?? ''),
+    displayDiscriminator: type === 'team' && discriminators.has(index)
+      ? matchCountDiscriminator(columns.w[index])
+      : (type === 'hero' ? 'hero' : (discriminators.get(index) ?? '')),
     weight: columns.w?.[index] ?? 0,
     href: href(id),
   }));
@@ -35,6 +42,7 @@ function searchableIndex() {
       ...rows('team', index.t, (id) => `/teams/${id}/`, 'Team'),
       ...rows('tournament', index.l, (id) => `/tournaments/${id}/`, 'Tournament'),
       ...rows('hero', index.h, (id) => `/heroes/${id}/`, 'Hero'),
+      ...rows('match', index.m, (id) => `/matches/${id}/`, 'Match'),
     ];
     const nameCounts = new Map();
     for (const entry of entries) {
@@ -77,12 +85,13 @@ function appendResult(list, entry, index) {
   link.dataset.searchResultId = String(entry.id);
   link.dataset.searchResultType = entry.type;
   link.dataset.searchDiscriminator = entry.sharedName ? entry.discriminator : '';
+  link.dataset.searchDisplayDiscriminator = entry.sharedName ? entry.displayDiscriminator : '';
   const name = document.createElement('strong');
   name.textContent = entry.name;
   const detail = document.createElement('span');
   detail.className = 'search-result-detail';
   const parts = [entry.typeLabel];
-  if (entry.sharedName && entry.discriminator) parts.push(entry.discriminator);
+  if (entry.sharedName && entry.displayDiscriminator) parts.push(entry.displayDiscriminator);
   if (entry.tag) parts.push(entry.tag);
   detail.textContent = parts.join(' · ');
   link.append(name, detail);
@@ -102,7 +111,7 @@ function enhance(root) {
   let active = -1;
 
   function select(index) {
-    active = options.length === 0 ? -1 : (index + options.length) % options.length;
+    active = options.length === 0 || index < 0 ? -1 : index % options.length;
     options.forEach((option, optionIndex) => option.setAttribute('aria-selected', String(optionIndex === active)));
     if (active < 0) input.removeAttribute('aria-activedescendant');
     else {
@@ -139,6 +148,7 @@ function enhance(root) {
       panel.hidden = true;
       input.setAttribute('aria-expanded', 'false');
       select(-1);
+      input.focus();
     }
     if (event.key === 'Enter' && active >= 0) {
       event.preventDefault();

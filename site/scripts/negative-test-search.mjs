@@ -122,6 +122,41 @@ await runAssertion('keyboardResultsAreLabeledAnnouncedAndResponsive', fileMutati
   (html) => html.replace('for="page-search"', 'for="broken-page-search"'),
 ));
 
+await runAssertion('everyIndexEntryResolvesToEmittedPage', fileMutation(indexFile, (text) => {
+  const value = JSON.parse(text);
+  value.t.i[uniqueIndex] = 999_999_999;
+  return JSON.stringify(value);
+}));
+
+await runAssertion('matchEntriesExactlyMatchEmittedRoutes', fileMutation(indexFile, (text) => {
+  const value = JSON.parse(text);
+  assert.ok(value.m.i.length > 0);
+  value.m.i.pop();
+  return JSON.stringify(value);
+}));
+
+await runAssertion('collisionTeamDiscriminatorsContainMatchCount', fileMutation(indexFile, (text) => {
+  const value = JSON.parse(text);
+  assert.ok(value.t.c.i.length > 0);
+  value.t.w[value.t.c.i[0]] += 1;
+  return JSON.stringify(value);
+}));
+
+await runAssertion('uniqueTeamDiscriminatorsAreAbsent', fileMutation(indexFile, (text) => {
+  const value = JSON.parse(text);
+  value.t.c.i.push(uniqueIndex);
+  value.t.c.y.push(0);
+  return JSON.stringify(value);
+}));
+
+await runAssertion('keyboardNavigationMovesFollowsAndCloses', fileMutation(
+  searchPage,
+  (html) => html.replace(
+    '</body>',
+    '<script>document.addEventListener("keydown",event=>{if(event.key==="ArrowDown")event.stopImmediatePropagation()},true)</script></body>',
+  ),
+));
+
 const linkMutation = fileMutation(homePage, (html) => html.replace('href="/search/"', 'href="/search-missing/"'));
 await linkMutation.apply();
 let failedLink;

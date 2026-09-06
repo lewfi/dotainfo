@@ -1602,10 +1602,9 @@ directions.
 
 **Breadcrumb navigation and structured data - step 33 complete.** Pre-rendered match, team,
 tournament, and hero detail pages display one `Breadcrumb` navigation landmark containing an
-ordered list. The trails are Home / Matches / matchup, Home / Teams / team name, Home /
+ordered list. The trails are Home / matchup, Home / Teams / team name, Home /
 Tournaments / tournament name, and Home / Heroes / hero name. The current final crumb is text,
-not a link. `Matches` is also text because `/matches/` is not a genuinely emitted route; every
-breadcrumb link must resolve to an emitted HTML page.
+not a link. Every breadcrumb link must resolve to an emitted HTML page.
 
 Match breadcrumbs use the two write-time team-name snapshots stored on the match row when both
 durable team IDs are present. If either team ID is null, the final crumb is `Match <id>` rather
@@ -1622,6 +1621,25 @@ with generated fragments: each title ends in the exact ` — DotaInfo` suffix, m
 their pre-suffix content in `, match <route id>`, later pagination pages end it in
 `, page <route page>`, and page 1 contains no generated page fragment. Entity-name punctuation
 is never treated as a separator signal.
+
+**Search improvements and breadcrumb correction - step 34 complete.** Every non-final
+`BreadcrumbList` `ListItem` must carry an `item` URL. Match pages therefore use Home / matchup:
+the itemless intermediate `Matches` crumb was removed because there is no emitted `/matches/`
+route to link. The final crumb retains the null-team fallback `Match <id>` whenever either
+durable team ID is absent.
+
+Search collision groups keep one result per durable team ID. A team result whose name is shared
+by multiple team IDs displays its committed match count as the discriminator; a uniquely named
+team displays no discriminator. The data contains 590 shared names spanning 1,816 team IDs.
+These identities must never be merged, collapsed, or hidden by name, even when era names and
+active windows overlap. `team_id` remains the durable key.
+
+The search index includes match entries only for the match routes emitted by the rolling recent
+window. The entry set is recomputed from `recentMatchPaths(BUILD_CLOCK)`, the same source used by
+the match page route generator, and historical client-resolved match URLs are not indexed.
+ArrowDown and ArrowUp move the active result, Enter follows it, and Escape closes the results and
+returns focus to the search input while retaining the existing listbox roles and
+`aria-selected` behavior.
 
 **Deploy - step 17 complete:** Cloudflare Pages is connected to the repo and builds on pushes
 to `main`; the ingest job's commits trigger builds automatically. The approval gate passed on
